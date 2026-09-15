@@ -1,0 +1,116 @@
+# human-chess
+
+<!-- [Conv #1, 18/18 corpus harnesses] Hand-maintained memory drifts silently — verified
+     in davila7/claude-code-templates (CLAUDE.md vs rules/ conflict visible in the files),
+     sst/opencode (post-crash drain "process-local until clustering"), cline/cline (2-line
+     stub, nothing carries across sessions). Counter-pattern: this file + memory/MEMORY.md
+     form the drift-disciplined core. Keep both current and consistent. -->
+
+**human-chess** is an application that bundles a set of chess learning, analysis, training
+tools, and mini-games — each one called a subproject. Named subprojects include an openings
+builder and trainer, a Chessitout variant for training mid-games, an endgames-focused
+introduction to chess for new players, an openings heuristic finder, a memory trainer, a
+visualization trainer, a bot-rating test, group chess, an N-move opening game, a game
+reviewer, and more (the full list is in `memory/subprojects-overview.md`).
+
+This is a fresh repository: no code and no command set exist yet. The stack is **not yet
+settled** — the stated intent is to mimic lichess' stack, since many of the open-source
+projects human-chess will draw from do the same. Treat the stack as an open decision to be
+made deliberately, not as an established fact.
+
+## Getting started
+
+The project is new. Build, run, and test commands will be added to this file as the first
+subproject takes shape; do not assume any exist yet.
+
+## Conventions
+
+- Work is organized into **subprojects** — each is a self-standing learning tool, training
+  tool, or mini-game (openings builder/trainer, Chessitout mid-game trainer, endgames
+  introduction, openings heuristic finder, ...).
+- Prefer reusing and mirroring lichess and the open-source chess projects human-chess pulls
+  from over ad-hoc choices; when you diverge, make it a deliberate, recorded decision.
+- Chess rules come from the lichess-derived rules library, never re-implemented here;
+  analysis comes from integrated open-source engines (user, 2026-09-15). Do not hand-write
+  move generation, legality, or evaluation code — wrap what exists.
+
+<!-- Adopted 2026-09-15 on the user's delegation from
+     docs/research/2026-09-15-class-practice-chess-learning-tools.md — PRACTICE-ASSERTED
+     (practitioner-reported, cited there, no outcome evidence on this project). Prose, not
+     mechanically enforced. memory/adopted-practices.md holds each line's drop condition;
+     remove the line there AND here when dropped. -->
+- Never invent an engine evaluation, a bot move, or a game result. If an engine call fails
+  or times out, say so; every number a user sees comes from a real engine or board-state
+  query, and the code that shows it is traceable to that source. (A1)
+- Any plain-language claim about a position (material, hanging pieces, whose move, "you're
+  worse because…") is grounded in an engine or board-state query, never generated
+  free-form. (V3)
+- The shared layer (rules library, engine wrappers, reusable open-source code) lives in one
+  named place with a one-line responsibility per top-level directory, written into memory
+  before the second subproject starts; subprojects consume it and never duplicate it.
+  Decompose that shared layer before parallelizing work across subprojects. (A2, R1)
+- No feature ships on its author's own say-so: the code-reviewer agent, a deterministic
+  check, or the user is the gate. Prose rule — nothing enforces it mechanically. (V5)
+- Licensing is the agent's to RAISE, the user's to DECIDE. Before code from any other
+  project enters the reuse library or a subproject, record its license and what that
+  license obligates (AGPL: running a modified service triggers source release; GPL:
+  linking makes the whole program GPL) in `memory/reuse-library.md`, and tell the user
+  before it lands. Never mix licenses silently. The project's own license is undecided
+  until the user says otherwise. (L2, L3)
+
+## Memory system
+
+Cross-session context lives in `memory/MEMORY.md` (the index) and individual topic files
+under `memory/`. When you learn something worth keeping, write it to a topic file and add
+a one-line pointer to `memory/MEMORY.md`.
+
+- The index is loaded into every session. Mechanically backed: the SessionStart hook
+  `.claude/hooks/memory_index.py` prints it into session context — this repo's `memory/`
+  is the source of truth, not any editor-side memory store.
+- Always update `memory/MEMORY.md` when adding or removing a topic file.
+- Remove stale entries; stale memory is worse than no memory.
+
+## Agent roles
+
+<!-- [Conv #3, counter-pattern to wshobson/agents n=127 and ruvnet/claude-flow n=280]
+     Large rosters cause overlap and trigger-collision. This harness keeps roles small.
+     Three roles: researcher (chess sources), code-reviewer (correctness), /friction. -->
+
+- `researcher` — research chess domain sources: opening theory and databases, engine
+  integration, and the open-source chess projects (lichess and
+  others) human-chess draws from. Does NOT write or modify code.
+- `code-reviewer` — review changes for correct use of the rules library and engines (nothing
+  re-implemented, nothing fabricated), safe reuse of shared code
+  across subprojects, and no secret leaks. Does NOT implement features.
+- `/friction` — log a decision-grade friction entry to the observe loop when something
+  goes wrong. Run immediately; no ceremony.
+
+## Observe loop
+
+Log friction when something goes wrong:
+```
+/friction "description of what went wrong"
+```
+Entries go to `observe/observe-log.jsonl` (append-only). Passive events are logged
+automatically by hooks. Decision-grade signal = /friction only.
+
+## Guardrails
+
+<!-- [Conv #2: regex-blocking PreToolUse rung] The Guardrails trust ladder:
+     notification-only < regex-blocking PreToolUse (THIS RUNG) < sandbox.
+     .claude/hooks/guard.py mechanically blocks destructive commands BEFORE they execute.
+     disler/claude-code-hooks-mastery is the public exemplar for this rung.
+     For human-chess, protecting the append-only observe trail and blocking destructive
+     shell operations keeps a young, multi-subproject repo safe as it grows. -->
+
+Permission baseline via `.claude/settings.json` + PreToolUse guard hook at
+`.claude/hooks/guard.py`. The guard mechanically enforces:
+- No recursive `rm` in any flag spelling
+- No `find ... -delete`
+- No `curl/wget` piped or chained into a shell
+- No `sudo` / privilege escalation
+- No `chmod 777`
+- No detaching a process from the session (`nohup`, `disown`, `setsid`, or a trailing `&`) — run work to completion; use the Bash tool's `run_in_background` for deliberate long-running processes
+- No `run_in_background` command whose last statement is a bare read/echo (`cat`/`tail`/`echo`/…) — the completion callback reports that read's exit, masking whether the real job failed; end at the redirect and Read the output file instead
+- No Write/Edit to `observe/observe-log.jsonl` (audit trail is append-only)
+- Matching is on PARSED commands, not raw command text — a keyword inside a quoted argument, a commit message, or a heredoc body is data, so you never need to reword a message to get past the guard
