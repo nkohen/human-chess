@@ -1,0 +1,29 @@
+# Shared layer — cross-cutting pieces surfaced by the subproject interviews
+
+Compiled 2026-09-16 from memory/subprojects/*.md. This is the candidate decomposition the
+conventions require before the second subproject starts (A2, R1). Not yet a directory layout;
+that is the next design step. Each item lists the subprojects that need it.
+
+| Piece | Needed by | Source / grounding |
+|---|---|---|
+| Rules and board: chessops (rules), chessground (board), legal-move highlighting | all | chessops GPL-3.0, chessground GPL-3.0 (ledger) |
+| Engine service: Stockfish over UCI on the server, stockfish-web in the browser, MultiPV, PV lines, WDL, recorded depth/time on every eval | endgames intro, Chessitout, heuristic finder, openings builder, N-move game, group chess, guess the eval, reviewer, bot test, puzzles, visualization | A1: every shown number traces to a real call |
+| Rating-calibrated engine play (UCI_Elo / Skill Level / Maia) with played-out calibration | endgames intro (full strength, max resistance), Chessitout, N-move game, group chess (slightly above players), bot test | V2 played-out verification |
+| Tablebase access (lila-tablebase endpoint / Fathom) for max-resistance defence and won/drawn truth | endgames intro, position mining | AGPL service run unmodified, or MIT Fathom |
+| Game import, no copy-paste, most recent game first: lichess API, chess.com public API (unsurveyed), PGN fallback; openingtree's importer is the reuse candidate | memory trainer, openings builder, reviewer, bot test | GPL-3.0 openingtree, user-directed |
+| Account layer: primary linked account, rating, user-configurable level, provenance tags on every stored game | reviewer, heuristic finder, bot test, puzzles, matchmaking | user, 2026-09-16 |
+| Position store and mining: the user's positions folder, pedagogical pool, criteria to find/generate more (WDL, material class, eval stability) | endgames intro (procedural ladder), Chessitout, guess the eval, visualization | user's folder; A1 |
+| "What was happening" fact extraction: board-state facts (attackers, defenders, hanging, structure) + engine comparison, LLM narrates only | memory trainer, Chessitout discussion, reviewer, puzzles, visualization dialogue | V3; chess-coach pattern (Apache-2.0) |
+| Findability model: what a player at rating R sees (Maia probabilities, explorer frequency at band) | heuristic finder, reviewer, bot test | A1 |
+| Concept library: vocabulary of chess concepts with board-state tests, seeded from literature | heuristic finder, reviewer, puzzles | licensing of literature to be raised first |
+| Reasoning check loop: user states reasoning, app checks each claim against board/engine | memory trainer, Chessitout, heuristic finder (user-proposed), visualization dialogue; reviewer deferred | V3 |
+| Shared analysis board (multi-user, movable pieces, engine optional/disabled per mode) | Chessitout, group chess (tools off), guess the eval, reviewer | lichess study/analysis as design reference |
+| Standard review: move list with classifications, eval graph, analysis board, move-by-move report, what-if moves, lazily computed | N-move game, group chess (+ vote data), bot test, memory trainer seed | reviewer subproject owns it |
+| Multiplayer: private rooms first, sealed/plurality votes, per-player clocks, per-game ratings, later lobbies/matchmaking and daily queues | Chessitout, N-move game, group chess, guess the eval PvP, Hand and Brain | lila-ws as architecture reference only (AGPL, not separable); boardgame.io (MIT) candidate |
+| Spaced repetition scheduler | openings builder; memory/puzzle decks later | Chessable 8-level table documented; SM-2/FSRS general |
+| Opening tree over the user's played games with per-move results | openings builder, bot test data, memory trainer | openingtree reuse |
+| Opening explorer statistics by rating band | openings builder, heuristic finder, findability | lichess explorer API / self-hosted lila-openingexplorer (AGPL) |
+| Puzzle data (lichess dump) and own-game puzzle generation | puzzles, endgames nudge, visualization | CC0 |
+
+Design stances that apply everywhere (user): scaffolding, not gamification; no invented
+numbers; focus on concepts applied in practice rather than comparison to expert play.
