@@ -84,14 +84,14 @@ responsibility here and in memory/shared-layer.md.
   Decompose that shared layer before parallelizing work across subprojects. (A2, R1)
 - No feature ships on its author's own say-so: the code-reviewer agent, a deterministic
   check, or the user is the gate. Prose rule — nothing enforces it mechanically. (V5)
-- Licensing is the agent's to RAISE, the user's to DECIDE. Before code from any other
-  project enters the reuse library or a subproject, record its license and what that
-  license obligates (AGPL: running a modified service triggers source release; GPL:
-  linking makes the whole program GPL) in `memory/reuse-library.md`, and tell the user
-  before it lands. Never mix licenses silently. **The project's license is AGPL-3.0-or-later (user,
-  2026-09-15; text in LICENSE).** Anything that enters must be AGPL-compatible: GPL-3.0,
-  MIT, BSD, Apache-2.0, CC0 and CC BY-SA are; non-commercial (NC) content and unlicensed
-  code are not. (L2, L3)
+- Licensing. **The project's license is AGPL-3.0-or-later (user, 2026-09-15; text in
+  LICENSE).** Anything that enters must be AGPL-compatible: GPL-3.0, MIT, BSD, Apache-2.0, CC0
+  and CC BY-SA are; non-commercial (NC) content and unlicensed code are not. Compatible pieces
+  are simply recorded in `memory/reuse-library.md` (license, obligation such as attribution or
+  a source offer for shipped GPL wasm) when they land; no decision is needed and none is
+  asked for (user, 2026-09-16). Raise it to the user only for the cases that are not settled:
+  NC or unlicensed material, an inconsistent or unverifiable license, or an obligation beyond
+  attribution (e.g. share-alike on data). (L2, L3, thinned 2026-09-16)
 
 ## Delegation: thin coordinator, workers on the cheaper tier (adopted 2026-09-15)
 
