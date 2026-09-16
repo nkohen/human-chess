@@ -10,3 +10,9 @@
 .brt-summary th, .brt-summary td { border: 1px solid #ccc; padding: 0.25rem 0.5rem; text-align: right; }
 .brt-summary th:first-child, .brt-summary td:first-child { text-align: left; }
 .brt-highest { font-weight: bold; }
+.brt-board-toggle { flex-direction: row !important; align-items: center; gap: 0.4rem; }
+.brt-board-editor { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.brt-board-editor-controls { display: flex; flex-direction: column; gap: 0.5rem; min-width: 10rem; }
+.brt-board-editor-controls fieldset { border: 1px solid #ccc; border-radius: 4px; padding: 0.5rem; }
+.brt-board-editor-controls label { display: flex; flex-direction: row; align-items: center; gap: 0.3rem; }
+.brt-castling-none { font-size: 0.85em; color: #666; margin: 0; }

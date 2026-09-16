@@ -42,5 +42,11 @@ games means a wide range), not a bare number.
 ## Status
 Interview closed 2026-09-16; the user may add more later.
 
+**User feedback on the first slice (2026-09-16), built the same day:** an interactive board to set
+up the start position instead of typing FEN/PGN. Now a "Set up on a board" checkbox shows the
+shared `BoardEditor` (packages/board: chessground free mode, spare-piece palette, drag off to
+delete) with side-to-move and castling controls; the FEN field stays the source of truth via
+`composeFen`/`castlingRightsFor` in packages/rules. No en-passant control yet.
+
 ## Open questions (not yet asked)
 - Time control.

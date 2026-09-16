@@ -1,0 +1,56 @@
+/* Styling for BoardEditor.tsx's palette. The piece swatches reuse chessground's own
+   `.cg-wrap piece.<role>.<color>` background-image rule (chessground.cburnett.css) by wrapping
+   each swatch in its own `.cg-wrap`; the rules below only override chessground's *sizing* of a
+   piece (12.5% of an 8x8 board, absolutely positioned) so it instead fills the small swatch box,
+   using two classes of specificity so they win over chessground's `.cg-wrap piece { ... }` without
+   relying on import order. */
+.hc-board-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.hc-editor-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.hc-editor-palette-item {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0.15rem;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  background: #f4f4f4;
+  cursor: pointer;
+}
+
+.hc-editor-palette-item-selected {
+  border-color: #2266cc;
+  background: #dceaff;
+}
+
+.hc-editor-palette-item .cg-wrap {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.hc-editor-palette-item .cg-wrap piece {
+  display: block;
+  position: static;
+  width: 100%;
+  height: 100%;
+}
+
+.hc-editor-erase-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 1.2rem;
+  color: #b00020;
+}

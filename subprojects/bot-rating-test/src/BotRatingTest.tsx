@@ -4,7 +4,7 @@
 // shown here traces to useEngineGame/the play package; nothing is generated free-form (A1, V3).
 // Design record: memory/subprojects/bot-rating-test.md.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Board, MoveLine } from '@human-chess/board';
+import { Board, BoardEditor, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import {
   describeEnd,
@@ -19,7 +19,16 @@ import {
   type Opponent,
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
-import { positionEnd, positionFromFen, START_FEN, type Color, type Position } from '@human-chess/rules';
+import {
+  castlingRightsFor,
+  composeFen,
+  EMPTY_PLACEMENT_FEN,
+  positionEnd,
+  positionFromFen,
+  START_FEN,
+  type Color,
+  type Position,
+} from '@human-chess/rules';
 import { appendRecord, clearRecords, loadRecords, type BotRatingRecord, type GameOutcome } from './records';
 import { ELO_LEVELS, suggestNextElo, suggestedStartingElo } from './suggest';
 import { highestWin, summarize } from './summary';
@@ -44,6 +53,14 @@ function pickColor(choice: ColorChoice): Color {
   if (choice === 'random') return Math.random() < 0.5 ? 'white' : 'black';
   return choice;
 }
+
+const CASTLING_LETTERS = ['K', 'Q', 'k', 'q'] as const;
+const CASTLING_LABEL: Record<(typeof CASTLING_LETTERS)[number], string> = {
+  K: 'White O-O',
+  Q: 'White O-O-O',
+  k: 'Black O-O',
+  q: 'Black O-O-O',
+};
 
 function SummaryTable({ records }: { records: BotRatingRecord[] }): React.JSX.Element {
   const rows = summarize(records);
@@ -84,9 +101,67 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
   const [colorChoice, setColorChoice] = useState<ColorChoice>('white');
   const [fenText, setFenText] = useState(STANDARD_START_FEN);
   const [fenError, setFenError] = useState<string | undefined>(undefined);
+  const [boardMode, setBoardMode] = useState(false);
   const [active, setActive] = useState<ActiveGame | undefined>(undefined);
   const [resigned, setResigned] = useState(false);
   const recordedRef = useRef(false);
+
+  // The FEN text is the single source of truth for the setup screen; these are just its fields,
+  // read defensively since the text can be mid-edit or pasted garbage. The board editor and the
+  // side-to-move/castling controls below only ever read from these and write back through
+  // composeFen — they never hold their own copy of the position.
+  const fenFields = useMemo(() => fenText.trim().split(/\s+/), [fenText]);
+  const placement = fenFields[0] ?? '';
+  const turnField: Color = fenFields[1] === 'b' ? 'black' : 'white';
+  const castlingField = fenFields[2] ?? '';
+  const allowedCastling = useMemo(() => {
+    try {
+      return castlingRightsFor(placement);
+    } catch {
+      return '';
+    }
+  }, [placement]);
+
+  const applyFenParts = useCallback((newPlacement: string, newTurn: Color, newCastling: string) => {
+    try {
+      setFenText(composeFen(newPlacement, newTurn, newCastling));
+      setFenError(undefined);
+    } catch (err) {
+      // A half-typed placement in the FEN field makes the turn/castling controls unable to
+      // rebuild the FEN; say so rather than silently doing nothing.
+      setFenError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
+  const handleEditorChange = useCallback(
+    (newPlacement: string) => {
+      let allowedForNew = '';
+      try {
+        allowedForNew = castlingRightsFor(newPlacement);
+      } catch {
+        // leave '' — an unparseable placement can't come from the editor, but stay defensive
+      }
+      const keptCastling = [...castlingField].filter(c => allowedForNew.includes(c)).join('');
+      applyFenParts(newPlacement, turnField, keptCastling);
+    },
+    [applyFenParts, castlingField, turnField],
+  );
+
+  const handleTurnChange = useCallback(
+    (newTurn: Color) => applyFenParts(placement, newTurn, castlingField),
+    [applyFenParts, placement, castlingField],
+  );
+
+  const toggleCastling = useCallback(
+    (letter: string) => {
+      const next = castlingField.includes(letter) ? castlingField.replace(letter, '') : castlingField + letter;
+      applyFenParts(placement, turnField, next);
+    },
+    [applyFenParts, placement, turnField, castlingField],
+  );
+
+  const handleClearBoard = useCallback(() => applyFenParts(EMPTY_PLACEMENT_FEN, 'white', ''), [applyFenParts]);
+  const handleResetBoard = useCallback(() => setFenText(STANDARD_START_FEN), []);
 
   const opponent: Opponent | undefined = useMemo(() => (active ? limitedStrength(active.elo) : undefined), [active?.elo]);
 
@@ -193,6 +268,47 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
             Start position (FEN)
             <input type="text" value={fenText} onChange={e => setFenText(e.target.value)} />
           </label>
+          <label className="brt-board-toggle">
+            <input type="checkbox" checked={boardMode} onChange={e => setBoardMode(e.target.checked)} />
+            Set up on a board
+          </label>
+          {boardMode && (
+            <div className="brt-board-editor">
+              <BoardEditor
+                fen={placement}
+                orientation={colorChoice === 'black' ? 'black' : 'white'}
+                onChange={handleEditorChange}
+                size="16rem"
+              />
+              <div className="brt-board-editor-controls">
+                <fieldset>
+                  <legend>Side to move</legend>
+                  <label>
+                    <input type="radio" name="brt-turn" checked={turnField === 'white'} onChange={() => handleTurnChange('white')} />
+                    White
+                  </label>
+                  <label>
+                    <input type="radio" name="brt-turn" checked={turnField === 'black'} onChange={() => handleTurnChange('black')} />
+                    Black
+                  </label>
+                </fieldset>
+                <fieldset>
+                  <legend>Castling rights</legend>
+                  {CASTLING_LETTERS.filter(c => allowedCastling.includes(c)).map(c => (
+                    <label key={c}>
+                      <input type="checkbox" checked={castlingField.includes(c)} onChange={() => toggleCastling(c)} />
+                      {CASTLING_LABEL[c]}
+                    </label>
+                  ))}
+                  {allowedCastling.length === 0 && <p className="brt-castling-none">No castling rights possible from this placement.</p>}
+                </fieldset>
+                <div className="brt-actions">
+                  <button type="button" onClick={handleClearBoard}>Clear board</button>
+                  <button type="button" onClick={handleResetBoard}>Start position</button>
+                </div>
+              </div>
+            </div>
+          )}
           {fenError && <p className="brt-error">{fenError}</p>}
           <button onClick={handleStart}>Start</button>
         </div>
