@@ -61,8 +61,14 @@ export function ImportScreen({ onImported, storageKey, title = 'Import a game' }
 
   const requestIdRef = useRef(0);
   const settledRef = useRef(false);
-  useEffect(() => () => {
-    settledRef.current = true;
+  useEffect(() => {
+    // Reset on (re)mount: React StrictMode mounts, unmounts and mounts again in development, and
+    // a cleanup-only effect left `settledRef` stuck at true, so every fetch result was silently
+    // dropped (user report 2026-09-16: "clicked fetch and nothing happened").
+    settledRef.current = false;
+    return () => {
+      settledRef.current = true;
+    };
   }, []);
 
   const fetchGame = (): void => {
