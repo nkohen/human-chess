@@ -1,0 +1,67 @@
+.ob {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ob-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ob-picker,
+.ob-new,
+.ob-mode {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ob-mode button.current {
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.ob-builder,
+.ob-drill {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.ob-board-col {
+  width: min(420px, 90vw);
+}
+
+.ob-side-col {
+  flex: 1;
+  min-width: 260px;
+}
+
+.ob-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ob-breadcrumb-line {
+  font-family: monospace;
+}
+
+.ob-multipv-lines {
+  padding-left: 1.25rem;
+}
+
+.ob-multipv-lines button {
+  text-align: left;
+  width: 100%;
+}
+
+.ob-dialog {
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}

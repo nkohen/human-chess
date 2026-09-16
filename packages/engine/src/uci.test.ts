@@ -1,6 +1,41 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testEngines } from './testing';
-import { EngineError, parseInfo, UciEngine } from './uci';
+import { EngineError, parseInfo, UciEngine, type UciTransport } from './uci';
+
+const STRENGTH_OPTION_LINES = [
+  'option name UCI_LimitStrength type check default false',
+  'option name UCI_Elo type spin default 1320 min 1320 max 3190',
+];
+
+/** A fake engine that answers the UCI handshake and any `go` with a fixed `option name` set, and
+ * records every line it was sent. Deterministic and fast: tests that only need to observe the
+ * exact `setoption` traffic a UciEngine produces should reach for this rather than a real
+ * engine, which is slow and (per manual testing) unsafe to instantiate several times over in
+ * one process alongside the parameterized real-engine tests below. */
+function fakeEngine(optionLines: string[] = STRENGTH_OPTION_LINES): { transport: UciTransport; sent: string[] } {
+  const sent: string[] = [];
+  let onLine: (line: string) => void = () => {};
+  const transport: UciTransport = {
+    send(line) {
+      sent.push(line);
+      if (line === 'uci') {
+        onLine('id name FakeEngine');
+        for (const l of optionLines) onLine(l);
+        onLine('uciok');
+      } else if (line === 'isready') {
+        onLine('readyok');
+      } else if (line.startsWith('go')) {
+        onLine('bestmove e2e4');
+      }
+    },
+    onLine(cb) {
+      onLine = cb;
+    },
+    onError() {},
+    close() {},
+  };
+  return { transport, sent };
+}
 
 describe('parseInfo', () => {
   it('parses a full info line', () => {
@@ -55,6 +90,40 @@ describe.each(testEngines())('UciEngine against $label', ({ open }) => {
 
   it('has no move in a finished position', async () => {
     await expect(engine.bestMove('7k/5Q2/6K1/8/8/8/8/8 b - - 0 1', [], { depth: 4 })).rejects.toBeInstanceOf(EngineError);
+  });
+});
+
+describe('option restoration', () => {
+  it('restores UCI_LimitStrength to its default after a limited-strength bestMove, before the next plain analyse', async () => {
+    const { transport, sent } = fakeEngine();
+    const engine = new UciEngine(transport);
+    await engine.init();
+    const startpos = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+    await engine.bestMove(startpos, [], { movetime: 10 }, { UCI_LimitStrength: true, UCI_Elo: 1320 });
+    expect(sent).toContain('setoption name UCI_LimitStrength value true');
+    const afterFirstMove = sent.length;
+
+    await engine.analyse(startpos, [], { depth: 1 });
+    const secondCallLines = sent.slice(afterFirstMove);
+    expect(secondCallLines).toContain('setoption name UCI_LimitStrength value false');
+    expect(secondCallLines).toContain('setoption name UCI_Elo value 1320');
+  });
+
+  it('leaves an untouched option alone: no setoption traffic when nothing was ever set', async () => {
+    const { transport, sent } = fakeEngine();
+    const engine = new UciEngine(transport);
+    await engine.init();
+    await engine.analyse('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', [], { depth: 1 });
+    expect(sent.some(l => l.startsWith('setoption'))).toBe(false);
+  });
+
+  it('throws rather than guess when asked to restore an option with no known default', async () => {
+    const { transport } = fakeEngine(['option name MyOption type string']);
+    const engine = new UciEngine(transport);
+    await engine.init();
+    await engine.setOption('MyOption', 'x');
+    await expect(engine.analyse('4k3/8/8/8/8/8/8/4K3 w - - 0 1', [], { depth: 1 })).rejects.toThrow(/no known default/);
   });
 });
 

@@ -41,6 +41,17 @@ All of: longer lines; more pieces on the board; gradually hiding pieces toward f
 ## Status
 Interview closed 2026-09-16; the user may add more later.
 
+## Status
+Interview closed 2026-09-16.
+
+**First slice built 2026-09-16** (subprojects/visualization-trainer, hosted at `#/visualization`,
+plus the first `packages/facts`): a random legal start position (8 random plies), the engine's
+depth-10 line cut to 4 plies shown in SAN under a view-only board, three questions about the
+unseen end position answered from chessops via the facts package (is it check; which piece is on
+a square; material points by the 1/3/3/5/9 convention), check answers, reveal the end board, tally,
+next. Not built: best-move and who-is-better questions (engine-graded), the player's own line with
+claims, back-and-forth correction dialogue, coordinate drills, blindfold hand-off, time element.
+
 ## Open questions (not yet asked)
 - Time element on the main exercises; hand-off into a blindfold game vs engine.
 - Feedback and grounding: the resulting position is computed by chessops; correctness is

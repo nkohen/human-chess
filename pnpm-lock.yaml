@@ -35,6 +35,18 @@ importers:
       '@human-chess/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@human-chess/guess-the-eval':
+        specifier: workspace:*
+        version: link:../../subprojects/guess-the-eval
+      '@human-chess/hand-and-brain':
+        specifier: workspace:*
+        version: link:../../subprojects/hand-and-brain
+      '@human-chess/openings-builder':
+        specifier: workspace:*
+        version: link:../../subprojects/openings-builder
+      '@human-chess/visualization-trainer':
+        specifier: workspace:*
+        version: link:../../subprojects/visualization-trainer
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -73,6 +85,12 @@ importers:
         specifier: ^19.0.0
         version: 19.0.0
 
+  packages/facts:
+    dependencies:
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../rules
+
   packages/play:
     dependencies:
       '@human-chess/engine':
@@ -81,16 +99,18 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
 
   packages/positions:
     dependencies:
-      '@human-chess/rules':
-        specifier: workspace:*
-        version: link:../rules
-    devDependencies:
       '@human-chess/engine':
         specifier: workspace:*
         version: link:../engine
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../rules
 
   packages/rules:
     dependencies:
@@ -109,6 +129,72 @@ importers:
       '@human-chess/play':
         specifier: workspace:*
         version: link:../../packages/play
+      '@human-chess/positions':
+        specifier: workspace:*
+        version: link:../../packages/positions
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
+  subprojects/guess-the-eval:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
+      '@human-chess/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@human-chess/positions':
+        specifier: workspace:*
+        version: link:../../packages/positions
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
+  subprojects/hand-and-brain:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
+  subprojects/openings-builder:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
+      '@human-chess/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
+  subprojects/visualization-trainer:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
+      '@human-chess/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@human-chess/facts':
+        specifier: workspace:*
+        version: link:../../packages/facts
       '@human-chess/positions':
         specifier: workspace:*
         version: link:../../packages/positions

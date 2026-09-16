@@ -1,0 +1,14 @@
+.viz { max-width: 32rem; padding: 1rem; margin: 0 auto; }
+.viz-tally { font-weight: bold; }
+.viz-board { max-width: 24rem; margin: 0 auto 1rem; }
+.viz-status { min-height: 1.5em; }
+.viz-dialog { border: 1px solid #8886; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0; }
+.viz-line { font-size: 1.1rem; margin: 1rem 0; }
+.viz-question { display: flex; align-items: center; gap: 0.5rem; margin: 0.75rem 0; flex-wrap: wrap; }
+.viz-question p { margin: 0; min-width: 100%; }
+.viz-question button.selected { font-weight: bold; outline: 2px solid currentColor; }
+.viz-correct { color: #1a7f37; font-weight: bold; }
+.viz-wrong { color: #b3261e; font-weight: bold; }
+.viz-check { margin-top: 0.5rem; }
+.viz-end { margin-top: 1.5rem; border-top: 1px solid #8884; padding-top: 1rem; }
+.viz-end .viz-board { max-width: 24rem; }

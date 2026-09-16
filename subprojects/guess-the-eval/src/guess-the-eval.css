@@ -1,0 +1,9 @@
+.gte { max-width: 32rem; padding: 1rem; margin: 0 auto; }
+.gte-status { min-height: 1.5em; }
+.gte-source { font-size: 0.85rem; opacity: 0.7; }
+.gte-guess { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem; }
+.gte-guess input[type='range'] { width: 100%; }
+.gte-reveal { margin-top: 0.75rem; }
+.gte-reveal p { margin: 0.35rem 0; }
+.gte-tally { font-weight: bold; }
+.gte-provenance { color: #666; font-size: 0.9em; }

@@ -4,6 +4,8 @@
 // parses, White is to move, the game is not over, and the engine sees a forced win.
 import type { Role } from '@human-chess/rules';
 
+export * from './selfPlay';
+
 export interface EndgameLesson {
   id: string;
   /** Rung of the ladder; lessons with the same stage are variations of one theme. */

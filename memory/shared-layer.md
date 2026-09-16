@@ -43,7 +43,7 @@ positions, subprojects/endgames-intro, apps/web. Reserved (named, not created): 
 | `packages/tablebase` (reserved) | syzygy truth for won/drawn and max-resistance defence | tablebase access |
 | `packages/import` (reserved) | lichess / chess.com / PGN import with provenance tags | game import |
 | `packages/store` (reserved) | persistence: accounts, linked ratings, games, repertoires | account layer |
-| `packages/facts` (reserved) | board-state facts + engine comparison behind every narrated claim | fact extraction, reasoning check |
+| `packages/facts` (built 2026-09-16) | plain-language board-state facts and questions, each answered by a chessops query (check, piece on square, material by the 1/3/3/5/9 convention); engine comparison still to come | fact extraction, reasoning check |
 | `packages/concepts` (reserved) | concept vocabulary with board-state tests | concept library |
 | `packages/review` (reserved) | standard review shape, lazily computed | standard review |
 | `packages/rooms` (reserved) | rooms, clocks, sealed votes, matchmaking | multiplayer |

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Board } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
+import { describeEnd, isInCheck, isPlayersTurn, lastMove, playerDests, result, sideToMove } from '@human-chess/play';
 import { endgameLadder, type EndgameLesson } from '@human-chess/positions';
-import { describeEnd, isInCheck, isPlayersTurn, lastMove, playerDests, result, sideToMove } from './game';
+import { lessonOutcome } from './lessonAdapt';
 import { loadConfident, saveConfident } from './progress';
 import { useLessonGame } from './useLessonGame';
 
@@ -24,7 +25,7 @@ export function EndgamesIntro({ engine }: EndgamesIntroProps): React.JSX.Element
 
   const index = endgameLadder.indexOf(lesson);
   const next = endgameLadder[index + 1];
-  const outcome = result(game);
+  const outcome = lessonOutcome(result(game));
   const dests = useMemo(() => playerDests(game), [game]);
 
   const goTo = (l: EndgameLesson): void => {

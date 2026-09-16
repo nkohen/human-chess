@@ -43,6 +43,14 @@ different phases.
 ## Status
 Interview closed 2026-09-16; the user may add more later.
 
+**First slice built 2026-09-16** (subprojects/guess-the-eval, hosted at `#/guess-the-eval`):
+position from engine self-play (6 random plies then 14 engine plies at depth 6, never a finished
+position; packages/positions selfPlay.ts), a centipawn slider guess, lock in, reveal the depth-14
+engine score from White's perspective with engine name and depth on screen, band verdict
+(±0.30 / ±1.00 / ±2.00 pawns), distance from the truth, top line in SAN, running same-band tally,
+endless "next". Not built: adaptive difficulty, win-probability presentation, real-game or
+curated positions, saving results. Reviewed by the code-reviewer agent 2026-09-16; findings fixed.
+
 ## Open questions (not yet asked)
 - Adaptive difficulty.
 - Eval presentation: centipawns vs win probability.

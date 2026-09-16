@@ -4,8 +4,8 @@
 import { Chess } from 'chessops/chess';
 import { parseFen, makeFen } from 'chessops/fen';
 import { chessgroundDests } from 'chessops/compat';
-import { makeSan } from 'chessops/san';
-import { makeUci, opposite as opp, parseSquare, parseUci, squareRank } from 'chessops/util';
+import { makeSan, makeSanAndPlay } from 'chessops/san';
+import { makeSquare, makeUci, opposite as opp, parseSquare, parseUci, squareRank } from 'chessops/util';
 import { Board } from 'chessops/board';
 import { SquareSet } from 'chessops/squareSet';
 import type { Color, Move, Role, SquareName } from 'chessops/types';
@@ -94,6 +94,62 @@ export function positionEnd(pos: Position): GameEnd | undefined {
   return undefined;
 }
 
+/** The SAN of each move in `ucis`, played in sequence on a clone of `pos`. Throws RulesError on an illegal or unparseable move. */
+export function sanLine(pos: Position, ucis: string[]): string[] {
+  const clone = pos.clone();
+  const sans: string[] = [];
+  for (const uci of ucis) {
+    const move = parseUci(uci);
+    if (!move) throw new RulesError(`unparseable UCI move "${uci}"`);
+    if (!clone.isLegal(move)) throw new RulesError(`illegal move ${uci} in ${fenOf(clone)}`);
+    sans.push(makeSanAndPlay(clone, move));
+  }
+  return sans;
+}
+
+/** The piece on `square`, or undefined when it is empty. A direct board read, never guessed. */
+export function pieceAt(pos: Position, square: SquareName): { color: Color; role: Role } | undefined {
+  const piece = pos.board.get(parseSquare(square));
+  if (!piece) return undefined;
+  return { color: piece.color, role: piece.role };
+}
+
+/** The square of `color`'s king. Throws RulesError if the position has none (should not happen for a legal Chess position). */
+export function kingSquare(pos: Position, color: Color): SquareName {
+  const square = pos.board.kingOf(color);
+  if (square === undefined) throw new RulesError(`no ${color} king on the board`);
+  return makeSquare(square);
+}
+
+/** How many of each role each side has on the board. */
+export function pieceCounts(pos: Position): Record<Color, Record<Role, number>> {
+  const counts: Record<Color, Record<Role, number>> = {
+    white: { pawn: 0, knight: 0, bishop: 0, rook: 0, queen: 0, king: 0 },
+    black: { pawn: 0, knight: 0, bishop: 0, rook: 0, queen: 0, king: 0 },
+  };
+  for (const [, piece] of pos.board) counts[piece.color][piece.role]++;
+  return counts;
+}
+
+/** Every occupied square on the board, in no particular order. */
+export function occupiedSquares(pos: Position): SquareName[] {
+  return [...pos.board].map(([square]) => makeSquare(square));
+}
+
+/** A uniformly random legal move as UCI, or undefined when there is none. Reads board state via `legalDests`; picks, does not judge legality. */
+export function randomLegalMove(pos: Position, random: () => number = Math.random): string | undefined {
+  const dests = legalDests(pos);
+  const moves: string[] = [];
+  for (const [from, tos] of dests) {
+    for (const to of tos) {
+      moves.push(isPromotionMove(pos, from, to) ? `${from}${to}q` : `${from}${to}`);
+    }
+  }
+  if (moves.length === 0) return undefined;
+  const idx = Math.floor(random() * moves.length);
+  return moves[Math.min(idx, moves.length - 1)];
+}
+
 /** The same position with the colours swapped and the board flipped, so Black plays White's part. */
 export function mirrorColors(pos: Position): Position {
   const setup = pos.toSetup();
@@ -113,3 +169,5 @@ export function mirrorColors(pos: Position): Position {
   if (mirrored.isErr) throw new RulesError(`mirroring produced an illegal position: ${mirrored.error.message}`);
   return mirrored.value;
 }
+
+export * from './roles';

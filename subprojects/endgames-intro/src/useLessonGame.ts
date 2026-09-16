@@ -1,73 +1,41 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { UciEngine } from '@human-chess/engine';
 import { maximalResistance, type Opponent } from '@human-chess/play';
+import { useEngineGame } from '@human-chess/play/react';
 import type { EndgameLesson } from '@human-chess/positions';
-import { isPromotionMove, type Color, type SquareName } from '@human-chess/rules';
-import { applyMove, currentFen, isPlayersTurn, playPlayerMove, startFen, startGame, uciMoves, type LessonGame } from './game';
+import type { Color } from '@human-chess/rules';
+import { fenFor, randomColor } from './lessonAdapt';
 
-export type EngineState = { kind: 'idle' } | { kind: 'thinking' } | { kind: 'failed'; message: string };
-
-const randomColor = (): Color => (Math.random() < 0.5 ? 'white' : 'black');
-
-// Module-level so the engine effect's dependency is a stable reference (a fresh default object
-// per render would re-run the effect, cancel the search and queue another, without end).
+// Module-level so the default stays a stable reference across renders (see @human-chess/play's
+// useEngineGame for why: a fresh object per render would re-run its engine-move effect).
 const DEFAULT_OPPONENT = maximalResistance();
 
 /**
- * Drives one attempt: the learner moves through the board, the opponent answers through the
- * engine. Any engine failure is shown as such; the app never plays a move the engine did not
- * return (A1).
+ * Drives one attempt at a lesson on top of the generic `useEngineGame`: picks the learner's
+ * colour, mirrors the lesson FEN for Black, and restarts (with a freshly rolled colour)
+ * whenever the lesson itself changes.
  */
 export function useLessonGame(lesson: EndgameLesson, engine: UciEngine | undefined, opponent: Opponent = DEFAULT_OPPONENT) {
-  const [game, setGame] = useState<LessonGame>(() => startGame(lesson, randomColor()));
-  const [engineState, setEngineState] = useState<EngineState>({ kind: 'idle' });
-  const attempt = useRef(0);
-  const latest = useRef(game);
-  latest.current = game;
+  const startColor = useRef<Color | undefined>(undefined);
+  if (startColor.current === undefined) startColor.current = randomColor();
+  const lastLessonId = useRef(lesson.id);
+
+  const hook = useEngineGame({ startFen: fenFor(lesson, startColor.current), playerColor: startColor.current, engine, opponent });
+  const hookRestart = hook.restart;
 
   const restart = useCallback(
     (l: EndgameLesson = lesson) => {
-      attempt.current += 1;
-      setEngineState({ kind: 'idle' });
-      setGame(startGame(l, randomColor()));
+      const color = randomColor();
+      startColor.current = color;
+      lastLessonId.current = l.id;
+      hookRestart({ startFen: fenFor(l, color), playerColor: color });
     },
-    [lesson],
+    [lesson, hookRestart],
   );
 
   useEffect(() => {
-    if (game.lesson.id !== lesson.id) restart(lesson);
-  }, [lesson, game.lesson.id, restart]);
+    if (lastLessonId.current !== lesson.id) restart(lesson);
+  }, [lesson, restart]);
 
-  const onPlayerMove = useCallback((from: SquareName, to: SquareName) => {
-    const g = latest.current;
-    if (!isPlayersTurn(g)) return;
-    const promotion = isPromotionMove(g.pos, from, to) ? 'queen' : undefined;
-    setGame(playPlayerMove(g, from, to, promotion));
-  }, []);
-
-  useEffect(() => {
-    if (!engine || game.end || isPlayersTurn(game)) return;
-    const myAttempt = attempt.current;
-    const ply = game.moves.length;
-    let cancelled = false;
-    setEngineState({ kind: 'thinking' });
-    opponent
-      .chooseMove(engine, startFen(game), uciMoves(game))
-      .then(({ move }) => {
-        if (cancelled || myAttempt !== attempt.current) return;
-        const g = latest.current;
-        if (g.moves.length !== ply || g.end) return;
-        setGame(applyMove(g, move));
-        setEngineState({ kind: 'idle' });
-      })
-      .catch((err: unknown) => {
-        if (cancelled || myAttempt !== attempt.current) return;
-        setEngineState({ kind: 'failed', message: err instanceof Error ? err.message : String(err) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [engine, game, opponent]);
-
-  return { game, engineState, onPlayerMove, restart, fen: currentFen(game) };
+  return { ...hook, restart };
 }

@@ -67,6 +67,10 @@ export class UciEngine {
   private identity: EngineIdentity | undefined;
   private currentMultiPv = 1;
   private closed = false;
+  /** Every option name ever set, via `setOption` or a search's `options` param — restored to
+   * its engine-reported default before any search that does not itself request it (A1: a
+   * shared engine must never stay weakened for whoever uses it next). */
+  private readonly optionsTouched = new Set<string>();
   private readonly graceMs: number;
 
   constructor(private readonly transport: UciTransport, opts: UciEngineOpts = {}) {
@@ -111,8 +115,35 @@ export class UciEngine {
     return this.enqueue(async () => {
       this.transport.send(`setoption name ${name} value ${String(value)}`);
       if (name === 'MultiPV') this.currentMultiPv = Number(value);
+      this.optionsTouched.add(name);
       await this.ready();
     });
+  }
+
+  /**
+   * Applies `requested` options for one search, then restores every option this engine has
+   * ever been asked to set (here or via `setOption`) that `requested` does not mention, back
+   * to the default the engine itself declared during the `uci` handshake. Throws rather than
+   * guess when an option was touched but no default was ever recorded for it.
+   */
+  private async applyOptions(requested: Record<string, string | number | boolean> | undefined): Promise<void> {
+    const entries = Object.entries(requested ?? {});
+    const requestedNames = new Set(entries.map(([n]) => n));
+    const toRestore = [...this.optionsTouched].filter(n => !requestedNames.has(n));
+    if (entries.length === 0 && toRestore.length === 0) return;
+    for (const [name, value] of entries) {
+      this.transport.send(`setoption name ${name} value ${String(value)}`);
+      if (name === 'MultiPV') this.currentMultiPv = Number(value);
+      this.optionsTouched.add(name);
+    }
+    for (const name of toRestore) {
+      const def = this.identity?.options.get(name);
+      if (def === undefined) {
+        throw new EngineError(`no known default for UCI option "${name}"; cannot restore it after use`);
+      }
+      this.transport.send(`setoption name ${name} value ${def}`);
+    }
+    await this.ready();
   }
 
   newGame(): Promise<void> {
@@ -122,11 +153,18 @@ export class UciEngine {
     });
   }
 
-  analyse(fen: string, moves: string[], limit: SearchLimit, multipv = 1): Promise<Analysis> {
+  analyse(
+    fen: string,
+    moves: string[],
+    limit: SearchLimit,
+    multipv = 1,
+    options?: Record<string, string | number | boolean>,
+  ): Promise<Analysis> {
     if (!limit.depth && !limit.movetime && !limit.nodes) {
       return Promise.reject(new EngineError('a search limit (depth, movetime or nodes) is required'));
     }
     return this.enqueue(async () => {
+      await this.applyOptions(options);
       if (multipv !== this.currentMultiPv) {
         this.transport.send(`setoption name MultiPV value ${multipv}`);
         this.currentMultiPv = multipv;
@@ -172,8 +210,13 @@ export class UciEngine {
   }
 
   /** The engine's chosen move. Throws EngineError when the engine has no move to offer. */
-  async bestMove(fen: string, moves: string[], limit: SearchLimit): Promise<{ move: string; analysis: Analysis }> {
-    const analysis = await this.analyse(fen, moves, limit, 1);
+  async bestMove(
+    fen: string,
+    moves: string[],
+    limit: SearchLimit,
+    options?: Record<string, string | number | boolean>,
+  ): Promise<{ move: string; analysis: Analysis }> {
+    const analysis = await this.analyse(fen, moves, limit, 1, options);
     if (!analysis.bestmove) throw new EngineError(`${analysis.engine} returned no move for ${fen}`);
     return { move: analysis.bestmove, analysis };
   }
