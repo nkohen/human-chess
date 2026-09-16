@@ -41,6 +41,9 @@ importers:
       '@human-chess/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@human-chess/game-reviewer':
+        specifier: workspace:*
+        version: link:../../subprojects/game-reviewer
       '@human-chess/guess-the-eval':
         specifier: workspace:*
         version: link:../../subprojects/guess-the-eval
@@ -133,6 +136,15 @@ importers:
         specifier: workspace:*
         version: link:../rules
 
+  packages/review:
+    dependencies:
+      '@human-chess/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../rules
+
   packages/rules:
     dependencies:
       chessops:
@@ -192,6 +204,27 @@ importers:
       '@human-chess/positions':
         specifier: workspace:*
         version: link:../../packages/positions
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
+  subprojects/game-reviewer:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
+      '@human-chess/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@human-chess/import':
+        specifier: workspace:*
+        version: link:../../packages/import
+      '@human-chess/review':
+        specifier: workspace:*
+        version: link:../../packages/review
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules

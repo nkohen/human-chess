@@ -10,6 +10,7 @@ import { OpeningTrainingGame } from '@human-chess/opening-training-game';
 import { BotRatingTest } from '@human-chess/bot-rating-test';
 import { Puzzles } from '@human-chess/puzzles';
 import { Chessitout } from '@human-chess/chessitout';
+import { GameReviewer } from '@human-chess/game-reviewer';
 import { loadBrowserEngine } from './engine';
 
 const routes: { hash: string; title: string; blurb: string }[] = [
@@ -23,6 +24,7 @@ const routes: { hash: string; title: string; blurb: string }[] = [
   { hash: '#/bot-rating', title: 'Bot-rating test', blurb: 'Play engines at set Elo levels and keep the record of what you beat.' },
   { hash: '#/puzzles', title: 'Puzzles', blurb: 'Solve lichess puzzles, one after another.' },
   { hash: '#/chessitout', title: 'Chessitout (solo)', blurb: 'Judge an imbalanced position, then play your side out against a rated engine.' },
+  { hash: '#/review', title: 'Game reviewer', blurb: 'Import a game and see every move evaluated, classified, and compared with the best.' },
 ];
 
 function useHash(): string {
@@ -88,6 +90,8 @@ export function App(): React.JSX.Element {
         <Puzzles />
       ) : hash === '#/chessitout' ? (
         <Chessitout engine={engine} />
+      ) : hash === '#/review' ? (
+        <GameReviewer engine={engine} />
       ) : hash === '#/openings' ? (
         <OpeningsBuilder engine={engine} />
       ) : (

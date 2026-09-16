@@ -17,6 +17,7 @@
     "@human-chess/chessitout": "workspace:*",
     "@human-chess/endgames-intro": "workspace:*",
     "@human-chess/engine": "workspace:*",
+    "@human-chess/game-reviewer": "workspace:*",
     "@human-chess/guess-the-eval": "workspace:*",
     "@human-chess/hand-and-brain": "workspace:*",
     "@human-chess/memory-trainer": "workspace:*",

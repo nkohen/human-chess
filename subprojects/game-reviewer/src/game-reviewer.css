@@ -1,0 +1,41 @@
+.gr { max-width: 32rem; padding: 1rem; margin: 0 auto; }
+.gr-import section { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.gr-import textarea { font-family: monospace; }
+.gr-error, .gr-status[role='alert'] { color: #b00020; }
+.gr-status { min-height: 1.5em; }
+.gr-players { opacity: 0.75; margin-top: -0.5rem; }
+
+.gr-nav { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
+
+.gr-detail p { margin: 0.3rem 0; }
+.gr-provenance { color: #666; font-size: 0.85em; }
+.gr-end { font-weight: bold; }
+
+.gr-badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 0.25rem; font-size: 0.85em; color: #fff; }
+.gr-badge-best { background: #2e7d32; }
+.gr-badge-good { background: #558b2f; }
+.gr-badge-inaccuracy { background: #f9a825; color: #000; }
+.gr-badge-mistake { background: #ef6c00; }
+.gr-badge-blunder { background: #c62828; }
+.gr-badge-mate-lost { background: #6a1b9a; }
+.gr-badge-mate-allowed { background: #4527a0; }
+
+.gr-moves { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; list-style: none; padding: 0; margin: 0.75rem 0; }
+.gr-moves li { display: flex; align-items: center; gap: 0.25rem; }
+.gr-move-number { opacity: 0.6; }
+.gr-move { border: none; border-radius: 0.2rem; padding: 0.1rem 0.4rem; cursor: pointer; }
+.gr-move-selected { outline: 2px solid #333; outline-offset: 1px; }
+
+.gr-strip { display: flex; align-items: flex-end; gap: 1px; height: 2.5rem; background: #ddd; margin: 0.75rem 0; }
+.gr-strip-bar { flex: 1; min-width: 2px; height: 100%; border: none; padding: 0; cursor: pointer; position: relative; background: transparent; }
+.gr-strip-bar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--pct);
+  background: #fff;
+  border-top: 1px solid #333;
+}
+.gr-strip-bar-selected { outline: 1px solid #333; }

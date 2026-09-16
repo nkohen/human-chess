@@ -16,7 +16,7 @@ multiplayer. Each row says what the slice is and what shared work it forces. Ord
 | 7 | Openings builder/trainer | done 2026-09-16 (`#/openings`): build a tree by playing moves with MultiPV suggestions, saved in localStorage; drill: app plays tree replies, wrong move stops | tree model; MultiPV UI |
 | 8 | Chessitout variant | done 2026-09-16 (`#/chessitout`): solo: mined imbalanced position, pick a side, play it out vs engine, end eval | position mining by eval band + material imbalance |
 | 9 | Memory trainer | done 2026-09-16 (`#/memory`): lichess username → most recent game fetched → reconstruct from move one, "I have no idea" ends, first divergence shown | `import` (lichess API + PGN via chessops) |
-| 10 | Game reviewer | in flight 2026-09-16: import or paste PGN → per-move eval, diff, classification, best move | `import`, `review` |
+| 10 | Game reviewer | done 2026-09-16 (`#/review`): import or paste PGN → per-move eval, diff, classification, best move | `import`, `review` |
 | 11 | Puzzles | done 2026-09-16 (`#/puzzles`): puzzles fetched one at a time from the lichess puzzle API (CC0) instead of a dump sample; solution line from the puzzle data | lichess puzzle API |
 | — | Group plays chess | no honest minimal without rooms; deferred until `rooms` exists | — |
 | — | Openings heuristic finder | no minimal that is not misleading; deferred | — |
@@ -27,8 +27,8 @@ layer; findings fixed), committed. Shared work that landed with them: `packages/
 state + `useEngineGame` (`./react`) + `limitedStrength(elo)`; UCI option restoration and `stop()`
 in the engine wrapper; `packages/facts`, `packages/import`, `packages/engine/src/score.ts`
 (whitePerspective, formatScore); rules helpers (sanLine, pgn, roles, pieceAt, START_FEN,
-fullmove). Not yet reviewed: opening training game, bot-rating test, puzzles, Chessitout. No
-browser run of the new slices yet (tsc + vitest + vite build only). Slice 10 (game reviewer +
-`packages/review`) in flight. All bands and thresholds (draw band 30 cp, imbalance band 150 cp,
+fullmove). Slice 10 (game reviewer + `packages/review`) landed last. A CDP browser smoke run of all
+routes passed (no exceptions; endgames move + engine reply, guess-the-eval reveal, puzzle fetch
+verified). Reviews of slices 3, 4, 8, 10, 11 pending or in progress. All bands and thresholds (draw band 30 cp, imbalance band 150 cp,
 classification cutoffs) are first guesses marked in code for the user to tune.
 Follow-up: memory-trainer/src/reconstruction.ts duplicates packages/play game state (no-playerColor mode); auto-queen idiom repeated in six files, wants one helper.

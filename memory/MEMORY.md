@@ -15,4 +15,4 @@ Each entry is one line: `- [Title](file.md) — one-line hook`
 - [Research docs](../docs/research/) — 2026-09-15: class-practice review, open-source reuse survey (licenses verified), and the commercial-product landscape organized by subproject; read the landscape doc before designing any subproject
 - [Shared layer](shared-layer.md) — cross-cutting pieces from the interviews and the directory decomposition (built: rules, board, engine, play, positions, facts, import; reserved names for the rest); tooling decisions of 2026-09-16 and why
 - [Subproject interviews](subprojects/) — one file per subproject with the user's answers (all 13 done 2026-09-16); read the relevant file before designing or building that subproject
-- [Minimal slices](minimal-slices.md) — user direction 2026-09-16: a super-minimal version of every subproject first, for early feedback; 10 of 11 slices built 2026-09-16, routes listed per row; the game reviewer is last
+- [Minimal slices](minimal-slices.md) — user direction 2026-09-16: a super-minimal version of every subproject first, for early feedback; all 11 slices built 2026-09-16, routes listed per row; user feedback is the next step

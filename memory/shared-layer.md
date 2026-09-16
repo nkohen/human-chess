@@ -45,7 +45,7 @@ positions, facts, import, seven subprojects, apps/web. Reserved (named, not crea
 | `packages/store` (reserved) | persistence: accounts, linked ratings, games, repertoires | account layer |
 | `packages/facts` (built 2026-09-16) | plain-language board-state facts and questions, each answered by a chessops query (check, piece on square, material by the 1/3/3/5/9 convention); engine comparison still to come | fact extraction, reasoning check |
 | `packages/concepts` (reserved) | concept vocabulary with board-state tests | concept library |
-| `packages/review` (reserved) | standard review shape, lazily computed | standard review |
+| `packages/review` | per-move engine review (eval before/after, loss from the mover's side, classification by first-guess cutoffs, best move) with provenance; report prose, what-if and findability still to come | standard review shape |
 | `packages/rooms` (reserved) | rooms, clocks, sealed votes, matchmaking | multiplayer |
 | `packages/srs` (reserved) | spaced-repetition scheduler | SRS |
 | `packages/opening-tree` (reserved) | played-games tree + explorer stats | opening tree, explorer |
