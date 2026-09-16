@@ -62,3 +62,7 @@ Interview closed 2026-09-16; the user may add more later.
 - Ratings and matchmaking beyond the daily queue; spectators; abandoned games.
 
 **User feedback on the first slice (2026-09-16), fixed the same day:** the voting screen did not say whose move it is (it matters for the verdict); now shown above the material line, and the playing status says "Your move."
+
+**Feedback pass 4 (2026-09-16):** a "Flip board" button while deciding who stands better (a
+viewing aid only; resets to White's side for each new position). Every board app-wide now
+highlights the previous move, including the mined position's last self-play move here.

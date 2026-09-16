@@ -3,7 +3,7 @@
 // narrative report text yet — see memory/subprojects/game-reviewer.md for what this slice
 // deliberately leaves out. Every eval and classification comes from @human-chess/review, which
 // gets them from a real engine or a rules-verified game end, never invented here (A1).
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { formatScore, type UciEngine } from '@human-chess/engine';
 import { ImportScreen } from '@human-chess/import/react';
@@ -266,6 +266,38 @@ function MoveCell({ move, selected, onSelect }: { move: ReviewedMove; selected: 
   );
 }
 
+// The eval chart follows lichess's analysis chart: a zero line across the middle, the area above
+// it (White ahead) filled white and the area below (Black ahead) filled dark, every eval mapped
+// through lichess's winning-chance curve so the middle of the chart has the resolution and a
+// +8 and a +20 look alike. Moves worth a look are marked in their classification colour.
+// Markers at a mate score sit on the chart's edge; kept whole by nudging them inward by their radius.
+const MARK_R = 4;
+const MARKED: Classification[] = ['inaccuracy', 'mistake', 'blunder', 'mate-lost', 'mate-allowed'];
+const MARK_COLOR: Record<Classification, string> = {
+  best: '#2e7d32', good: '#558b2f', inaccuracy: '#f9a825', mistake: '#ef6c00', blunder: '#c62828',
+  'mate-lost': '#6a1b9a', 'mate-allowed': '#4527a0',
+};
+
+/** The element's rendered pixel size, so the SVG can be drawn 1:1 (no viewBox stretching, which
+ * would turn the round markers into ellipses); the initial guess is replaced on first layout. */
+function useElementSize<T extends Element>(): [React.RefObject<T | null>, { w: number; h: number }] {
+  const ref = useRef<T>(null);
+  const [size, setSize] = useState({ w: 600, h: 96 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = (): void => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) setSize(s => (s.w === r.width && s.h === r.height ? s : { w: r.width, h: r.height }));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, size];
+}
+
 function EvalStrip({
   review,
   selectedPly,
@@ -275,37 +307,66 @@ function EvalStrip({
   selectedPly: number;
   onSelect: (ply: number) => void;
 }): React.JSX.Element {
-  if (review.moves.length === 0) return <div className="gr-strip" />;
-  // One point per move (its eval after being played), tracing the game's eval, White perspective.
+  const [ref, { w, h }] = useElementSize<SVGSVGElement>();
+  // Per-instance clip ids: a second chart on the same page would otherwise clip through this one's.
+  const clipId = useId();
+  const upperId = `${clipId}-upper`;
+  const lowerId = `${clipId}-lower`;
+  const n = review.moves.length;
+  const mid = h / 2;
+  const xOf = (i: number): number => ((i + 1) / n) * w;
+  // One point per move (its eval after being played); the curve starts at the zero line before
+  // the first move so the first eval is a step away from "even", not a jump from the left edge.
+  const points = review.moves.map((m, i) => ({ x: xOf(i), y: mid - winningChance(m.evalAfterPlayed) * mid }));
+  const line = `M0,${mid} ` + points.map(p => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const area = `${line} L${w},${mid} Z`;
+  const selected = review.moves.findIndex(m => m.ply === selectedPly);
   return (
-    <div className="gr-strip">
-      {review.moves.map(m => {
-        const pct = evalBarPercent(m.evalAfterPlayed);
-        return (
-          <button
-            key={m.ply}
-            className={`gr-strip-bar${selectedPly === m.ply ? ' gr-strip-bar-selected' : ''}`}
-            style={{ '--pct': `${pct}%` } as React.CSSProperties}
-            onClick={() => onSelect(m.ply)}
-            title={`${m.san}: ${formatEvalOrEnd(m.evalAfterPlayed)}`}
-          />
-        );
-      })}
-    </div>
+    <svg
+      ref={ref}
+      className="gr-strip"
+      viewBox={`0 0 ${w} ${h}`}
+      role="img"
+      aria-label="Evaluation over the game, White's perspective; above the middle line White is ahead"
+    >
+      {n > 0 && (
+        <>
+          <defs>
+            <clipPath id={upperId}><rect x="0" y="0" width={w} height={mid} /></clipPath>
+            <clipPath id={lowerId}><rect x="0" y={mid} width={w} height={mid} /></clipPath>
+          </defs>
+          <rect className="gr-chart-bg" x="0" y="0" width={w} height={h} />
+          <path className="gr-chart-white" d={area} clipPath={`url(#${upperId})`} />
+          <path className="gr-chart-black" d={area} clipPath={`url(#${lowerId})`} />
+          <line className="gr-chart-zero" x1="0" y1={mid} x2={w} y2={mid} />
+          <path className="gr-chart-line" d={line} />
+          {selected >= 0 && <line className="gr-chart-selected" x1={xOf(selected)} y1="0" x2={xOf(selected)} y2={h} />}
+          {review.moves.map((m, i) =>
+            MARKED.includes(m.classification) ? (
+              <circle key={`mark-${m.ply}`} className="gr-chart-mark" cx={points[i]!.x} cy={Math.min(h - MARK_R, Math.max(MARK_R, points[i]!.y))} r={MARK_R} fill={MARK_COLOR[m.classification]} />
+            ) : null,
+          )}
+          {/* Hit areas centred on each move's point, so a click near a marker selects that move. */}
+          {review.moves.map((m, i) => (
+            <rect key={m.ply} className="gr-chart-hit" x={xOf(i) - w / (2 * n)} y="0" width={w / n} height={h} onClick={() => onSelect(m.ply)}>
+              <title>{`${m.san}: ${formatEvalOrEnd(m.evalAfterPlayed)} (${classificationLabel(m.classification)})`}</title>
+            </rect>
+          ))}
+        </>
+      )}
+    </svg>
   );
 }
 
-const EVAL_CAP_CP = 500;
-
-/** Maps a White-perspective evaluation to a 0-100 fill, clamped at ±5 pawns for a cp Score,
- * fully filled toward the winner for a mate score or a delivered checkmate (winner-aware, never
- * guessed from a sign), and split evenly for a rules-verified draw. */
-function evalBarPercent(e: EvalOrEnd): number {
-  if (e.type === 'checkmate') return e.winner === 'white' ? 100 : 0;
-  if (e.type === 'draw') return 50;
-  if (e.type === 'mate') return e.value >= 0 ? 100 : 0;
-  const clamped = Math.max(-EVAL_CAP_CP, Math.min(EVAL_CAP_CP, e.value));
-  return ((clamped + EVAL_CAP_CP) / (2 * EVAL_CAP_CP)) * 100;
+/** lichess's winning-chance curve, in [-1, 1] from White's side: the constant is lila's
+ * ui/ceval winningChances.ts (2/(1+e^(-0.00368208·cp)) - 1); mate and checkmate go to the chart's
+ * edge (±1, winner-aware, never guessed from a sign) as lila's acpl chart does, and a
+ * rules-verified draw sits on the zero line. */
+function winningChance(e: EvalOrEnd): number {
+  if (e.type === 'checkmate') return e.winner === 'white' ? 1 : -1;
+  if (e.type === 'draw') return 0;
+  if (e.type === 'mate') return e.value >= 0 ? 1 : -1;
+  return 2 / (1 + Math.exp(-0.00368208 * e.value)) - 1;
 }
 
 /** Plain-language rendering of an EvalOrEnd: a real Score formats as usual; a delivered

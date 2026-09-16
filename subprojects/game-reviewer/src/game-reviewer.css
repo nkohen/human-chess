@@ -26,19 +26,16 @@
 .gr-move { border: none; border-radius: 0.2rem; padding: 0.1rem 0.4rem; cursor: pointer; }
 .gr-move-selected { outline: 2px solid #333; outline-offset: 1px; }
 
-.gr-strip { display: flex; align-items: flex-end; gap: 1px; height: 2.5rem; background: #ddd; margin: 0.75rem 0; }
-.gr-strip-bar { flex: 1; min-width: 2px; height: 100%; border: none; padding: 0; cursor: pointer; position: relative; background: transparent; }
-.gr-strip-bar::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--pct);
-  background: #fff;
-  border-top: 1px solid #333;
-}
-.gr-strip-bar-selected { outline: 1px solid #333; }
+.gr-strip { display: block; width: 100%; height: 6rem; margin: 0.75rem 0; border: 1px solid #999; }
+.gr-chart-bg { fill: #a0a0a0; }
+.gr-chart-white { fill: #f4f4f4; }
+.gr-chart-black { fill: #303030; }
+.gr-chart-zero { stroke: #d33; stroke-width: 1px; stroke-dasharray: 4 3; }
+.gr-chart-line { fill: none; stroke: #666; stroke-width: 1px; }
+.gr-chart-selected { stroke: #1e88e5; stroke-width: 2px; }
+.gr-chart-mark { stroke: #000; stroke-width: 1px; }
+.gr-chart-hit { fill: transparent; cursor: pointer; }
+.gr-chart-hit:hover { fill: rgba(30, 136, 229, 0.25); }
 
 .gr-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.75rem 0; }
 .gr-legend-hint { color: #666; font-size: 0.85em; }

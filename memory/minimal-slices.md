@@ -65,3 +65,10 @@ refresh). Verified only in a headless browser with lichess's endpoints faked at 
 the user must try the real login themselves. Bugs found in that smoke and fixed: the restored
 hash after the redirect fired no hashchange (the app stayed on home), and a deduped GET whose
 leader was aborted pre-send under StrictMode's double mount rejected its joiner too.
+Feedback pass 4 (2026-09-16, openings builder, game reviewer, Chessitout, all boards): explorer
+bars show percentages on hover; "Tree at this position" first in the side column; moves can be
+removed from the tree (confirm when continuations go with them); review depth 20 by default;
+lichess-style eval chart with a zero line and colour; Chessitout board flips while deciding;
+every board (hover previews included) highlights the previous move, each derived from that
+screen's own move data (a worker did the sweep; the visualization trainer's start position now
+keeps its setup moves for it).

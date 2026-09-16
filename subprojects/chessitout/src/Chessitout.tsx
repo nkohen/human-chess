@@ -38,6 +38,9 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
   const [miningError, setMiningError] = useState<string | undefined>(undefined);
   const [vote, setVote] = useState<Vote | undefined>(undefined);
   const [playerColor, setPlayerColor] = useState<Color | undefined>(undefined);
+  // Which side the board is seen from while deciding who stands better; a flip is a viewing aid
+  // only and is reset for every new position (user, 2026-09-16).
+  const [viewFrom, setViewFrom] = useState<Color>('white');
   const [elo, setElo] = useState(DEFAULT_ELO);
   const [tally, setTally] = useState({ right: 0, wrong: 0 });
   const [finalAnalysis, setFinalAnalysis] = useState<Analysis | undefined>(undefined);
@@ -57,6 +60,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     setGeneration(g => g + 1);
     setPhase('mining');
     setPosition(undefined);
+    setViewFrom('white');
     setMiningError(undefined);
     setVote(undefined);
     setPlayerColor(undefined);
@@ -213,7 +217,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
         <h2>Chessitout</h2>
         <Board
           fen={position.fen}
-          orientation="white"
+          orientation={viewFrom}
           turnColor={turn(pos)}
           dests={new Map()}
           movableColor={undefined}
@@ -221,6 +225,11 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
           check={inCheck(pos)}
           onMove={() => undefined}
         />
+        <div className="ci-view">
+          <button className="ci-flip" onClick={() => setViewFrom(c => (c === 'white' ? 'black' : 'white'))}>
+            Flip board (seen from {viewFrom === 'white' ? "White's" : "Black's"} side)
+          </button>
+        </div>
         <p className="ci-turn">{turn(pos) === 'white' ? 'White to move' : 'Black to move'}</p>
         <p className="ci-material">{describeMaterialDifference(pieceCounts(pos))}</p>
         {phase === 'voting' ? (

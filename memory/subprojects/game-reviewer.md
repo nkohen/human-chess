@@ -84,3 +84,8 @@ Interview closed 2026-09-16; the user may add more later.
 screen's constant and `packages/review`'s default changed. Not yet configurable in the UI; a
 full game at depth 20 on the wasm engine takes minutes, so a depth control like the openings
 builder's is the natural next step if the user finds it slow.
+
+**Feedback pass 4 (2026-09-16):** the eval strip's bars had no visible zero; replaced with a
+lichess-style chart (zero line mid-height, White ahead filled white above, Black ahead dark
+below, evals through lichess's winning-chance curve so the middle has the resolution, coloured
+markers for inaccuracy/mistake/blunder/mate-lost/mate-allowed, click a ply to select it).
