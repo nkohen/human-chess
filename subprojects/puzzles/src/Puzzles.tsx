@@ -150,7 +150,9 @@ export function Puzzles(): React.JSX.Element {
             <Board
               fen={currentFen(solveState)}
               orientation={puzzle.solverColor}
-              turnColor={finished ? puzzle.solverColor : turn(solveState.pos)}
+              // Always the real side to move: chessground marks the king of `turnColor` when in
+              // check, so after a mating solution the mated king is the one highlighted.
+              turnColor={turn(solveState.pos)}
               dests={dests}
               movableColor={finished ? undefined : puzzle.solverColor}
               lastMove={solveState.lastMove}
@@ -162,11 +164,14 @@ export function Puzzles(): React.JSX.Element {
             <p style={styles.meta}>
               lichess puzzle rating: {puzzle.rating}
             </p>
-            <div style={styles.themes}>
-              {puzzle.themes.map(theme => (
-                <span key={theme} style={styles.theme}>{theme}</span>
-              ))}
-            </div>
+            {finished && (
+              // Themes name the motif and would give the solution away, so they appear only once solved.
+              <div style={styles.themes}>
+                {puzzle.themes.map(theme => (
+                  <span key={theme} style={styles.theme}>{theme}</span>
+                ))}
+              </div>
+            )}
           </>
         )}
 

@@ -36,3 +36,8 @@ Interview closed 2026-09-16; the user may add more later.
 
 ## Open questions (not yet asked)
 - Modes: single puzzles, themed sets, timed rush; which for version one?
+
+**User feedback on the first slice (2026-09-16), fixed the same day:** after a mating solution
+the solver's own king was highlighted as in check (the board was told the solver was to move;
+now it gets the real side to move); puzzle themes are hidden until the puzzle is solved because
+they give the motif away.
