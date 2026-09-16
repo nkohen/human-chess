@@ -25,6 +25,10 @@ export interface BoardProps {
   onMove: (from: SquareName, to: SquareName) => void;
   /** CSS size of the square board; defaults to 100% of the parent's width. */
   size?: string;
+  /** Right-click to circle a square, right-drag to draw an arrow (chessground's built-in
+   * `drawable`); right-click again on a shape removes it. Default true — lichess allows drawing
+   * on every board, not just ones the viewer can move on. */
+  drawable?: boolean;
 }
 
 export function Board(props: BoardProps): React.JSX.Element {
@@ -54,7 +58,10 @@ export function Board(props: BoardProps): React.JSX.Element {
     draggable: { enabled: props.movableColor !== undefined },
     selectable: { enabled: props.movableColor !== undefined },
     premovable: { enabled: false },
-    drawable: { enabled: false },
+    // visible: true so a drawn circle/arrow actually renders (enabled alone only turns on the
+    // right-click/right-drag input handling). Keys checked against chessground's own
+    // config.d.ts/draw.d.ts (node_modules/chessground) rather than guessed.
+    drawable: { enabled: props.drawable ?? true, visible: true },
   });
 
   useEffect(() => {
@@ -67,11 +74,29 @@ export function Board(props: BoardProps): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // chessground's `configure()` resets user-drawn shapes to `config.drawable.shapes ?? []` on
+  // every `set()` that carries a fen. Shapes belong to the position being looked at, so they are
+  // cleared when the fen changes; on any other prop change (a caller re-rendering with a fresh
+  // `dests` map, a check flag, ...) the current shapes are passed back so a circle or arrow the
+  // person drew survives. `setShapes` is the user-shapes API; `setAutoShapes` is for
+  // computer-drawn annotations and is not used here.
+  const shownFen = useRef(props.fen);
   useEffect(() => {
-    api.current?.set(config());
+    if (!api.current) return;
+    const cfg = config();
+    const keep = shownFen.current === props.fen ? api.current.state.drawable.shapes : [];
+    shownFen.current = props.fen;
+    api.current.set({ ...cfg, drawable: { ...cfg.drawable, shapes: keep } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.fen, props.orientation, props.turnColor, props.check, props.lastMove, props.dests, props.movableColor]);
+  }, [props.fen, props.orientation, props.turnColor, props.check, props.lastMove, props.dests, props.movableColor, props.drawable]);
 
   const size = props.size ?? '100%';
-  return <div ref={el} style={{ width: size, aspectRatio: '1 / 1' }} />;
+  return (
+    // chessground already suppresses the browser context menu on its own board element whenever
+    // drawable is enabled at construction time (events.js: `disableContextMenu || drawable.enabled`
+    // gates the listener) or `disableContextMenu` is set; this handler is a defensive fallback
+    // for the wrapper div itself, e.g. if a board is ever constructed with drawing off and later
+    // switched on (chessground only binds that listener once, at construction).
+    <div ref={el} style={{ width: size, aspectRatio: '1 / 1' }} onContextMenu={props.drawable === false ? undefined : e => e.preventDefault()} />
+  );
 }

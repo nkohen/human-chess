@@ -62,6 +62,17 @@ curated positions, saving results. Reviewed by the code-reviewer agent 2026-09-1
 - Cross-cutting: hovering a move in any displayed line should show the position (→ MoveLine
   in packages/board).
 
+**Feedback round 2 (2026-09-16), addressed the same day:**
+- Split the winning band into winning and dominating (→ nine bands, dominating at ±500 cp,
+  first guess).
+- Hover previews glitched, probably rendering off the bottom of the screen and correcting (→
+  fixed-position preview that never touches layout or the pointer, flips above when needed).
+- "Next position" is the primary button: put it at the top, centred.
+- Right-click highlights and right-drag arrows on the board, as on other board UIs (→
+  chessground's drawable enabled on every Board by default, cleared when the position changes).
+- The results page should be visual: bars, not text (→ total bar, per-position points bars and
+  compact eval scales).
+
 ## Open questions (not yet asked)
 - Adaptive difficulty.
 - Eval presentation: centipawns vs win probability.

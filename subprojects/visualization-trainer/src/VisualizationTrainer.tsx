@@ -157,6 +157,8 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
               movableColor={undefined}
               check={inCheck(startPos)}
               onMove={() => undefined}
+              // Drawing the line's arrows on the start board would do the visualizing for the learner.
+              drawable={revealed}
             />
           </div>
 

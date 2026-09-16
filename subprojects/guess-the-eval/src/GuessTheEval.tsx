@@ -11,10 +11,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import { EngineError, formatPawns, formatScore, whitePerspective, type Analysis, type Score, type UciEngine } from '@human-chess/engine';
 import { generateRecipePosition, pickRecipe, type RecipePosition } from '@human-chess/positions';
-import { inCheck, positionFromFen, turn } from '@human-chess/rules';
+import { inCheck, positionFromFen, turn, type SquareName } from '@human-chess/rules';
 import { EvalScale } from './EvalScale';
 import { band, describeBand, grade, MAX_POINTS, points, SLIDER_MAX_CP, SLIDER_MIN_CP } from './scoring';
 import './guess-the-eval.css';
+
+/** Stable so the board does not re-run its update (and would not need to) on every slider tick. */
+const EMPTY_DESTS = new Map<SquareName, SquareName[]>();
 
 export interface GuessTheEvalProps {
   /** A ready (initialised) engine, or undefined while it loads; or an Error when it could not load. */
@@ -173,21 +176,40 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
   }
   if (phase === 'summary') {
     const total = results.reduce((sum, r) => sum + r.points, 0);
+    const maxTotal = ROUNDS * MAX_POINTS;
     return (
       <div className="gte">
         <h2>Guess the eval</h2>
         <div className="gte-summary">
-          <p className="gte-summary-total">
-            Total: {total} / {ROUNDS * MAX_POINTS}
-          </p>
-          <ol>
+          <button className="gte-primary" onClick={playAgain}>
+            Play again
+          </button>
+          <div className="gte-bar-row gte-summary-total-row">
+            <div className="gte-bar">
+              <div className="gte-bar-fill" style={{ width: `${Math.min(100, (total / maxTotal) * 100)}%` }} />
+            </div>
+            <span className="gte-bar-value">
+              {total} / {maxTotal}
+            </span>
+          </div>
+          <ol className="gte-summary-list">
             {results.map((r, i) => (
-              <li key={i}>
-                Eval {formatScore(r.truth)}, your guess {formatPawns(r.guessCp)} — {r.points} points ({r.recipeDescription})
+              <li key={i} className="gte-summary-row" title={r.recipeDescription}>
+                <div className="gte-bar-row">
+                  <div className="gte-bar">
+                    <div className="gte-bar-fill" style={{ width: `${Math.min(100, (r.points / MAX_POINTS) * 100)}%` }} />
+                  </div>
+                  <span className="gte-bar-value">{r.points}</span>
+                </div>
+                <div className="gte-bar-row">
+                  <EvalScale guessCp={r.guessCp} truth={r.truth} compact />
+                  <span className="gte-summary-row-values">
+                    {formatScore(r.truth)} · guess {formatPawns(r.guessCp)}
+                  </span>
+                </div>
               </li>
             ))}
           </ol>
-          <button onClick={playAgain}>Play again</button>
         </div>
       </div>
     );
@@ -214,7 +236,7 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
         fen={position.fen}
         orientation="white"
         turnColor={turn(pos)}
-        dests={new Map()}
+        dests={EMPTY_DESTS}
         movableColor={undefined}
         check={inCheck(pos)}
         onMove={() => undefined}
@@ -244,6 +266,9 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
 
       {phase === 'revealed' && truth && gradeResult && line && roundResult && (
         <div className="gte-reveal">
+          <button className="gte-primary" onClick={advance}>
+            {roundIndex + 1 >= ROUNDS ? 'See results' : 'Next position'}
+          </button>
           <p className="gte-source">Position source: {position.description}.</p>
           <p>
             Engine evaluation, White's perspective: <strong>{formatScore(truth)}</strong>{' '}
@@ -262,7 +287,6 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
           <div className="gte-topline">
             Top line: <MoveLine startFen={position.fen} ucis={line.pv} />
           </div>
-          <button onClick={advance}>{roundIndex + 1 >= ROUNDS ? 'See results' : 'Next position'}</button>
         </div>
       )}
     </div>

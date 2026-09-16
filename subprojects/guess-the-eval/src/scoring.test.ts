@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { band, BAND_CLEAR_CP, BAND_SLIGHT_CP, BAND_WINNING_CP, describeBand, DECAY_CP, grade, mateSide, MAX_POINTS, points } from './scoring';
+import { band, BAND_CLEAR_CP, BAND_DOMINATING_CP, BAND_SLIGHT_CP, BAND_WINNING_CP, describeBand, DECAY_CP, grade, mateSide, MAX_POINTS, points } from './scoring';
 
 // whitePerspective's tests moved to packages/engine/src/score.test.ts along with the function.
 
@@ -35,14 +35,21 @@ describe('band', () => {
     expect(band({ type: 'cp', value: BAND_SLIGHT_CP })).toBe('white-slight');
     expect(band({ type: 'cp', value: BAND_CLEAR_CP })).toBe('white-clear');
     expect(band({ type: 'cp', value: BAND_WINNING_CP })).toBe('white-winning');
+    expect(band({ type: 'cp', value: BAND_DOMINATING_CP })).toBe('white-dominating');
     expect(band({ type: 'cp', value: -BAND_SLIGHT_CP })).toBe('black-slight');
     expect(band({ type: 'cp', value: -BAND_CLEAR_CP })).toBe('black-clear');
     expect(band({ type: 'cp', value: -BAND_WINNING_CP })).toBe('black-winning');
+    expect(band({ type: 'cp', value: -BAND_DOMINATING_CP })).toBe('black-dominating');
   });
 
-  it('treats any mate as winning for the mating side', () => {
-    expect(band({ type: 'mate', value: 5 })).toBe('white-winning');
-    expect(band({ type: 'mate', value: -1 })).toBe('black-winning');
+  it('reports winning (not yet dominating) just below the dominating threshold', () => {
+    expect(band({ type: 'cp', value: BAND_DOMINATING_CP - 1 })).toBe('white-winning');
+    expect(band({ type: 'cp', value: -(BAND_DOMINATING_CP - 1) })).toBe('black-winning');
+  });
+
+  it('treats any mate as dominating for the mating side', () => {
+    expect(band({ type: 'mate', value: 5 })).toBe('white-dominating');
+    expect(band({ type: 'mate', value: -1 })).toBe('black-dominating');
   });
 });
 
@@ -51,6 +58,8 @@ describe('describeBand', () => {
     expect(describeBand('equal')).toMatch(/equal/i);
     expect(describeBand('white-winning')).toMatch(/white/i);
     expect(describeBand('black-winning')).toMatch(/black/i);
+    expect(describeBand('white-dominating')).toMatch(/white/i);
+    expect(describeBand('black-dominating')).toMatch(/black/i);
   });
 });
 

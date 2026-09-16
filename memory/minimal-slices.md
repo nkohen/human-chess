@@ -43,3 +43,8 @@ GeoGuessr-style points (5000 × exp(−distance/150 cp), first guess), summary. 
 piece-on square is always one the line touched, material before the line shown, five exercises
 per session, hover previews only after the reveal. The user's remaining comments on the other
 nine slices are still to come.
+Feedback pass 2 (2026-09-16, guess-the-eval only): nine bands with "dominating" at ±500 cp;
+MoveLine preview made position-fixed and pointer-transparent (the old absolute preview grew the
+page and flickered); primary "Next position" at the top of the reveal; chessground drawing
+(right-click circles, right-drag arrows) on by default for every Board, shapes kept across
+re-renders and cleared on a FEN change; bar-based results page.

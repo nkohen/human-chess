@@ -5,7 +5,7 @@
 // mate as a cp number (the ±1000 clamp used elsewhere for GeoGuessr-style points, in scoring.ts,
 // is a scoring convention, not an evaluation, and stays out of this display).
 import { formatPawns, formatScore, type Score } from '@human-chess/engine';
-import { BAND_CLEAR_CP, BAND_SLIGHT_CP, BAND_WINNING_CP, clampCp, mateSide, SLIDER_MAX_CP, SLIDER_MIN_CP } from './scoring';
+import { BAND_CLEAR_CP, BAND_DOMINATING_CP, BAND_SLIGHT_CP, BAND_WINNING_CP, clampCp, mateSide, SLIDER_MAX_CP, SLIDER_MIN_CP } from './scoring';
 
 interface Segment {
   from: number;
@@ -14,14 +14,18 @@ interface Segment {
   label: string;
 }
 
-const SEGMENTS: Segment[] = [
-  { from: SLIDER_MIN_CP, to: -BAND_WINNING_CP, className: 'gte-seg-black-winning', label: 'Black winning' },
+// The scale spans SLIDER_MIN_CP..SLIDER_MAX_CP (±1000); with BAND_DOMINATING_CP at 500 the two
+// outer "dominating" segments are the outer 500cp on each side.
+export const SEGMENTS: Segment[] = [
+  { from: SLIDER_MIN_CP, to: -BAND_DOMINATING_CP, className: 'gte-seg-black-dominating', label: 'Black dominating' },
+  { from: -BAND_DOMINATING_CP, to: -BAND_WINNING_CP, className: 'gte-seg-black-winning', label: 'Black winning' },
   { from: -BAND_WINNING_CP, to: -BAND_CLEAR_CP, className: 'gte-seg-black-clear', label: 'Black clearly better' },
   { from: -BAND_CLEAR_CP, to: -BAND_SLIGHT_CP, className: 'gte-seg-black-slight', label: 'Black slightly better' },
   { from: -BAND_SLIGHT_CP, to: BAND_SLIGHT_CP, className: 'gte-seg-equal', label: 'Equal' },
   { from: BAND_SLIGHT_CP, to: BAND_CLEAR_CP, className: 'gte-seg-white-slight', label: 'White slightly better' },
   { from: BAND_CLEAR_CP, to: BAND_WINNING_CP, className: 'gte-seg-white-clear', label: 'White clearly better' },
-  { from: BAND_WINNING_CP, to: SLIDER_MAX_CP, className: 'gte-seg-white-winning', label: 'White winning' },
+  { from: BAND_WINNING_CP, to: BAND_DOMINATING_CP, className: 'gte-seg-white-winning', label: 'White winning' },
+  { from: BAND_DOMINATING_CP, to: SLIDER_MAX_CP, className: 'gte-seg-white-dominating', label: 'White dominating' },
 ];
 
 const RANGE_CP = SLIDER_MAX_CP - SLIDER_MIN_CP;
@@ -35,14 +39,18 @@ export interface EvalScaleProps {
   guessCp: number;
   /** White's perspective. */
   truth: Score;
+  /** Short (~10px) with no legend and no marker text labels — just the coloured bands and the
+   * two marker ticks. Used for the per-round rows on the summary screen (item 5, user feedback
+   * 2026-09-16), where the eval/guess values are printed as text alongside the row instead. */
+  compact?: boolean;
 }
 
-export function EvalScale({ guessCp, truth }: EvalScaleProps): React.JSX.Element {
+export function EvalScale({ guessCp, truth, compact = false }: EvalScaleProps): React.JSX.Element {
   const truthPct = truth.type === 'mate' ? (mateSide(truth) === 'white' ? 100 : 0) : pct(truth.value);
   const guessPct = pct(guessCp);
 
   return (
-    <div className="gte-scale">
+    <div className={`gte-scale${compact ? ' gte-scale-compact' : ''}`}>
       <div className="gte-scale-bar">
         {SEGMENTS.map(seg => (
           <div
@@ -53,19 +61,21 @@ export function EvalScale({ guessCp, truth }: EvalScaleProps): React.JSX.Element
           />
         ))}
         <div className="gte-scale-marker gte-scale-marker-guess" style={{ left: `${guessPct}%` }}>
-          <span className="gte-scale-marker-label">Guess {formatPawns(guessCp)}</span>
+          {!compact && <span className="gte-scale-marker-label">Guess {formatPawns(guessCp)}</span>}
         </div>
         <div className="gte-scale-marker gte-scale-marker-truth" style={{ left: `${truthPct}%` }}>
-          <span className="gte-scale-marker-label">{formatScore(truth)}</span>
+          {!compact && <span className="gte-scale-marker-label">{formatScore(truth)}</span>}
         </div>
       </div>
-      <div className="gte-scale-legend">
-        {SEGMENTS.map(seg => (
-          <span key={seg.className} className="gte-scale-legend-item">
-            <span className={`gte-scale-swatch ${seg.className}`} /> {seg.label}
-          </span>
-        ))}
-      </div>
+      {!compact && (
+        <div className="gte-scale-legend">
+          {SEGMENTS.map(seg => (
+            <span key={seg.className} className="gte-scale-legend-item">
+              <span className={`gte-scale-swatch ${seg.className}`} /> {seg.label}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

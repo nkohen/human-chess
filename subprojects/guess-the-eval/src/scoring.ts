@@ -6,18 +6,23 @@
 import type { Score } from '@human-chess/engine';
 
 export type Band =
+  | 'black-dominating'
   | 'black-winning'
   | 'black-clear'
   | 'black-slight'
   | 'equal'
   | 'white-slight'
   | 'white-clear'
-  | 'white-winning';
+  | 'white-winning'
+  | 'white-dominating';
 
 /** Centipawn band edges. A cp score at or beyond a threshold falls in that band or a stronger one. */
 export const BAND_SLIGHT_CP = 30;
 export const BAND_CLEAR_CP = 100;
 export const BAND_WINNING_CP = 200;
+// First guess (user feedback, 2026-09-16, item 1): splits "winning" into "winning" and a more
+// decisive "dominating" band. Flagged here for the user to tune, not a researched threshold.
+export const BAND_DOMINATING_CP = 500;
 
 /**
  * Which side a White-perspective mate score belongs to. UCI's "mate 0" means the side to move is
@@ -31,15 +36,17 @@ export function mateSide(score: Score): 'white' | 'black' {
   return Object.is(score.value, -0) ? 'black' : score.value >= 0 ? 'white' : 'black';
 }
 
-/** Which qualitative band a White-perspective score falls in. A mate always counts as winning for its side. */
+/** Which qualitative band a White-perspective score falls in. A mate always counts as dominating for its side. */
 export function band(score: Score): Band {
   if (score.type === 'mate') {
-    return mateSide(score) === 'white' ? 'white-winning' : 'black-winning';
+    return mateSide(score) === 'white' ? 'white-dominating' : 'black-dominating';
   }
   const cp = score.value;
+  if (cp >= BAND_DOMINATING_CP) return 'white-dominating';
   if (cp >= BAND_WINNING_CP) return 'white-winning';
   if (cp >= BAND_CLEAR_CP) return 'white-clear';
   if (cp >= BAND_SLIGHT_CP) return 'white-slight';
+  if (cp <= -BAND_DOMINATING_CP) return 'black-dominating';
   if (cp <= -BAND_WINNING_CP) return 'black-winning';
   if (cp <= -BAND_CLEAR_CP) return 'black-clear';
   if (cp <= -BAND_SLIGHT_CP) return 'black-slight';
@@ -48,6 +55,7 @@ export function band(score: Score): Band {
 
 export function describeBand(b: Band): string {
   switch (b) {
+    case 'white-dominating': return 'White is dominating';
     case 'white-winning': return 'White is winning';
     case 'white-clear': return 'White is clearly better';
     case 'white-slight': return 'White is slightly better';
@@ -55,6 +63,7 @@ export function describeBand(b: Band): string {
     case 'black-slight': return 'Black is slightly better';
     case 'black-clear': return 'Black is clearly better';
     case 'black-winning': return 'Black is winning';
+    case 'black-dominating': return 'Black is dominating';
   }
 }
 

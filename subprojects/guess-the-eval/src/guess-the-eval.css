@@ -10,10 +10,32 @@
 .gte-score { font-weight: bold; }
 .gte-provenance { color: #666; font-size: 0.9em; }
 
-/* Eval scale: replaces the slider, same width, after a reveal. */
+/* Primary button (item 3/5, user feedback 2026-09-16): the main next-step action, full-width
+   up to the board's width and centred, larger than the plain buttons around it. */
+.gte-primary {
+  display: block;
+  width: 100%;
+  min-width: 12rem;
+  margin: 0 auto 1rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1.05rem;
+  font-weight: bold;
+  text-align: center;
+  color: #fff;
+  background: #1a56db;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.gte-primary:hover { background: #1747b8; }
+.gte-primary:disabled { opacity: 0.6; cursor: default; }
+
+/* Eval scale: replaces the slider, same width, after a reveal. Nine bands (item 1, user
+   feedback 2026-09-16): "winning" split into "winning" and a darker-shaded "dominating". */
 .gte-scale { width: 100%; margin-top: 1.5rem; }
 .gte-scale-bar { position: relative; display: flex; width: 100%; height: 1.25rem; border-radius: 3px; overflow: visible; }
 .gte-scale-seg { height: 100%; }
+.gte-seg-black-dominating { background: #2a0d0d; }
 .gte-seg-black-winning { background: #4a1a1a; }
 .gte-seg-black-clear { background: #7a2e2e; }
 .gte-seg-black-slight { background: #b06a6a; }
@@ -21,6 +43,7 @@
 .gte-seg-white-slight { background: #a9c9a9; }
 .gte-seg-white-clear { background: #5a9c5a; }
 .gte-seg-white-winning { background: #2e6e2e; }
+.gte-seg-white-dominating { background: #163a16; }
 
 .gte-scale-marker { position: absolute; top: 0; width: 0; height: 100%; transform: translateX(-50%); }
 .gte-scale-marker::before { content: ''; position: absolute; left: -1px; top: -0.3rem; width: 2px; height: calc(100% + 0.6rem); }
@@ -34,7 +57,25 @@
 .gte-scale-legend-item { display: inline-flex; align-items: center; gap: 0.25rem; }
 .gte-scale-swatch { display: inline-block; width: 0.65rem; height: 0.65rem; border-radius: 2px; }
 
-.gte-summary ol { padding-left: 1.25rem; }
-.gte-summary li { margin: 0.2rem 0; }
-.gte-summary-total { font-weight: bold; font-size: 1.1rem; margin: 0.5rem 0; }
+/* Compact eval scale (item 5, user feedback 2026-09-16): summary-row use, no legend, no marker
+   text, short bar. The marker ticks sit flush with the bar instead of protruding above/below it
+   since there is no label to make room for. */
+.gte-scale-compact { width: 100%; margin-top: 0; flex: 1; }
+.gte-scale-compact .gte-scale-bar { height: 10px; border-radius: 2px; }
+.gte-scale-compact .gte-scale-marker::before { top: -1px; height: calc(100% + 2px); width: 2px; }
+
+/* Summary screen (item 5, user feedback 2026-09-16): bars instead of a text list. */
+.gte-bar-row { display: flex; align-items: center; gap: 0.6rem; margin: 0.3rem 0; }
+.gte-bar { position: relative; flex: 1; height: 1rem; background: #e5e5e5; border-radius: 4px; overflow: hidden; }
+.gte-bar-fill { height: 100%; background: #1a56db; border-radius: 4px 0 0 4px; }
+.gte-bar-value { min-width: 3.5rem; font-size: 0.85rem; font-weight: bold; text-align: right; white-space: nowrap; }
+
+.gte-summary-total-row { margin: 0.75rem 0 1.25rem; }
+.gte-summary-total-row .gte-bar { height: 1.6rem; }
+.gte-summary-total-row .gte-bar-value { min-width: 6rem; font-size: 1.1rem; }
+
+.gte-summary-list { list-style: none; padding: 0; margin: 0; }
+.gte-summary-row { padding: 0.4rem 0; border-top: 1px solid #eee; cursor: default; }
+.gte-summary-row:first-child { border-top: none; }
+.gte-summary-row-values { font-size: 0.78rem; opacity: 0.8; white-space: nowrap; }
 .gte-topline { margin: 0.35rem 0; }
