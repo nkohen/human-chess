@@ -2,7 +2,7 @@
 // every "right"/"wrong" judgement traces to the puzzle JSON lichess sent — nothing here
 // invents a line or a verdict (A1). No player rating is tracked, per the puzzles interview
 // (memory/subprojects/puzzles.md): only a session tally.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { inCheck, isPromotionMove, legalDests, turn, type SquareName } from '@human-chess/rules';
 import { fetchNextPuzzle, fetchPuzzleById, type ParsedPuzzle } from './puzzle';
@@ -50,32 +50,53 @@ export function Puzzles(): React.JSX.Element {
   const [idInput, setIdInput] = useState('');
   const [tally, setTally] = useState<Tally>(EMPTY_TALLY);
 
+  // Guards every in-flight fetch against a later one superseding it (a fast second click, or
+  // React StrictMode's double effect invocation in dev): only the request whose id is still
+  // current when it resolves is allowed to apply its puzzle or its error.
+  const requestId = useRef(0);
+
   const applyPuzzle = (p: ParsedPuzzle): void => {
     setPuzzle(p);
     setSolveState(startSolve(p.startFen, p.solution));
   };
 
   const loadNext = useCallback(() => {
+    const id = ++requestId.current;
     setLoading(true);
     setError(undefined);
     fetchNextPuzzle()
-      .then(applyPuzzle)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setLoading(false));
+      .then(p => {
+        if (requestId.current === id) applyPuzzle(p);
+      })
+      .catch((err: unknown) => {
+        if (requestId.current === id) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (requestId.current === id) setLoading(false);
+      });
   }, []);
 
   const loadById = (): void => {
     const id = idInput.trim();
     if (!id) return;
+    const requestNo = ++requestId.current;
     setLoading(true);
     setError(undefined);
     fetchPuzzleById(id)
-      .then(applyPuzzle)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setLoading(false));
+      .then(p => {
+        if (requestId.current === requestNo) applyPuzzle(p);
+      })
+      .catch((err: unknown) => {
+        if (requestId.current === requestNo) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (requestId.current === requestNo) setLoading(false);
+      });
   };
 
   // Load a first puzzle on mount, same as guess-the-eval auto-generating its first position.
+  // loadNext is itself request-id guarded (see above), so StrictMode's mount/unmount/remount in
+  // dev fires this twice but only the second, current request ever applies a puzzle or an error.
   useEffect(() => {
     loadNext();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,10 +104,22 @@ export function Puzzles(): React.JSX.Element {
 
   const onMove = (from: SquareName, to: SquareName): void => {
     if (!solveState) return;
-    // No promotion picker in this UI; auto-queen, the same convention as hand-and-brain and
-    // memory-trainer. attemptMove compares the full UCI string, so an underpromotion solution
-    // (rare in practice) simply reads as 'wrong' here rather than being silently accepted.
-    const uci = isPromotionMove(solveState.pos, from, to) ? `${from}${to}q` : `${from}${to}`;
+    // No promotion picker in this UI. Default to auto-queen, the same convention as
+    // hand-and-brain and memory-trainer — except when the puzzle's own solution move for this
+    // exact from/to square pair is an underpromotion: the puzzle line is the only accepted
+    // answer here (attemptMove compares the full UCI string), so auto-queening in that one case
+    // would make the correct move permanently unplayable from this UI rather than merely reading
+    // as 'wrong' on a first attempt. Any other from/to (including a genuinely wrong guess) still
+    // auto-queens and, if it doesn't match the solution string, correctly reads as 'wrong'.
+    const promoting = isPromotionMove(solveState.pos, from, to);
+    let promotion = 'q';
+    if (promoting) {
+      const expected = solveState.solution[solveState.index];
+      if (expected && expected.length === 5 && expected.startsWith(`${from}${to}`)) {
+        promotion = expected[4]!;
+      }
+    }
+    const uci = promoting ? `${from}${to}${promotion}` : `${from}${to}`;
     let next: SolveState;
     try {
       next = attemptMove(solveState, uci);

@@ -7,12 +7,17 @@ import {
   fenOf, hasLegalMoves, playUci, positionEnd, positionFromFen, turn,
   type Color, type GameEnd, type Position,
 } from '@human-chess/rules';
-import { classify, terminalScore, type Classification } from './classify';
+import { classify, terminalEval, type Classification, type EvalOrEnd } from './classify';
 
 /** The slice of UciEngine reviewGame actually calls — enough to fake in tests without a transport. */
 export type AnalysingEngine = Pick<UciEngine, 'analyse'>;
 
 export class ReviewError extends Error {}
+
+/** Thrown when `options.signal` is already aborted before a position's analyse() call would
+ * have started. Callers (e.g. GameReviewer's unmount/re-run cleanup) treat this as an expected
+ * cancellation, not a failure to surface to the user. */
+export class ReviewCancelled extends ReviewError {}
 
 export interface ReviewedMove {
   /** 1-based ply number (half-move), matching PGN/SAN move-list convention. */
@@ -32,12 +37,15 @@ export interface ReviewedMove {
    * "the eval after playing the top move" — no second analyse() call is needed for it.
    */
   evalAfterBest: Score;
-  /** White-perspective Score after the move actually played, from the next ply's evalBefore
-   * (or, for the last move, one extra analyse() call — or terminalScore() when the game ended). */
-  evalAfterPlayed: Score;
+  /** White-perspective evaluation after the move actually played, from the next ply's
+   * evalBefore (or, for the last move, one extra analyse() call — or the rules-verified
+   * terminalEval() when the game ended by rule; see EvalOrEnd). */
+  evalAfterPlayed: EvalOrEnd;
   lossCp: number | undefined;
   classification: Classification;
-  provenance: { engine: string; depth: number };
+  /** depthAfter is 'rules' rather than a number when evalAfterPlayed is a terminal fact from
+   * positionEnd(), never attributed to a search depth it did not come from. */
+  provenance: { engine: string; depthBefore: number; depthAfter: number | 'rules' };
 }
 
 export interface GameReview {
@@ -50,6 +58,9 @@ export interface GameReview {
 export interface ReviewOptions {
   /** Search depth for every position. Defaults to 12. */
   depth?: number;
+  /** Checked before each analyse() call; an already-aborted signal throws ReviewCancelled
+   * instead of starting another search the caller no longer wants. */
+  signal?: AbortSignal;
 }
 
 export interface ReviewProgress {
@@ -84,6 +95,7 @@ export async function reviewGame(
 
   const analyses: Analysis[] = [];
   for (let i = 0; i < total; i++) {
+    if (options.signal?.aborted) throw new ReviewCancelled('review cancelled');
     analyses.push(await engine.analyse(fens[i]!, [], limit, 1));
     onProgress?.({ ply: i + 1, total });
   }
@@ -96,6 +108,7 @@ export async function reviewGame(
   if (total > 0) {
     const finalPos = positions[total]!;
     if (hasLegalMoves(finalPos)) {
+      if (options.signal?.aborted) throw new ReviewCancelled('review cancelled');
       finalAnalysis = await engine.analyse(fens[total]!, [], limit, 1);
     } else {
       const howEnded = positionEnd(finalPos);
@@ -117,14 +130,19 @@ export async function reviewGame(
     const evalAfterBest = evalBefore;
 
     const nextRaw = i + 1 < total ? analyses[i + 1] : finalAnalysis;
-    let evalAfterPlayed: Score;
+    let evalAfterPlayed: EvalOrEnd;
+    let depthAfter: number | 'rules';
     if (nextRaw) {
       const nextLine = nextRaw.lines[0];
       if (!nextLine) throw new ReviewError(`${nextRaw.engine} returned no evaluation line after ply ${i + 1}`);
       evalAfterPlayed = whitePerspective(nextLine.score, turn(positions[i + 1]!));
+      depthAfter = nextLine.depth;
     } else {
-      // Only reachable for the last move when the game ended by rule (end is set above).
-      evalAfterPlayed = terminalScore(end!.end);
+      // Only reachable for the last move when the game ended by rule (end is set above); the
+      // terminal fact comes from positionEnd(), never from a search, so it is never attributed
+      // to a depth (finding 3).
+      evalAfterPlayed = terminalEval(end!.end);
+      depthAfter = 'rules';
     }
 
     const played = game.ucis[i]!;
@@ -145,7 +163,7 @@ export async function reviewGame(
       evalAfterPlayed,
       lossCp,
       classification,
-      provenance: { engine: rawBefore.engine, depth: bestLine.depth },
+      provenance: { engine: rawBefore.engine, depthBefore: bestLine.depth, depthAfter },
     });
   }
 

@@ -6,6 +6,27 @@ import type { Color, GameEnd } from '@human-chess/rules';
 
 export type Classification = 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'mate-lost' | 'mate-allowed';
 
+/** A drawn game's rules-verified reason, i.e. every GameEnd kind except checkmate. */
+export type DrawReason = Exclude<GameEnd['kind'], 'checkmate'>;
+
+/**
+ * The evaluation of a position after a move, White-perspective — either a real engine Score, or,
+ * when that move ended the game, the rules-verified terminal fact itself (see terminalEval).
+ * A delivered checkmate is never represented as a Score: "mate in 0" or a cp number would both
+ * be inventions about a position that has no legal move left to search from (A1). The winner is
+ * carried explicitly rather than encoded in a sign, so a checkmate can never be misread as a
+ * loss for the side that just delivered it.
+ */
+export type EvalOrEnd = Score | { type: 'checkmate'; winner: Color } | { type: 'draw'; reason: DrawReason };
+
+/** `e` restated as a Score for cp/mate-distance comparisons: a checkmate has no meaningful
+ * distance left (mate 0), a draw is exactly cp 0 — both rules-verified facts, not estimates. */
+function asScore(e: EvalOrEnd): Score {
+  if (e.type === 'checkmate') return { type: 'mate', value: 0 };
+  if (e.type === 'draw') return { type: 'cp', value: 0 };
+  return e;
+}
+
 // First-guess thresholds (cp loss, mover's perspective) borrowed from the Chess.com-style
 // expected-points buckets mentioned in memory/subprojects/game-reviewer.md; not tuned against
 // real games yet. A move at or above a threshold falls in that bucket or a worse one.
@@ -33,13 +54,23 @@ export function classify(args: {
   mover: Color;
   isBest: boolean;
   evalAfterBest: Score;
-  evalAfterPlayed: Score;
+  evalAfterPlayed: EvalOrEnd;
 }): ClassifyResult {
   const { mover, isBest, evalAfterBest, evalAfterPlayed } = args;
+
+  // A move that delivers checkmate is unimprovable — nothing beats ending the game on the spot
+  // — regardless of whether it happens to be the engine's own first-choice mating line (many
+  // different moves can mate immediately; the engine's bestmove names only one of them). This
+  // must be checked before the isBest branch so a non-bestmove checkmate is never reported as
+  // "mate lost" or scored as if the position still had a searchable eval.
+  if (evalAfterPlayed.type === 'checkmate' && evalAfterPlayed.winner === mover) {
+    return { lossCp: 0, classification: 'best' };
+  }
+
   if (isBest) return { lossCp: 0, classification: 'best' };
 
   const moverBest = moverPerspective(evalAfterBest, mover);
-  const moverPlayed = moverPerspective(evalAfterPlayed, mover);
+  const moverPlayed = moverPerspective(asScore(evalAfterPlayed), mover);
 
   const mateForMoverBefore = moverBest.type === 'mate' && moverBest.value > 0;
   const mateAgainstMoverBefore = moverBest.type === 'mate' && moverBest.value < 0;
@@ -56,10 +87,10 @@ export function classify(args: {
   if (!mateAgainstMoverBefore && mateAgainstMoverAfter) {
     return { lossCp: undefined, classification: 'mate-allowed' };
   }
-  // Any other mate involvement (mate retained on both sides just with a different distance, or
-  // a mate score landing exactly on a just-delivered checkmate — see terminalScore below): not
+  // Any other mate involvement (mate retained on both sides just with a different distance): not
   // one of the two named failure modes, and not expressible as a cp loss. First guess: treat it
-  // as a fine, non-"best" move rather than inventing a number.
+  // as a fine, non-"best" move rather than inventing a number. (A just-delivered checkmate is
+  // never reached here — it is caught above, before the isBest branch, via terminalEval below.)
   if (moverBest.type === 'mate' || moverPlayed.type === 'mate') {
     return { lossCp: undefined, classification: 'good' };
   }
@@ -72,13 +103,13 @@ export function classify(args: {
 }
 
 /**
- * The White-perspective Score for a position that ends the game by rule (no engine call is
- * possible: a checkmate/stalemate position has no legal move to search from). A draw (stalemate,
- * insufficient material, fifty-move) is exactly cp 0 — not an estimate, the rules-verified
- * outcome. A checkmate is recorded as mate 0: the position IS checkmate, full stop; direction
- * (who delivered it) lives in `end.winner`, not in this score's sign, so it is never guessed.
+ * The evaluation of a position that ends the game by rule (no engine call is possible: a
+ * checkmate/stalemate position has no legal move to search from). Represented as the distinct
+ * EvalOrEnd terminal variants, never as a Score: a checkmate is not "mate 0" (which would read
+ * as a near-mate still to be found) or a cp number, it IS the game over, with the winner carried
+ * explicitly rather than guessed from a sign. A draw carries its rules-verified reason.
  */
-export function terminalScore(end: GameEnd): Score {
-  if (end.kind === 'checkmate') return { type: 'mate', value: 0 };
-  return { type: 'cp', value: 0 };
+export function terminalEval(end: GameEnd): EvalOrEnd {
+  if (end.kind === 'checkmate') return { type: 'checkmate', winner: end.winner };
+  return { type: 'draw', reason: end.kind };
 }

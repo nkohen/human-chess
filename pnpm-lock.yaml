@@ -114,6 +114,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
 
   packages/play:
     dependencies:

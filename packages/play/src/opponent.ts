@@ -23,8 +23,8 @@ export function maximalResistance(movetimeMs = 600): Opponent {
 }
 
 /** Stockfish 19's own UCI_Elo range. */
-const MIN_UCI_ELO = 1320;
-const MAX_UCI_ELO = 3190;
+export const MIN_UCI_ELO = 1320;
+export const MAX_UCI_ELO = 3190;
 
 /**
  * Rating-limited play via Stockfish's own UCI_LimitStrength/UCI_Elo. UciEngine restores these

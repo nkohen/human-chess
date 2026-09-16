@@ -12,7 +12,7 @@ import {
   currentFen, describeEnd, isInCheck, isPlayersTurn, lastMove, limitedStrength, playerDests, sideToMove,
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
-import { inCheck, pieceCounts, positionFromFen, turn, type Color } from '@human-chess/rules';
+import { inCheck, pieceCounts, positionFromFen, turn, START_FEN, type Color } from '@human-chess/rules';
 import { describeMaterialDifference } from './material';
 import { judgeVote, type Vote } from './vote';
 import './chessitout.css';
@@ -24,7 +24,6 @@ export interface ChessitoutProps {
 
 type Phase = 'mining' | 'voting' | 'choose-side' | 'playing' | 'result';
 
-const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const MAX_PLIES = 40;
 const FINAL_ANALYSE_DEPTH = 16;
 const DEFAULT_ELO = 1800;
@@ -84,25 +83,37 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     };
   }, [readyEngine, phase, generation]);
 
-  const onVote = useCallback((v: Vote) => {
-    setVote(v);
-    setPhase(v === 'equal' ? 'choose-side' : 'playing');
-    if (v !== 'equal') setPlayerColor(v);
-  }, []);
+  // Both handlers below call restart(...) synchronously, in the same event-handler batch as the
+  // setPhase('playing')/setPlayerColor calls, rather than in a separate effect keyed on `phase`.
+  // An effect would run one render after phase becomes 'playing', so that render would still
+  // show the previous, already-finished attempt (game.end set) — and the `finished` effect below
+  // would see that stale `finished` and jump straight back to 'result', skipping the new game
+  // entirely on a second and later attempt. Calling restart here means the very render where
+  // phase first becomes 'playing' already has the fresh game.
+  const onVote = useCallback(
+    (v: Vote) => {
+      setVote(v);
+      if (v === 'equal') {
+        setPhase('choose-side');
+        return;
+      }
+      if (!position) return;
+      setPlayerColor(v);
+      setPhase('playing');
+      restart({ startFen: position.fen, playerColor: v });
+    },
+    [position, restart],
+  );
 
-  const onChooseSide = useCallback((color: Color) => {
-    setPlayerColor(color);
-    setPhase('playing');
-  }, []);
-
-  // The game hook's own state is only seeded from its options at mount; start the real attempt
-  // explicitly once a position and a player colour are both chosen.
-  useEffect(() => {
-    if (phase === 'playing' && position && playerColor) {
-      restart({ startFen: position.fen, playerColor });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, generation]);
+  const onChooseSide = useCallback(
+    (color: Color) => {
+      if (!position) return;
+      setPlayerColor(color);
+      setPhase('playing');
+      restart({ startFen: position.fen, playerColor: color });
+    },
+    [position, restart],
+  );
 
   useEffect(() => {
     if (phase === 'playing' && finished) setPhase('result');
@@ -110,14 +121,24 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
 
   // Once the attempt is over, get the "now" reading of the final position, always from a real
   // engine call (A1) — used as the result headline when the 40-ply cap (not a game end) is what
-  // stopped play, and always shown alongside the mining-time eval for the vote judgment.
+  // stopped play, and always shown alongside the mining-time eval for the vote judgment. Skipped
+  // when the game itself ended (checkmate/stalemate/etc.): the engine has no move to search for
+  // in a position with no legal moves, so it returns no pv line and this would otherwise hang at
+  // "evaluating…" forever; describeEnd(game) already says how the game ended in that case.
   useEffect(() => {
-    if (phase !== 'result' || !readyEngine || finalAnalysis || finalAnalysisError) return;
+    if (phase !== 'result' || !readyEngine || finalAnalysis || finalAnalysisError || game.end) return;
     let cancelled = false;
     readyEngine
       .analyse(currentFen(game), [], { depth: FINAL_ANALYSE_DEPTH })
       .then(a => {
-        if (!cancelled) setFinalAnalysis(a);
+        if (cancelled) return;
+        // No pv line is a failure, not a silent no-op (A1) — same convention as
+        // subprojects/opening-training-game/src/OpeningTrainingGame.tsx's verdict effect.
+        if (!a.lines[0]) {
+          setFinalAnalysisError(`${a.engine} returned no evaluation line for this position`);
+          return;
+        }
+        setFinalAnalysis(a);
       })
       .catch((err: unknown) => {
         if (!cancelled) setFinalAnalysisError(err instanceof Error ? err.message : String(err));
@@ -126,7 +147,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, readyEngine, finalAnalysis, finalAnalysisError, generation]);
+  }, [phase, readyEngine, finalAnalysis, finalAnalysisError, generation, game.end]);
 
   // Judge the vote against the mining-time eval exactly once per attempt (never against the
   // "now" eval, which reflects the moves played rather than the read of the starting position).
@@ -134,7 +155,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     if (phase !== 'result' || !position || !vote) return;
     if (judgedGeneration.current === generation) return;
     judgedGeneration.current = generation;
-    const outcome = judgeVote(vote, position.eval.score.value);
+    const outcome = judgeVote(vote, position.eval.score);
     setTally(t => (outcome === 'right' ? { ...t, right: t.right + 1 } : { ...t, wrong: t.wrong + 1 }));
   }, [phase, position, vote, generation]);
 
@@ -235,13 +256,17 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     return `Play stopped at the ${MAX_PLIES}-ply cap. Evaluating the final position…`;
   })();
 
-  const voteOutcome = position && vote ? judgeVote(vote, position.eval.score.value) : undefined;
+  const voteOutcome = position && vote ? judgeVote(vote, position.eval.score) : undefined;
   const voteLabel = vote === 'white' ? 'White' : vote === 'black' ? 'Black' : 'Equal';
-  const nowText = nowScore
-    ? `${formatScore(nowScore)} (${finalAnalysis!.engine}, depth ${nowLine!.depth}).`
-    : finalAnalysisError
-      ? `unavailable — ${finalAnalysisError}`
-      : 'evaluating…';
+  // The "now" analysis is never run once game.end is set (see the effect above); say so plainly
+  // instead of hanging at "evaluating…" forever.
+  const nowText = game.end
+    ? 'no evaluation: the game is over.'
+    : nowScore
+      ? `${formatScore(nowScore)} (${finalAnalysis!.engine}, depth ${nowLine!.depth}).`
+      : finalAnalysisError
+        ? `unavailable — ${finalAnalysisError}`
+        : 'evaluating…';
 
   return (
     <div className="chessitout">

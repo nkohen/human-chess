@@ -29,6 +29,6 @@ in the engine wrapper; `packages/facts`, `packages/import`, `packages/engine/src
 (whitePerspective, formatScore); rules helpers (sanLine, pgn, roles, pieceAt, START_FEN,
 fullmove). Slice 10 (game reviewer + `packages/review`) landed last. A CDP browser smoke run of all
 routes passed (no exceptions; endgames move + engine reply, guess-the-eval reveal, puzzle fetch
-verified). Reviews of slices 3, 4, 8, 10, 11 pending or in progress. All bands and thresholds (draw band 30 cp, imbalance band 150 cp,
+verified). All 11 slices reviewed by the code-reviewer agent and their findings fixed (last batch: restart-in-effect bugs in Chessitout and the bot-rating test, checkmate shown as "mate lost" in the reviewer, review cancellation, import screen lifted into `packages/import/react`). All bands and thresholds (draw band 30 cp, imbalance band 150 cp,
 classification cutoffs) are first guesses marked in code for the user to tune.
 Follow-up: memory-trainer/src/reconstruction.ts duplicates packages/play game state (no-playerColor mode); auto-queen idiom repeated in six files, wants one helper.

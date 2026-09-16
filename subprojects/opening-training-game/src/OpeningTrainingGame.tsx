@@ -11,13 +11,15 @@ import {
   isPlayersTurn,
   lastMove,
   limitedStrength,
+  MAX_UCI_ELO,
+  MIN_UCI_ELO,
   playerDests,
   result as gameResult,
   sideToMove,
   type PlayedMove,
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
-import type { Color } from '@human-chess/rules';
+import { START_FEN, type Color } from '@human-chess/rules';
 import { verdict as computeVerdict, type Verdict } from './verdict';
 import './opening-training-game.css';
 
@@ -26,15 +28,15 @@ export interface OpeningTrainingGameProps {
   engine: UciEngine | Error | undefined;
 }
 
-const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const MOVE_PRESETS = [12, 20];
-// Mirrors packages/play's opponent.ts limitedStrength bounds (Stockfish 19's own UCI_Elo range).
-const MIN_ELO = 1320;
-const MAX_ELO = 3190;
 const ELO_STEP = 100;
+// Stepped from MIN_UCI_ELO by ELO_STEP, always ending exactly at MAX_UCI_ELO (3190) so the true
+// ceiling is reachable even though the last step is shorter than ELO_STEP — otherwise a loop
+// bound by `e <= MAX_UCI_ELO` would stop at 3120 and never offer 3190 itself.
 const ELO_OPTIONS: number[] = [];
-for (let e = MIN_ELO; e <= MAX_ELO; e += ELO_STEP) ELO_OPTIONS.push(e);
-const DEFAULT_ELO = MIN_ELO;
+for (let e = MIN_UCI_ELO; e < MAX_UCI_ELO; e += ELO_STEP) ELO_OPTIONS.push(e);
+ELO_OPTIONS.push(MAX_UCI_ELO);
+const DEFAULT_ELO = MIN_UCI_ELO;
 const VERDICT_DEPTH = 18;
 
 interface Settings {

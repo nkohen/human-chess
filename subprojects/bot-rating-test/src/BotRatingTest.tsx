@@ -19,7 +19,7 @@ import {
   type Opponent,
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
-import { positionFromFen, type Color } from '@human-chess/rules';
+import { positionEnd, positionFromFen, START_FEN, type Color, type Position } from '@human-chess/rules';
 import { appendRecord, clearRecords, loadRecords, type BotRatingRecord, type GameOutcome } from './records';
 import { ELO_LEVELS, suggestNextElo, suggestedStartingElo } from './suggest';
 import { highestWin, summarize } from './summary';
@@ -30,7 +30,7 @@ export interface BotRatingTestProps {
   engine: UciEngine | Error | undefined;
 }
 
-const STANDARD_START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const STANDARD_START_FEN = START_FEN;
 
 type ColorChoice = 'white' | 'black' | 'random';
 
@@ -109,19 +109,16 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
     ...(opponent ? { opponent } : {}),
   });
 
-  // useEngineGame only reads its startFen/playerColor options on mount; when a new attempt
-  // begins (Start, or "Play suggested level") this explicitly resets the underlying game,
-  // mirroring subprojects/endgames-intro/src/useLessonGame.ts.
-  useEffect(() => {
-    if (active) restart({ startFen: active.startFen, playerColor: active.playerColor });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
-
   const outcome: GameOutcome | undefined = resigned ? 'lost' : gameResult(game);
   const ended = finished || resigned;
 
+  // Gated on the played game actually belonging to `active` (not just recordedRef, which alone
+  // was found to still race: beginGame's restart and setActive land in the same batch, but this
+  // extra check is what actually guards against recording a stale, just-finished game's outcome
+  // under the newly chosen elo/colour if that batching assumption ever stops holding).
   useEffect(() => {
     if (!active || !ended || !outcome || recordedRef.current) return;
+    if (game.startFen !== active.startFen || game.playerColor !== active.playerColor) return;
     recordedRef.current = true;
     const updated = appendRecord({
       opponentId: opponent?.id ?? `limited-strength-${active.elo}`,
@@ -134,17 +131,30 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
     setRecords(updated);
   }, [active, ended, outcome, opponent, game]);
 
-  const beginGame = useCallback((nextElo: number, choice: ColorChoice, startFenValue: string) => {
-    recordedRef.current = false;
-    setResigned(false);
-    setActive({ elo: nextElo, playerColor: pickColor(choice), startFen: startFenValue });
-  }, []);
+  // Resets the underlying game synchronously, in the same event-handler batch as setActive —
+  // mirroring subprojects/chessitout/src/Chessitout.tsx's onVote/onChooseSide — so the render
+  // where `active` first reflects the new attempt never still holds the previous, finished game.
+  const beginGame = useCallback(
+    (nextElo: number, choice: ColorChoice, startFenValue: string) => {
+      recordedRef.current = false;
+      setResigned(false);
+      const playerColor = pickColor(choice);
+      setActive({ elo: nextElo, playerColor, startFen: startFenValue });
+      restart({ startFen: startFenValue, playerColor });
+    },
+    [restart],
+  );
 
   const handleStart = useCallback(() => {
+    let pos: Position;
     try {
-      positionFromFen(fenText);
+      pos = positionFromFen(fenText);
     } catch (err) {
       setFenError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    if (positionEnd(pos)) {
+      setFenError('This position is already game over — choose a starting position where a game can still be played.');
       return;
     }
     setFenError(undefined);

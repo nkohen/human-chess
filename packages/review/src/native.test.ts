@@ -28,7 +28,7 @@ describe.skipIf(nativeEngines.length === 0)('reviewGame against a native engine'
       const classifications: string[] = ['best', 'good', 'inaccuracy', 'mistake', 'blunder', 'mate-lost', 'mate-allowed'];
       for (const move of review.moves) {
         expect(move.provenance.engine.toLowerCase()).toContain('stockfish');
-        expect(move.provenance.depth).toBeGreaterThanOrEqual(6);
+        expect(move.provenance.depthBefore).toBeGreaterThanOrEqual(6);
         expect(classifications).toContain(move.classification);
       }
     } finally {

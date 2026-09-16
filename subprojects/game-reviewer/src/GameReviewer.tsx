@@ -5,11 +5,13 @@
 // gets them from a real engine or a rules-verified game end, never invented here (A1).
 import { useEffect, useState } from 'react';
 import { Board } from '@human-chess/board';
-import { formatScore, type Score, type UciEngine } from '@human-chess/engine';
-import { fetchLatestLichessGame, importPgn, type ImportedGame } from '@human-chess/import';
-import { reviewGame, type Classification, type GameReview, type ReviewedMove, type ReviewProgress } from '@human-chess/review';
-import type { SquareName } from '@human-chess/rules';
-import { loadLastUsername, saveLastUsername } from './storage';
+import { formatScore, type UciEngine } from '@human-chess/engine';
+import { ImportScreen } from '@human-chess/import/react';
+import type { ImportedGame } from '@human-chess/import';
+import {
+  ReviewCancelled, reviewGame, type Classification, type EvalOrEnd, type GameReview, type ReviewedMove, type ReviewProgress,
+} from '@human-chess/review';
+import { inCheck, positionFromFen, type SquareName } from '@human-chess/rules';
 import './game-reviewer.css';
 
 export interface GameReviewerProps {
@@ -20,69 +22,20 @@ export interface GameReviewerProps {
 type Screen = { kind: 'import' } | { kind: 'review'; game: ImportedGame };
 
 const ANALYSE_DEPTH = 12;
+const STORAGE_KEY = 'human-chess.game-reviewer.lichess-username';
 
 export function GameReviewer({ engine }: GameReviewerProps): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ kind: 'import' });
   const startOver = (): void => setScreen({ kind: 'import' });
 
   if (screen.kind === 'import') {
-    return <ImportScreen onImported={game => setScreen({ kind: 'review', game })} />;
+    return (
+      <div className="gr">
+        <ImportScreen storageKey={STORAGE_KEY} title="Game reviewer" onImported={game => setScreen({ kind: 'review', game })} />
+      </div>
+    );
   }
   return <ReviewScreen engine={engine} game={screen.game} onAnotherGame={startOver} />;
-}
-
-function ImportScreen({ onImported }: { onImported: (game: ImportedGame) => void }): React.JSX.Element {
-  const [username, setUsername] = useState(() => loadLastUsername());
-  const [pgnText, setPgnText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
-
-  const fetchGame = (): void => {
-    if (!username.trim()) return;
-    setLoading(true);
-    setError(undefined);
-    fetchLatestLichessGame(username.trim())
-      .then(game => {
-        saveLastUsername(username.trim());
-        onImported(game);
-      })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setLoading(false));
-  };
-
-  const usePastedPgn = (): void => {
-    setError(undefined);
-    try {
-      onImported(importPgn(pgnText));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  return (
-    <div className="gr gr-import">
-      <h2>Game reviewer</h2>
-      <section>
-        <label htmlFor="gr-username">Lichess username</label>
-        <input id="gr-username" value={username} onChange={e => setUsername(e.target.value)} disabled={loading} />
-        <button onClick={fetchGame} disabled={loading || !username.trim()}>
-          {loading ? 'Fetching…' : 'Fetch my latest game'}
-        </button>
-      </section>
-      <section>
-        <label htmlFor="gr-pgn">Or paste a PGN</label>
-        <textarea id="gr-pgn" rows={8} value={pgnText} onChange={e => setPgnText(e.target.value)} />
-        <button onClick={usePastedPgn} disabled={!pgnText.trim()}>
-          Use this PGN
-        </button>
-      </section>
-      {error && (
-        <p className="gr-error" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  );
 }
 
 type ReviewPhase = 'waiting-for-engine' | 'analysing' | 'done' | 'failed';
@@ -108,14 +61,20 @@ function ReviewScreen({
       setPhase('waiting-for-engine');
       return;
     }
+    const controller = new AbortController();
     let cancelled = false;
     setPhase('analysing');
     setProgress(undefined);
     setError(undefined);
     setReview(undefined);
-    reviewGame(readyEngine, { startFen: game.startFen, ucis: game.ucis }, { depth: ANALYSE_DEPTH }, p => {
-      if (!cancelled) setProgress(p);
-    })
+    reviewGame(
+      readyEngine,
+      { startFen: game.startFen, ucis: game.ucis },
+      { depth: ANALYSE_DEPTH, signal: controller.signal },
+      p => {
+        if (!cancelled) setProgress(p);
+      },
+    )
       .then(r => {
         if (cancelled) return;
         setReview(r);
@@ -124,11 +83,17 @@ function ReviewScreen({
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        // A cancellation is expected whenever this effect re-runs or unmounts mid-review (the
+        // cleanup below triggers it); it is swallowed silently. Any other failure is real and
+        // must be shown (A1: never hide that an engine call failed).
+        if (err instanceof ReviewCancelled) return;
         setError(err instanceof Error ? err.message : String(err));
         setPhase('failed');
       });
     return () => {
       cancelled = true;
+      controller.abort();
+      readyEngine.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readyEngine, game]);
@@ -177,7 +142,8 @@ function ReviewScreen({
   const move = selectedPly > 0 ? review.moves[selectedPly - 1] : undefined;
   const fen = move ? move.fenAfter : game.startFen;
   const lastMove: [SquareName, SquareName] | undefined = move ? [move.uci.slice(0, 2) as SquareName, move.uci.slice(2, 4) as SquareName] : undefined;
-  const canPrev = selectedPly > (review.moves.length > 0 ? 1 : 0);
+  // Ply 0 (the starting position) is a valid stop, not a floor to avoid — "prev" can reach it.
+  const canPrev = selectedPly > 0;
   const canNext = selectedPly < review.moves.length;
 
   return (
@@ -191,10 +157,19 @@ function ReviewScreen({
 
       <EvalStrip review={review} selectedPly={selectedPly} onSelect={setSelectedPly} />
 
-      <Board fen={fen} orientation={game.playedAs ?? 'white'} turnColor="white" dests={new Map()} movableColor={undefined} lastMove={lastMove} check={false} onMove={() => undefined} />
+      <Board
+        fen={fen}
+        orientation={game.playedAs ?? 'white'}
+        turnColor="white"
+        dests={new Map()}
+        movableColor={undefined}
+        lastMove={lastMove}
+        check={inCheck(positionFromFen(fen))}
+        onMove={() => undefined}
+      />
 
       <div className="gr-nav">
-        <button onClick={() => setSelectedPly(p => Math.max(review.moves.length > 0 ? 1 : 0, p - 1))} disabled={!canPrev}>
+        <button onClick={() => setSelectedPly(p => Math.max(0, p - 1))} disabled={!canPrev}>
           prev
         </button>
         <button onClick={() => setSelectedPly(p => Math.min(review.moves.length, p + 1))} disabled={!canNext}>
@@ -212,6 +187,8 @@ function ReviewScreen({
 
       <MoveList moves={review.moves} selectedPly={selectedPly} onSelect={setSelectedPly} />
 
+      <Legend />
+
       <button onClick={onAnotherGame}>Another game</button>
     </div>
   );
@@ -221,7 +198,7 @@ function MoveDetail({ move }: { move: ReviewedMove }): React.JSX.Element {
   return (
     <div className="gr-detail">
       <p>
-        Played <strong>{move.san}</strong> — {formatScore(move.evalAfterPlayed)}
+        Played <strong>{move.san}</strong> — {formatEvalOrEnd(move.evalAfterPlayed)}
         {move.lossCp !== undefined && move.classification !== 'best' && ` (${(move.lossCp / 100).toFixed(2)} pawns lost)`}
       </p>
       {move.classification !== 'best' && (
@@ -231,9 +208,24 @@ function MoveDetail({ move }: { move: ReviewedMove }): React.JSX.Element {
       )}
       <p className={`gr-badge gr-badge-${move.classification}`}>{classificationLabel(move.classification)}</p>
       <p className="gr-provenance">
-        {move.provenance.engine}, depth {move.provenance.depth}
+        {move.provenance.engine}, depth {move.provenance.depthBefore} → {move.provenance.depthAfter}
       </p>
     </div>
+  );
+}
+
+const ALL_CLASSIFICATIONS: Classification[] = ['best', 'good', 'inaccuracy', 'mistake', 'blunder', 'mate-lost', 'mate-allowed'];
+
+function Legend(): React.JSX.Element {
+  return (
+    <p className="gr-legend">
+      {ALL_CLASSIFICATIONS.map(c => (
+        <span key={c} className={`gr-badge gr-badge-${c}`}>
+          {classificationLabel(c)}
+        </span>
+      ))}
+      <span className="gr-legend-hint"> (first-guess cutoffs)</span>
+    </p>
   );
 }
 
@@ -295,7 +287,7 @@ function EvalStrip({
             className={`gr-strip-bar${selectedPly === m.ply ? ' gr-strip-bar-selected' : ''}`}
             style={{ '--pct': `${pct}%` } as React.CSSProperties}
             onClick={() => onSelect(m.ply)}
-            title={`${m.san}: ${formatScore(m.evalAfterPlayed)}`}
+            title={`${m.san}: ${formatEvalOrEnd(m.evalAfterPlayed)}`}
           />
         );
       })}
@@ -305,11 +297,24 @@ function EvalStrip({
 
 const EVAL_CAP_CP = 500;
 
-/** Maps a White-perspective Score to a 0-100 fill, clamped at ±5 pawns; a mate fills fully. */
-function evalBarPercent(score: Score): number {
-  if (score.type === 'mate') return score.value >= 0 ? 100 : 0;
-  const clamped = Math.max(-EVAL_CAP_CP, Math.min(EVAL_CAP_CP, score.value));
+/** Maps a White-perspective evaluation to a 0-100 fill, clamped at ±5 pawns for a cp Score,
+ * fully filled toward the winner for a mate score or a delivered checkmate (winner-aware, never
+ * guessed from a sign), and split evenly for a rules-verified draw. */
+function evalBarPercent(e: EvalOrEnd): number {
+  if (e.type === 'checkmate') return e.winner === 'white' ? 100 : 0;
+  if (e.type === 'draw') return 50;
+  if (e.type === 'mate') return e.value >= 0 ? 100 : 0;
+  const clamped = Math.max(-EVAL_CAP_CP, Math.min(EVAL_CAP_CP, e.value));
   return ((clamped + EVAL_CAP_CP) / (2 * EVAL_CAP_CP)) * 100;
+}
+
+/** Plain-language rendering of an EvalOrEnd: a real Score formats as usual; a delivered
+ * checkmate or a draw is stated in words directly from the rules-verified fact, winner-aware,
+ * never as an invented score (V3). */
+function formatEvalOrEnd(e: EvalOrEnd): string {
+  if (e.type === 'checkmate') return `checkmate — ${e.winner === 'white' ? 'White' : 'Black'} wins`;
+  if (e.type === 'draw') return `draw (${e.reason})`;
+  return formatScore(e);
 }
 
 function classificationLabel(c: Classification): string {

@@ -17,6 +17,9 @@ function formatPawns(cp: number): string {
 
 /** A Score as plain text: "+1.3 pawns" or "mate in 4 for White". */
 export function formatScore(score: Score): string {
-  if (score.type === 'mate') return `mate in ${Math.abs(score.value)} for ${score.value >= 0 ? 'White' : 'Black'}`;
+  if (score.type === 'mate') {
+    if (score.value === 0) return 'checkmate';
+    return `mate in ${Math.abs(score.value)} for ${score.value >= 0 ? 'White' : 'Black'}`;
+  }
   return `${formatPawns(score.value)} pawns`;
 }

@@ -86,6 +86,7 @@ export function useEngineGame(options: UseEngineGameOptions) {
       });
     return () => {
       cancelled = true;
+      engine?.stop();
     };
   }, [engine, game, opponent, plyLimitReached]);
 

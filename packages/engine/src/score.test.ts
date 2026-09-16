@@ -23,4 +23,8 @@ describe('formatScore', () => {
     expect(formatScore({ type: 'mate', value: 4 })).toBe('mate in 4 for White');
     expect(formatScore({ type: 'mate', value: -2 })).toBe('mate in 2 for Black');
   });
+
+  it('formats mate 0 as checkmate, not "mate in 0"', () => {
+    expect(formatScore({ type: 'mate', value: 0 })).toBe('checkmate');
+  });
 });

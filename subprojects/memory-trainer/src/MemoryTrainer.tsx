@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Board } from '@human-chess/board';
-import { fetchLatestLichessGame, importPgn, type ImportedGame } from '@human-chess/import';
+import { ImportScreen } from '@human-chess/import/react';
+import type { ImportedGame } from '@human-chess/import';
 import { fullmove, inCheck, opposite, positionFromFen, turn, type Color, type SquareName } from '@human-chess/rules';
 import { compareReconstruction, fenSequence } from './compare';
 import {
   currentFen, lastReconstructedMove, playReconstructionMove, reconstructedSans, reconstructedUcis,
   reconstructionDests, sideToMove, startReconstruction, type Reconstruction,
 } from './reconstruction';
-import { loadLastUsername, saveLastUsername } from './storage';
+
+const STORAGE_KEY = 'human-chess.memory-trainer.lichess-username';
 
 type Screen =
   | { kind: 'import' }
@@ -43,7 +45,11 @@ export function MemoryTrainer(): React.JSX.Element {
   };
 
   if (screen.kind === 'import') {
-    return <ImportScreen onImported={beginReconstruction} />;
+    return (
+      <div className="memory-trainer">
+        <ImportScreen storageKey={STORAGE_KEY} title="Memory trainer" onImported={beginReconstruction} />
+      </div>
+    );
   }
 
   if (screen.kind === 'reconstruct') {
@@ -79,86 +85,6 @@ export function MemoryTrainer(): React.JSX.Element {
 
   const { game, reconstruction } = screen;
   return <ReviewScreen game={game} reconstruction={reconstruction} onAnotherGame={startOver} />;
-}
-
-function ImportScreen({ onImported }: { onImported: (game: ImportedGame) => void }): React.JSX.Element {
-  const [username, setUsername] = useState(() => loadLastUsername());
-  const [pgnText, setPgnText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
-
-  // A lichess fetch that resolves after the user already imported a pasted PGN (or after this
-  // screen unmounts) must be ignored — otherwise it can call onImported a second time and yank
-  // the user back out of a screen they already moved past. requestIdRef makes a resolve stale
-  // the moment a newer fetch starts; settledRef makes it stale the moment ANY import succeeds
-  // or the component unmounts.
-  const requestIdRef = useRef(0);
-  const settledRef = useRef(false);
-  useEffect(() => () => {
-    settledRef.current = true;
-  }, []);
-
-  const fetchGame = (): void => {
-    if (!username.trim()) return;
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    setError(undefined);
-    fetchLatestLichessGame(username.trim())
-      .then(game => {
-        if (settledRef.current || requestIdRef.current !== requestId) return;
-        settledRef.current = true;
-        saveLastUsername(username.trim());
-        onImported(game);
-      })
-      .catch((err: unknown) => {
-        if (settledRef.current || requestIdRef.current !== requestId) return;
-        setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (requestIdRef.current === requestId) setLoading(false);
-      });
-  };
-
-  const usePastedPgn = (): void => {
-    setError(undefined);
-    try {
-      const game = importPgn(pgnText);
-      settledRef.current = true;
-      onImported(game);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  return (
-    <div className="memory-trainer memory-trainer-import">
-      <h2>Memory trainer</h2>
-      <section>
-        <label htmlFor="mt-username">Lichess username</label>
-        <input
-          id="mt-username"
-          value={username}
-          onChange={e => setUsername(e.target.value)}
-          disabled={loading}
-        />
-        <button onClick={fetchGame} disabled={loading || !username.trim()}>
-          {loading ? 'Fetching…' : 'Fetch my latest game'}
-        </button>
-      </section>
-      <section>
-        <label htmlFor="mt-pgn">Or paste a PGN</label>
-        <textarea id="mt-pgn" rows={8} value={pgnText} onChange={e => setPgnText(e.target.value)} />
-        <button onClick={usePastedPgn} disabled={!pgnText.trim() || loading}>
-          Use this PGN
-        </button>
-      </section>
-      {error && (
-        <p className="memory-trainer-error" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  );
 }
 
 function MoveList({ sans }: { sans: string[] }): React.JSX.Element {

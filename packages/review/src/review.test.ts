@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Analysis, Score } from '@human-chess/engine';
-import { classify, terminalScore } from './classify';
-import { reviewGame, type AnalysingEngine, type ReviewProgress } from './review';
+import { classify, terminalEval } from './classify';
+import { ReviewCancelled, reviewGame, type AnalysingEngine, type ReviewProgress } from './review';
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -79,14 +79,21 @@ describe('reviewGame', () => {
     expect(m3!.lossCp).toBe(150);
 
     // Black delivers checkmate: the terminal position has no eval to search, so evalAfterPlayed
-    // is the rules-verified mate score, and cp loss is undefined rather than invented.
-    expect(m4!.evalAfterPlayed).toEqual({ type: 'mate', value: 0 });
-    expect(m4!.lossCp).toBeUndefined();
-    expect(m4!.classification).toBe('good');
+    // is the rules-verified terminal fact (never a Score). Qh4# was not the engine's own
+    // bestmove for that position (scripted as g8f6), but delivering checkmate is unimprovable,
+    // so this must classify as 'best' with zero loss rather than "mate lost" or a cp bucket.
+    expect(m4!.evalAfterPlayed).toEqual({ type: 'checkmate', winner: 'black' });
+    expect(m4!.lossCp).toBe(0);
+    expect(m4!.classification).toBe('best');
 
     for (const move of review.moves) {
-      expect(move.provenance).toEqual({ engine: 'FakeEngine', depth: 6 });
+      expect(move.provenance.engine).toBe('FakeEngine');
+      expect(move.provenance.depthBefore).toBe(6);
     }
+    // The first three moves' "after" eval comes from the next ply's real analyse() call; only
+    // the terminal (checkmating) move's depthAfter is 'rules', never attributed to a search.
+    expect(review.moves.slice(0, 3).map(m => m.provenance.depthAfter)).toEqual([6, 6, 6]);
+    expect(m4!.provenance.depthAfter).toBe('rules');
   });
 
   it('reports evalAfterBest equal to evalBefore (no second analyse call for the best line)', async () => {
@@ -97,6 +104,30 @@ describe('reviewGame', () => {
     ]);
     const review = await reviewGame(engine, { startFen: START_FEN, ucis: ['e2e4', 'e7e5'] }, { depth: 4 });
     expect(review.moves[0]!.evalAfterBest).toEqual(review.moves[0]!.evalBefore);
+  });
+
+  it('stops issuing analyse() calls once the signal is aborted, throwing ReviewCancelled', async () => {
+    const controller = new AbortController();
+    const { engine, calls } = scriptedEngine([
+      { bestmove: 'f2f3', scoreCp: 0 },
+      { bestmove: 'd7d5', scoreCp: 20 },
+      { bestmove: 'd2d4', scoreCp: 350 },
+      { bestmove: 'g8f6', scoreCp: -200 },
+    ]);
+    // Abort right after the 2nd analyse() call resolves, before reviewGame would start a 3rd.
+    const wrapped: AnalysingEngine = {
+      analyse: (fen, moves, limit, multipv, options) =>
+        engine.analyse(fen, moves, limit, multipv, options).then(result => {
+          if (calls.length === 2) controller.abort();
+          return result;
+        }),
+    };
+    const ucis = ['f2f3', 'e7e5', 'g2g4', 'd8h4'];
+
+    await expect(
+      reviewGame(wrapped, { startFen: START_FEN, ucis }, { depth: 6, signal: controller.signal }),
+    ).rejects.toThrow(ReviewCancelled);
+    expect(calls).toHaveLength(2);
   });
 });
 
@@ -143,6 +174,16 @@ describe('classify', () => {
     expect(result).toEqual({ lossCp: undefined, classification: 'mate-allowed' });
   });
 
+  it('classifies a delivered checkmate as "best" even when it was not the engine\'s bestmove', () => {
+    const result = classify({
+      mover: 'black',
+      isBest: false, // the engine's own bestmove for this position was something else
+      evalAfterBest: { type: 'cp', value: -400 },
+      evalAfterPlayed: { type: 'checkmate', winner: 'black' },
+    });
+    expect(result).toEqual({ lossCp: 0, classification: 'best' });
+  });
+
   it('clamps a negative raw difference (search noise) to zero rather than reporting a gain', () => {
     const result = classify({
       mover: white,
@@ -154,14 +195,14 @@ describe('classify', () => {
   });
 });
 
-describe('terminalScore', () => {
-  it('is mate 0 for a checkmate (direction lives in GameEnd.winner, not the score)', () => {
-    expect(terminalScore({ kind: 'checkmate', winner: 'black' })).toEqual({ type: 'mate', value: 0 });
+describe('terminalEval', () => {
+  it('is a distinct checkmate value, never a Score, with the winner carried explicitly', () => {
+    expect(terminalEval({ kind: 'checkmate', winner: 'black' })).toEqual({ type: 'checkmate', winner: 'black' });
   });
 
-  it('is cp 0 for a rules-verified draw', () => {
-    expect(terminalScore({ kind: 'stalemate' })).toEqual({ type: 'cp', value: 0 });
-    expect(terminalScore({ kind: 'insufficient-material' })).toEqual({ type: 'cp', value: 0 });
-    expect(terminalScore({ kind: 'fifty-moves' })).toEqual({ type: 'cp', value: 0 });
+  it('is a distinct draw value carrying the rules-verified reason', () => {
+    expect(terminalEval({ kind: 'stalemate' })).toEqual({ type: 'draw', reason: 'stalemate' });
+    expect(terminalEval({ kind: 'insufficient-material' })).toEqual({ type: 'draw', reason: 'insufficient-material' });
+    expect(terminalEval({ kind: 'fifty-moves' })).toEqual({ type: 'draw', reason: 'fifty-moves' });
   });
 });

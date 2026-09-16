@@ -1,7 +1,7 @@
 .gr { max-width: 32rem; padding: 1rem; margin: 0 auto; }
-.gr-import section { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
-.gr-import textarea { font-family: monospace; }
-.gr-error, .gr-status[role='alert'] { color: #b00020; }
+.hc-import section { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.hc-import textarea { font-family: monospace; }
+.hc-import-error, .gr-status[role='alert'] { color: #b00020; }
 .gr-status { min-height: 1.5em; }
 .gr-players { opacity: 0.75; margin-top: -0.5rem; }
 
@@ -39,3 +39,6 @@
   border-top: 1px solid #333;
 }
 .gr-strip-bar-selected { outline: 1px solid #333; }
+
+.gr-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.75rem 0; }
+.gr-legend-hint { color: #666; font-size: 0.85em; }

@@ -39,21 +39,38 @@ describe('clampElo', () => {
 });
 
 describe('suggestNextElo', () => {
-  it('goes up 100 after a win', () => {
-    expect(suggestNextElo(1800, 'won')).toBe(1900);
+  // 1820 (not 1800) is used here because it is itself one of ELO_LEVELS' values (1320 stepping
+  // by 100); suggestNextElo steps through ELO_LEVELS' own indices, so a non-level input like
+  // 1800 is only meaningful through the closest-level fallback exercised separately below.
+  it('goes up one ELO_LEVELS step after a win', () => {
+    expect(suggestNextElo(1820, 'won')).toBe(1920);
   });
 
-  it('goes down 100 after a loss', () => {
-    expect(suggestNextElo(1800, 'lost')).toBe(1700);
+  it('goes down one ELO_LEVELS step after a loss', () => {
+    expect(suggestNextElo(1820, 'lost')).toBe(1720);
   });
 
   it('stays the same after a draw', () => {
-    expect(suggestNextElo(1800, 'draw')).toBe(1800);
+    expect(suggestNextElo(1820, 'draw')).toBe(1820);
+  });
+
+  it('falls back to the closest ELO_LEVELS entry for a value that is not itself a level', () => {
+    // 1800 is not a level (closest are 1720 and 1820); closest is 1820, so a win steps up from
+    // there to 1920, same as suggestNextElo(1820, 'won') above.
+    expect(suggestNextElo(1800, 'won')).toBe(1920);
   });
 
   it('never suggests below MIN_ELO or above MAX_ELO', () => {
     expect(suggestNextElo(MIN_ELO, 'lost')).toBe(MIN_ELO);
     expect(suggestNextElo(MAX_ELO, 'won')).toBe(MAX_ELO);
+  });
+
+  it('always returns a value that is itself one of ELO_LEVELS, even from the short final step', () => {
+    // MAX_ELO (3190) is only 70 above the level below it (3120), not the usual 100: a flat
+    // ±100 offset from MAX_ELO would land on 3090, which ELO_LEVELS does not contain.
+    const secondToLast = ELO_LEVELS[ELO_LEVELS.length - 2]!;
+    expect(suggestNextElo(MAX_ELO, 'lost')).toBe(secondToLast);
+    expect(ELO_LEVELS).toContain(suggestNextElo(MAX_ELO, 'lost'));
   });
 });
 
@@ -68,6 +85,8 @@ describe('suggestedStartingElo', () => {
       record({ elo: 2000, result: 'lost', playedAt: '2026-01-03T00:00:00.000Z' }),
       record({ elo: 1800, result: 'won', playedAt: '2026-01-02T00:00:00.000Z' }),
     ];
-    expect(suggestedStartingElo(records)).toBe(1900);
+    // Most recent by playedAt is elo 2000 (not itself an ELO_LEVELS value), lost: steps down one
+    // level from the closest ELO_LEVELS entry (2020) to 1920.
+    expect(suggestedStartingElo(records)).toBe(1920);
   });
 });
