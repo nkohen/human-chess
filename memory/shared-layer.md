@@ -27,3 +27,34 @@ that is the next design step. Each item lists the subprojects that need it.
 
 Design stances that apply everywhere (user): scaffolding, not gamification; no invented
 numbers; focus on concepts applied in practice rather than comparison to expert play.
+
+## Directory decomposition (2026-09-16, first slice built)
+
+One line per top-level directory, as CLAUDE.md requires. Built: rules, board, engine, play,
+positions, subprojects/endgames-intro, apps/web. Reserved (named, not created): the rest.
+
+| Directory | Responsibility | Interview pieces it will absorb |
+|---|---|---|
+| `packages/rules` | rules and notation over chessops; only importer of chessops | rules/board row; mirroring, repetition keys, promotion detection |
+| `packages/board` | chessground as a React component; only importer of chessground | board; later the shared analysis board's board part |
+| `packages/engine` | typed UCI client with provenance on every result; Worker + Node transports | engine service |
+| `packages/play` | opponents: maximal resistance now; UCI_Elo / Skill Level / Maia calibration later | rating-calibrated engine play |
+| `packages/positions` | curated + mined position pools with validation tests | position store and mining |
+| `packages/tablebase` (reserved) | syzygy truth for won/drawn and max-resistance defence | tablebase access |
+| `packages/import` (reserved) | lichess / chess.com / PGN import with provenance tags | game import |
+| `packages/store` (reserved) | persistence: accounts, linked ratings, games, repertoires | account layer |
+| `packages/facts` (reserved) | board-state facts + engine comparison behind every narrated claim | fact extraction, reasoning check |
+| `packages/concepts` (reserved) | concept vocabulary with board-state tests | concept library |
+| `packages/review` (reserved) | standard review shape, lazily computed | standard review |
+| `packages/rooms` (reserved) | rooms, clocks, sealed votes, matchmaking | multiplayer |
+| `packages/srs` (reserved) | spaced-repetition scheduler | SRS |
+| `packages/opening-tree` (reserved) | played-games tree + explorer stats | opening tree, explorer |
+| `subprojects/<name>` | one tool each; consumes packages | the 13 subprojects |
+| `apps/web` | Vite + React host, hash routes, owns the browser engine instance | — |
+
+Tooling decisions taken by the agent on 2026-09-16 (reversible, raise with the user if they
+object): pnpm workspace via `npx pnpm@10` (npm 10.9.2 crashes on modern peer sets; corepack's
+pnpm cache was broken), React 19 rather than lichess's snabbdom, Vite, vitest, nmrugg's
+`stockfish` npm package (lite single-threaded build, no cross-origin isolation needed) rather
+than lila-stockfish-web (needs separate NNUE downloads; its npm metadata says AGPL while its
+LICENSE file says GPL).

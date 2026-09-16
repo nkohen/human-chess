@@ -94,6 +94,18 @@ point the learner also gets a nudge toward the puzzles subproject.
   tablebase positions that is the DTZ/DTM-maximizing defence, not merely the best eval).
 
 ## Status
-Interview for this subproject closed 2026-09-16; the user may add more later.
+Interview closed 2026-09-16; the user may add more later.
+
+**First slice built 2026-09-16** (subprojects/endgames-intro, hosted at `#/endgames`): four
+hard-coded rungs (two two-rook ladders, K+Q vs K, K+R vs K) with intro text, random colour with
+the position mirrored for Black, play against full-strength wasm Stockfish in the browser
+(600 ms per move), the exact success prompt with "I'm Confident!" / "Play Again", draw reasons
+in plain words from chessops queries, retry on failure, skip behind an "are you sure", lesson
+list with earlier rungs always playable, confidence stored per browser. Not yet built: animated
+piece pop-up (text only), hints on repeated failure (deferred until the reviewer exists),
+tablebase-backed defence (engine only; fine for these rungs), later rungs (pawn endings,
+Q vs R/B/N, drawing positions), the user's positions folder, the nudge to the opening tutorial
+and to puzzles, help-request tracking. Verified by vitest (rules, engine, positions, game
+state) and one hand-driven Chrome DevTools smoke run (handshake, move, engine reply).
 
 ## Open questions (not yet asked)

@@ -3,7 +3,7 @@
 Every piece of outside code or data that enters human-chess is recorded here BEFORE it lands,
 with its license and what that license obligates, and the user is told (CLAUDE.md, L2/L3).
 Status column: `candidate` (surveyed, not adopted), `adopted` (user said yes, code present),
-`rejected`. Nothing is adopted yet. Project license: AGPL-3.0-or-later (user, 2026-09-15). Stack decided
+`rejected`. First adoptions 2026-09-16 (chessops, chessground, nmrugg stockfish). Project license: AGPL-3.0-or-later (user, 2026-09-15). Stack decided
 2026-09-15: TypeScript, with Rust-to-wasm for compute-heavy parts. Every surveyed candidate
 below is AGPL-compatible except: cm-chessboard's default NC piece art, chessdriller and any
 other item with no license file, and unverified items.
@@ -25,15 +25,16 @@ Full survey with sources: docs/research/2026-09-15-reuse-survey.md.
 
 | Piece | License | Obligation if used | Status |
 |---|---|---|---|
-| chessops (npm `chessops`) | GPL-3.0 | app becomes GPL-3.0 | candidate, rules library for a TS stack |
-| chessground (`@lichess-org/chessground`) | GPL-3.0 | app becomes GPL-3.0 | candidate, board |
+| chessops (npm `chessops` 0.15.1, GPL-3.0-or-later) | GPL-3.0+ | linked into the app; fine under AGPL-3.0 (§13) | **adopted 2026-09-16** in packages/rules |
+| chessground (npm `chessground` 9.2.1, GPL-3.0-or-later; not scoped) | GPL-3.0+ | linked into the app; fine under AGPL-3.0 | **adopted 2026-09-16** in packages/board (with its cburnett piece set and brown board CSS) |
 | pgn-viewer (`@lichess-org/pgn-viewer`) | GPL-3.0 | app becomes GPL-3.0 | candidate |
-| stockfish-web (`@lichess-org/stockfish-web`) | GPL-3.0 | bundled wasm: app becomes GPL-3.0 | candidate, browser engine |
+| stockfish-web (npm `lila-stockfish-web` 0.0.11) | GPL-3.0 per LICENSE file; package.json says AGPL-3.0-or-later (inconsistent) | bundled wasm | candidate, not chosen: needs separate NNUE downloads |
+| stockfish.js (npm `stockfish` 19.0.0, nmrugg / Chess.com; GPL-3.0 per Copying.txt in the package) | GPL-3.0 | the unmodified loader + wasm are copied into apps/web/public/engine and shipped with the site: distributing the site must offer source (upstream repo + version) | **adopted 2026-09-16** in packages/engine (Worker transport) and apps/web |
 | scalachess | MIT | attribution | rejected 2026-09-15: stack is TypeScript, not JVM |
 | shakmaty (Rust crate, GPL-3.0+ per COPYING and Cargo.toml) and shakmaty-syzygy (GPL-3.0+ per Cargo.toml) | GPL-3.0+ | a Rust/wasm module linking it is GPL | candidate, only for a Rust compute module |
 | python-chess (pip `chess`) | GPL-3.0+ | any Python program importing it is GPL | candidate, data sidecar |
 | berserk | GPL-3.0 | same as above | candidate |
-| Stockfish binary | GPL-3.0 | none when run as separate UCI process; if redistributed, ship source/offer | candidate, server engine |
+| Stockfish binary | GPL-3.0 | none when run as separate UCI process; if redistributed, ship source/offer | used unmodified by tests when present (ProcessTransport); server engine later |
 | lc0 binary | GPL-3.0 + NVIDIA §7 permission | as Stockfish; weights terms unaudited | candidate |
 | Maia nets (maia-chess) | GPL-3.0 (code); weights not separately stated | unclear for weights: ask before bundling | candidate, bot-rating test |
 | maia2 | MIT | attribution | candidate |
@@ -55,3 +56,8 @@ Full survey with sources: docs/research/2026-09-15-reuse-survey.md.
 | chessdriller | no license file | cannot be reused until the author licenses it | design reference only |
 | fishtest, syzygy1/tb code | no license file found | methodology / data files only | reference |
 | Lichess Elite Database | unverified | confirm with curator | unverified |
+
+## Non-chess tooling (2026-09-16)
+
+React 19, react-dom, Vite 8, @vitejs/plugin-react (MIT); TypeScript 5.9 (Apache-2.0); vitest 5
+(MIT); pnpm. Attribution only; none changes the project's license.

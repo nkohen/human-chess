@@ -1,0 +1,11 @@
+{
+  "name": "@human-chess/endgames-intro",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@human-chess/board": "workspace:*", "@human-chess/engine": "workspace:*", "@human-chess/play": "workspace:*", "@human-chess/positions": "workspace:*", "@human-chess/rules": "workspace:*", "react": "^19.0.0" }
+}

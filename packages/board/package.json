@@ -1,0 +1,17 @@
+{
+  "name": "@human-chess/board",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "dependencies": {
+    "@human-chess/rules": "workspace:*",
+    "chessground": "^9.2.1",
+    "react": "^19.0.0"
+  }
+}

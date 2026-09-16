@@ -14,16 +14,44 @@ visualization trainer, a bot-rating test, group chess, an N-move opening game, a
 reviewer, puzzles, guess-the-eval, Hand and Brain, and more (the full list is in
 `memory/subprojects-overview.md`).
 
-This is a fresh repository: no code and no command set exist yet. **Stack (user, 2026-09-15):
-TypeScript for everything that is not computationally intensive; Rust compiled to WebAssembly
-is the option for compute-heavy parts.** Rules come from chessops (the lichess TypeScript rules
-library; shakmaty is the Rust counterpart if a Rust module ever needs rules); the board is
-chessground. Basis: docs/research/2026-09-15-reuse-survey.md, section 4.
+**Stack (user, 2026-09-15): TypeScript for everything that is not computationally intensive;
+Rust compiled to WebAssembly is the option for compute-heavy parts.** Rules come from chessops
+(the lichess TypeScript rules library; shakmaty is the Rust counterpart if a Rust module ever
+needs rules); the board is chessground. Basis: docs/research/2026-09-15-reuse-survey.md,
+section 4. Tooling chosen by the agent on 2026-09-16 and reversible while the code is small:
+pnpm workspace, Vite + React 19 for the web app, vitest, one strict root tsconfig, the
+`stockfish` npm package (nmrugg/stockfish.js) as the in-browser engine in a Web Worker.
 
 ## Getting started
 
-The project is new. Build, run, and test commands will be added to this file as the first
-subproject takes shape; do not assume any exist yet.
+npm 10.9.2 on this machine crashes resolving modern peer sets, so pnpm is used, through npx
+(or `corepack pnpm` once corepack's cache is repaired):
+
+```
+npx pnpm@10 install      # once, and after any package.json change
+npx pnpm@10 check        # tsc --noEmit over the workspace, then vitest
+npx pnpm@10 dev          # web app on http://localhost:5173 (copies the wasm engine first)
+npx pnpm@10 build        # production build into apps/web/dist
+```
+
+Engine tests use the wasm Stockfish from node_modules and also a native binary when
+`STOCKFISH_PATH` or /opt/homebrew/bin/stockfish exists. There is no browser test yet; the
+first slice was smoke-tested by hand through the Chrome DevTools protocol (2026-09-16).
+
+## Layout: the shared layer (A2/R1; responsibilities and mapping in memory/shared-layer.md)
+
+- `packages/rules` — chess rules and notation: thin wrappers over chessops; the only importer of chessops.
+- `packages/board` — the board UI: chessground as a React component; the only importer of chessground.
+- `packages/engine` — typed UCI client whose results carry provenance; Web Worker and Node transports.
+- `packages/play` — opponents built on the engine: maximal resistance now, rating-calibrated later.
+- `packages/positions` — curated and mined position pools, each validated by tests.
+- `subprojects/<name>` — one self-standing tool each; consumes packages, never duplicates them.
+- `apps/web` — the Vite app hosting every subproject behind a hash route.
+- `scripts/` — repo scripts (copying the wasm engine into the web app's public folder).
+
+Reserved package names for pieces not yet built: `tablebase`, `import`, `store`, `facts`,
+`concepts`, `review`, `rooms`, `srs`, `opening-tree`. Add a package only with a one-line
+responsibility here and in memory/shared-layer.md.
 
 ## Conventions
 

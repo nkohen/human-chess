@@ -1,0 +1,16 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+body { margin: 0; }
+.app-header { display: flex; justify-content: space-between; padding: 0.5rem 1rem; border-bottom: 1px solid #8884; }
+.app-header a { font-weight: bold; text-decoration: none; color: inherit; }
+.app-engine { font-size: 0.85rem; opacity: 0.7; }
+.home { padding: 1rem; max-width: 40rem; }
+.endgames { display: grid; grid-template-columns: 16rem minmax(0, 1fr); gap: 1rem; padding: 1rem; }
+.endgames-lessons ol { list-style: none; padding: 0; }
+.endgames-lessons button { display: block; width: 100%; text-align: left; padding: 0.4rem 0.6rem; margin-bottom: 0.25rem; }
+.endgames-lessons button.current { font-weight: bold; }
+.endgames-play { max-width: 32rem; }
+.endgames-status { min-height: 1.5em; }
+.endgames-dialog { border: 1px solid #8886; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0; }
+.endgames-dialog button, .endgames-actions button { margin-right: 0.5rem; }
+.endgames-newpiece { font-weight: bold; }
+@media (max-width: 40rem) { .endgames { grid-template-columns: 1fr; } }
