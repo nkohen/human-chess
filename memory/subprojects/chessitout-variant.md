@@ -60,3 +60,5 @@ Interview closed 2026-09-16; the user may add more later.
 
 ## Open questions (not yet asked)
 - Ratings and matchmaking beyond the daily queue; spectators; abandoned games.
+
+**User feedback on the first slice (2026-09-16), fixed the same day:** the voting screen did not say whose move it is (it matters for the verdict); now shown above the material line, and the playing status says "Your move."

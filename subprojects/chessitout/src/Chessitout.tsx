@@ -213,6 +213,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
           check={inCheck(pos)}
           onMove={() => undefined}
         />
+        <p className="ci-turn">{turn(pos) === 'white' ? 'White to move' : 'Black to move'}</p>
         <p className="ci-material">{describeMaterialDifference(pieceCounts(pos))}</p>
         {phase === 'voting' ? (
           <>
@@ -300,7 +301,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
             ? `The engine failed: ${engineState.message}`
             : engineState.kind === 'thinking'
               ? 'Engine is thinking…'
-              : `You are playing ${playerColor}.`)}
+              : `You are playing ${playerColor}. Your move.`)}
       </p>
       <ol className="ci-moves">
         {moveLines.length === 0 ? <li>No moves yet.</li> : moveLines.map((line, i) => <li key={i}>{line}</li>)}
