@@ -82,6 +82,14 @@ memory/reuse-library.md.
 ## Status
 Interview closed 2026-09-16; the user may add more later.
 
+**User feedback on the first slice (2026-09-16), built the same day:** search depth at least 20,
+and configurable — now default 20, range 6..30, persisted per browser, with the engine's
+intermediate lines streamed while the search runs (new `onProgress` on `analyse`). A button to
+suggest opponent moves on the opponent's turn — implemented as "Add these N opponent replies to
+the tree" over the MultiPV first moves, because the lichess explorer (the interview's source of
+"likely") now answers 401 without a lichess login (see memory/reuse-library.md); explorer-weighted
+replies need lichess OAuth and were flagged to the user, not built.
+
 ## Open questions (not yet asked)
 - How the user's played games are pulled in (openingtree's importer is the candidate).
 - Whether repertoires are shared between users.

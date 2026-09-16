@@ -51,6 +51,21 @@
   font-family: monospace;
 }
 
+.ob-depth {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.ob-depth input {
+  width: 3.5rem;
+}
+
+.ob-multipv-provenance {
+  margin-top: 0.5rem;
+}
+
 .ob-multipv-lines {
   padding-left: 1.25rem;
 }
@@ -64,4 +79,13 @@
   border: 1px solid currentColor;
   border-radius: 0.5rem;
   padding: 0.75rem;
+}
+
+.ob-add-replies {
+  margin-top: 0.5rem;
+}
+
+.ob-multipv-intree {
+  font-size: 0.85em;
+  opacity: 0.7;
 }

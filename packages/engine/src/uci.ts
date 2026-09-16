@@ -156,12 +156,22 @@ export class UciEngine {
     });
   }
 
+  /**
+   * Runs one search and resolves with its final `Analysis` once `bestmove` arrives.
+   *
+   * `onProgress`, when given, is called after every parsed `info` line that carries a pv —
+   * with the current lines so far, sorted by multipv ascending (same shape as
+   * `Analysis.lines`) — so a caller can show a deep search's intermediate output while it is
+   * still running (A1: these are real engine lines, just not the final ones). It is never
+   * called after the search ends; the last call always precedes the resolved promise.
+   */
   analyse(
     fen: string,
     moves: string[],
     limit: SearchLimit,
     multipv = 1,
     options?: Record<string, string | number | boolean>,
+    onProgress?: (lines: PvLine[]) => void,
   ): Promise<Analysis> {
     if (!limit.depth && !limit.movetime && !limit.nodes) {
       return Promise.reject(new EngineError('a search limit (depth, movetime or nodes) is required'));
@@ -179,12 +189,27 @@ export class UciEngine {
       this.transport.send(`position fen ${fen}${moves.length ? ' moves ' + moves.join(' ') : ''}`);
       let bestmove: string | undefined;
       let ponder: string | undefined;
+      // A throwing progress callback must not abort the exchange mid-search: the listener would
+      // be dropped while the engine keeps searching and its late `bestmove` would be attributed
+      // to the next queued search (A1). Instead the error is kept, the search is stopped, the
+      // exchange completes on the real `bestmove`, and only then is the error rethrown.
+      let progressError: unknown;
       this.searching = true;
       try {
         await this.exchange(`go${goArgs(limit)}`, line => {
           if (line.startsWith('info ')) {
             const pv = parseInfo(line);
-            if (pv) lines.set(pv.multipv, pv);
+            if (pv) {
+              lines.set(pv.multipv, pv);
+              if (onProgress && progressError === undefined) {
+                try {
+                  onProgress([...lines.values()].sort((a, b) => a.multipv - b.multipv));
+                } catch (err) {
+                  progressError = err;
+                  this.transport.send('stop');
+                }
+              }
+            }
             return false;
           }
           if (line.startsWith('bestmove')) {
@@ -201,6 +226,9 @@ export class UciEngine {
         });
       } finally {
         this.searching = false;
+      }
+      if (progressError !== undefined) {
+        throw progressError instanceof Error ? progressError : new Error(String(progressError));
       }
       const analysis: Analysis = {
         engine: this.name,

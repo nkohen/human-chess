@@ -37,13 +37,21 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
     if (edge) setPath(p => [...p, edge]);
   };
 
+  // Records several candidate opponent replies at once without moving along any of them; the
+  // user then answers each from "Tree at this position".
+  const children = childrenOf(opening, currentEpd);
+
+  const addReplies = (ucis: string[]): void => {
+    let updated = opening;
+    for (const uci of ucis) updated = addMove(updated, currentEpd, uci);
+    onOpeningChange(updated);
+  };
+
   const onBoardMove = (from: SquareName, to: SquareName): void => {
     const promotion = isPromotionMove(pos, from, to) ? 'queen' : undefined;
     const played = playMove(pos, from, to, promotion);
     playAndAdd(played.uci);
   };
-
-  const children = childrenOf(opening, currentEpd);
 
   return (
     <div className="ob-builder">
@@ -73,7 +81,14 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
       </div>
 
       <div className="ob-side-col">
-        <MultiPvPanel engine={engine} fen={fen} onPlayMove={playAndAdd} orientation={opening.color} />
+        <MultiPvPanel
+          engine={engine}
+          fen={fen}
+          onPlayMove={playAndAdd}
+          orientation={opening.color}
+          inTree={children.map(m => m.uci)}
+          {...(turn(pos) !== opening.color ? { onAddReplies: addReplies } : {})}
+        />
         <div className="ob-children">
           <h4>Tree at this position</h4>
           {children.length === 0 && <p className="ob-multipv-status">No moves recorded here yet.</p>}

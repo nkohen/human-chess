@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testEngines } from './testing';
-import { EngineError, parseInfo, UciEngine, type UciTransport } from './uci';
+import { EngineError, parseInfo, UciEngine, type PvLine, type UciTransport } from './uci';
 
 const STRENGTH_OPTION_LINES = [
   'option name UCI_LimitStrength type check default false',
@@ -90,6 +90,36 @@ describe.each(testEngines())('UciEngine against $label', ({ open }) => {
 
   it('has no move in a finished position', async () => {
     await expect(engine.bestMove('7k/5Q2/6K1/8/8/8/8/8 b - - 0 1', [], { depth: 4 })).rejects.toBeInstanceOf(EngineError);
+  });
+
+  it('reports progress before resolving, never past the resolved depth', async () => {
+    const progressCalls: PvLine[][] = [];
+    const a = await engine.analyse(
+      'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      [],
+      { depth: 10 },
+      1,
+      undefined,
+      lines => progressCalls.push(lines),
+    );
+    expect(progressCalls.length).toBeGreaterThan(0);
+    expect(progressCalls[0]!.length).toBeGreaterThan(0);
+    // The last progress payload is exactly what the resolved analysis carries, and the first
+    // one comes from an earlier iteration (a depth-10 search from the start position begins at
+    // depth 1), so the callback really did fire during the search rather than at its end.
+    expect(progressCalls.at(-1)).toEqual(a.lines);
+    expect(progressCalls[0]![0]!.depth).toBeLessThan(a.lines[0]!.depth);
+  });
+
+  it('a throwing progress callback stops the search and rejects, without leaking its bestmove into the next search', async () => {
+    await expect(
+      engine.analyse('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', [], { depth: 30 }, 1, undefined, () => {
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
+    // The next search must get its own bestmove for its own position: a Black-to-move reply.
+    const next = await engine.analyse('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1', [], { depth: 4 });
+    expect(next.bestmove).toMatch(/^[a-h][78][a-h][56]$/);
   });
 });
 

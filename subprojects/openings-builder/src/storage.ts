@@ -32,3 +32,35 @@ export function saveRepertoire(openings: Opening[]): void {
     // storage unavailable: repertoire lives for this page only
   }
 }
+
+// The MultiPV panel's search depth. Same guarded-localStorage pattern as the repertoire
+// above: reads and writes never throw, and a bad or missing stored value falls back to the
+// default rather than sinking the panel.
+const DEPTH_KEY = 'human-chess.openings.depth.v1';
+export const DEFAULT_DEPTH = 20;
+export const MIN_DEPTH = 6;
+export const MAX_DEPTH = 30;
+
+function clampDepth(depth: number): number {
+  return Math.min(MAX_DEPTH, Math.max(MIN_DEPTH, Math.round(depth)));
+}
+
+export function loadDepth(): number {
+  try {
+    const raw = globalThis.localStorage?.getItem(DEPTH_KEY);
+    if (!raw) return DEFAULT_DEPTH;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return DEFAULT_DEPTH;
+    return clampDepth(n);
+  } catch {
+    return DEFAULT_DEPTH;
+  }
+}
+
+export function saveDepth(depth: number): void {
+  try {
+    globalThis.localStorage?.setItem(DEPTH_KEY, String(clampDepth(depth)));
+  } catch {
+    // storage unavailable: depth choice lives for this page only
+  }
+}

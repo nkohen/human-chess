@@ -42,7 +42,8 @@ Full survey with sources: docs/research/2026-09-15-reuse-survey.md.
 | Fathom | MIT | attribution | candidate, tablebase probing |
 | lila-tablebase | AGPL-3.0 | run unmodified or use public endpoint | candidate |
 | lila-openingexplorer | AGPL-3.0 | run unmodified or use public endpoint | candidate |
-| lichess game and puzzle dumps, incl. the per-user game export API (`/api/games/user/{username}`, same underlying data) | CC0 | none | **adopted 2026-09-16** in packages/import (`fetchLatestLichessGame`); puzzle dumps still candidate; the puzzle API (`/api/puzzle/next`, `/api/puzzle/{id}`, same CC0 data) **adopted 2026-09-16** in subprojects/puzzles |
+| lichess game and puzzle dumps, incl. the per-user game export API (`/api/games/user/{username}`, same underlying data) | CC0 | none | **adopted 2026-09-16** in packages/import (`fetchLatestLichessGame`; note: lichess answers non-browser User-Agents such as curl's or HeadlessChrome's with an HTML 404, so test it with a real browser UA); puzzle dumps still candidate; the puzzle API (`/api/puzzle/next`, `/api/puzzle/{id}`, same CC0 data) **adopted 2026-09-16** in subprojects/puzzles |
+| lichess opening explorer API (`explorer.lichess.ovh/lichess`, `/masters`) | CC0 data | none | **blocked 2026-09-16**: every request, with or without a browser User-Agent or Origin, gets `401 Authorization Required` from nginx — the explorer now needs a lichess login (OAuth token). The openings builder's "likely opponent replies" (interview) therefore uses engine MultiPV until lichess OAuth exists; raise with the user before building OAuth |
 | lichess broadcast games | CC BY-SA 4.0 | attribution, share-alike on the data | candidate, data |
 | chess-openings (ECO TSV) | CC0 | none | candidate, data |
 | chess-coach (qam4) | Apache-2.0 | attribution + NOTICE | candidate, game-reviewer grounding pattern |
