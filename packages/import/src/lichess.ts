@@ -1,6 +1,7 @@
 // Fetches a lichess player's most recent game through lichess's public game-export API — no
 // OAuth, browser CORS is allowed. The PGN (moves, headers) lichess returns is game data,
 // licensed CC0 by lichess; see memory/reuse-library.md.
+import { LichessRateLimited, lichessFetch, type LichessFetchImpl } from '@human-chess/lichess';
 import { toImportedGame } from './parse';
 import type { ImportedGame } from './types';
 
@@ -13,7 +14,7 @@ const TIMEOUT_MS = 15_000;
 
 export async function fetchLatestLichessGame(
   username: string,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: LichessFetchImpl = lichessFetch,
 ): Promise<ImportedGame> {
   const url = `${LICHESS_GAMES_URL}/${encodeURIComponent(username)}?max=1&moves=true&tags=true&perfType=${STANDARD_PERF_TYPES}`;
 
@@ -24,6 +25,10 @@ export async function fetchLatestLichessGame(
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
+    // The default fetchImpl (lichessFetch) turns a 429 — and a call made during its cooldown —
+    // into this error already; surface it as-is so the UI's err.message shows the real wait
+    // time instead of a generic rate-limit message.
+    if (err instanceof LichessRateLimited) throw err;
     if (err instanceof DOMException && err.name === 'TimeoutError') {
       throw new Error('lichess did not answer within 15 s');
     }
@@ -33,6 +38,9 @@ export async function fetchLatestLichessGame(
   if (response.status === 404) {
     throw new Error(`no lichess user "${username}"`);
   }
+  // Kept even though lichessFetch (the default fetchImpl) never returns a 429 response — it
+  // throws LichessRateLimited before returning — because a caller-supplied fetchImpl (as in
+  // this file's own tests) can still hand back a raw 429 Response directly.
   if (response.status === 429) {
     throw new Error('lichess rate-limited this request; wait a moment and try again');
   }

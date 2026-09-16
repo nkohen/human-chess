@@ -1,6 +1,7 @@
 // The whole repertoire (every opening) as one JSON array in localStorage. Guarded because
 // storage can be missing (no browser) or throw (private mode, quota); on any failure the
 // repertoire simply lives for this page only, same pattern as endgames-intro/src/progress.ts.
+import { EXPLORER_RATING_BUCKETS } from '@human-chess/lichess';
 import { deserialize, serialize, type Opening } from './repertoire';
 
 const KEY = 'human-chess.openings.v1';
@@ -62,5 +63,50 @@ export function saveDepth(depth: number): void {
     globalThis.localStorage?.setItem(DEPTH_KEY, String(clampDepth(depth)));
   } catch {
     // storage unavailable: depth choice lives for this page only
+  }
+}
+
+// The Explorer panel's rating band (min/max over EXPLORER_RATING_BUCKETS). Same guarded-
+// localStorage pattern as depth above.
+const EXPLORER_BAND_KEY = 'human-chess.openings.explorerBand.v1';
+export const DEFAULT_EXPLORER_MIN = 1600;
+export const DEFAULT_EXPLORER_MAX = 2000;
+
+export interface ExplorerBand {
+  min: number;
+  max: number;
+}
+
+const DEFAULT_EXPLORER_BAND: ExplorerBand = { min: DEFAULT_EXPLORER_MIN, max: DEFAULT_EXPLORER_MAX };
+
+function isRatingBucket(n: number): boolean {
+  return (EXPLORER_RATING_BUCKETS as readonly number[]).includes(n);
+}
+
+function isBandLike(v: unknown): v is { min: unknown; max: unknown } {
+  return typeof v === 'object' && v !== null && 'min' in v && 'max' in v;
+}
+
+export function loadExplorerBand(): ExplorerBand {
+  try {
+    const raw = globalThis.localStorage?.getItem(EXPLORER_BAND_KEY);
+    if (!raw) return DEFAULT_EXPLORER_BAND;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isBandLike(parsed) || typeof parsed.min !== 'number' || typeof parsed.max !== 'number') {
+      return DEFAULT_EXPLORER_BAND;
+    }
+    const { min, max } = parsed;
+    if (!isRatingBucket(min) || !isRatingBucket(max) || min > max) return DEFAULT_EXPLORER_BAND;
+    return { min, max };
+  } catch {
+    return DEFAULT_EXPLORER_BAND;
+  }
+}
+
+export function saveExplorerBand(band: ExplorerBand): void {
+  try {
+    globalThis.localStorage?.setItem(EXPLORER_BAND_KEY, JSON.stringify(band));
+  } catch {
+    // storage unavailable: band choice lives for this page only
   }
 }

@@ -41,6 +41,7 @@ positions, facts, import, seven subprojects, apps/web. Reserved (named, not crea
 | `packages/play` | opponents: maximal resistance now; UCI_Elo / Skill Level / Maia calibration later | rating-calibrated engine play |
 | `packages/positions` | curated + mined position pools with validation tests | position store and mining |
 | `packages/tablebase` (reserved) | syzygy truth for won/drawn and max-resistance defence | tablebase access |
+| `packages/lichess` | the one client for lichess.org HTTP APIs (added 2026-09-16 after the user hit lichess limits and asked for OAuth): single in-flight request, app-wide 429 cooldown, localStorage response cache, OAuth PKCE login + token attach; `import`, `puzzles` and the openings builder's explorer calls go through it | lichess access |
 | `packages/import` | lichess fetch + pasted-PGN import into one ImportedGame shape; PGN parsing delegated to `packages/rules` (`parsePgnGame`); chess.com and provenance tags still to add | game import |
 | `packages/store` (reserved) | persistence: accounts, linked ratings, games, repertoires | account layer |
 | `packages/facts` (built 2026-09-16) | plain-language board-state facts and questions, each answered by a chessops query (check, piece on square, material by the 1/3/3/5/9 convention); engine comparison still to come | fact extraction, reasoning check |

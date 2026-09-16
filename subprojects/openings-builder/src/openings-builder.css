@@ -89,3 +89,75 @@
   font-size: 0.85em;
   opacity: 0.7;
 }
+
+.ob-explorer {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #8884;
+}
+
+.ob-explorer-band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.ob-explorer-status {
+  opacity: 0.8;
+}
+
+.ob-explorer-provenance {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.ob-explorer-moves {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ob-explorer-moves li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.ob-explorer-moves button {
+  flex: 1;
+  text-align: left;
+}
+
+.ob-explorer-wdl {
+  display: flex;
+  width: 5rem;
+  height: 0.6rem;
+  overflow: hidden;
+  border-radius: 0.2rem;
+  flex-shrink: 0;
+}
+
+.ob-explorer-wdl-white {
+  background: #e8e8e0;
+}
+
+.ob-explorer-wdl-draw {
+  background: #8888;
+}
+
+.ob-explorer-wdl-black {
+  background: #333;
+}
+
+.ob-explorer-add-threshold {
+  margin-top: 0.5rem;
+}
+
+.ob-reply-error {
+  color: #b00020;
+  margin: 0.25rem 0;
+}

@@ -20,6 +20,7 @@
     "@human-chess/game-reviewer": "workspace:*",
     "@human-chess/guess-the-eval": "workspace:*",
     "@human-chess/hand-and-brain": "workspace:*",
+    "@human-chess/lichess": "workspace:*",
     "@human-chess/memory-trainer": "workspace:*",
     "@human-chess/opening-training-game": "workspace:*",
     "@human-chess/openings-builder": "workspace:*",

@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, type SquareName } from '@human-chess/rules';
+import { ExplorerPanel } from './ExplorerPanel';
 import { MultiPvPanel } from './MultiPvPanel';
 import { addMove, childrenOf, fenAt, type Opening, type OpeningMove } from './repertoire';
 
@@ -41,10 +42,21 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
   // user then answers each from "Tree at this position".
   const children = childrenOf(opening, currentEpd);
 
+  // A reply the rules library rejects (an explorer move that isn't legal here, say) is reported
+  // and skipped, so it never takes the legal ones down with it (reviewer, 2026-09-16).
+  const [replyError, setReplyError] = useState<string | undefined>(undefined);
   const addReplies = (ucis: string[]): void => {
     let updated = opening;
-    for (const uci of ucis) updated = addMove(updated, currentEpd, uci);
-    onOpeningChange(updated);
+    const failed: string[] = [];
+    for (const uci of ucis) {
+      try {
+        updated = addMove(updated, currentEpd, uci);
+      } catch (err) {
+        failed.push(`${uci} (${err instanceof Error ? err.message : String(err)})`);
+      }
+    }
+    if (updated !== opening) onOpeningChange(updated);
+    setReplyError(failed.length > 0 ? `Could not add: ${failed.join(', ')}` : undefined);
   };
 
   const onBoardMove = (from: SquareName, to: SquareName): void => {
@@ -89,6 +101,8 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
           inTree={children.map(m => m.uci)}
           {...(turn(pos) !== opening.color ? { onAddReplies: addReplies } : {})}
         />
+        {turn(pos) !== opening.color && <ExplorerPanel fen={fen} onAddMoves={addReplies} />}
+        {replyError && <p className="ob-reply-error">{replyError}</p>}
         <div className="ob-children">
           <h4>Tree at this position</h4>
           {children.length === 0 && <p className="ob-multipv-status">No moves recorded here yet.</p>}

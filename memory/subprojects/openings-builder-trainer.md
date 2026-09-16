@@ -87,8 +87,13 @@ and configurable — now default 20, range 6..30, persisted per browser, with th
 intermediate lines streamed while the search runs (new `onProgress` on `analyse`). A button to
 suggest opponent moves on the opponent's turn — implemented as "Add these N opponent replies to
 the tree" over the MultiPV first moves, because the lichess explorer (the interview's source of
-"likely") now answers 401 without a lichess login (see memory/reuse-library.md); explorer-weighted
-replies need lichess OAuth and were flagged to the user, not built.
+"likely") now answers 401 without a lichess login (see memory/reuse-library.md). Built the same
+day once the user said yes to OAuth: an explorer panel under the engine lines on the opponent's
+turn (`ExplorerPanel.tsx`), logged out it shows a login prompt; logged in it lists each reply's
+share with win/draw/loss bars, a rating band (persisted; default 1600–2000, lichess's documented
+buckets) and "Add replies played ≥ 5%" — the 5% threshold and the band default are first guesses
+the user has not weighed in on. Speeds fixed to blitz+rapid+classical. Explorer responses cached
+7 days per position/band through `packages/lichess`.
 
 ## Open questions (not yet asked)
 - How the user's played games are pulled in (openingtree's importer is the candidate).

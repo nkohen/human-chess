@@ -50,6 +50,9 @@ importers:
       '@human-chess/hand-and-brain':
         specifier: workspace:*
         version: link:../../subprojects/hand-and-brain
+      '@human-chess/lichess':
+        specifier: workspace:*
+        version: link:../../packages/lichess
       '@human-chess/memory-trainer':
         specifier: workspace:*
         version: link:../../subprojects/memory-trainer
@@ -111,9 +114,18 @@ importers:
 
   packages/import:
     dependencies:
+      '@human-chess/lichess':
+        specifier: workspace:*
+        version: link:../lichess
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
+  packages/lichess:
+    dependencies:
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -306,6 +318,9 @@ importers:
       '@human-chess/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@human-chess/lichess':
+        specifier: workspace:*
+        version: link:../../packages/lichess
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
@@ -318,6 +333,9 @@ importers:
       '@human-chess/board':
         specifier: workspace:*
         version: link:../../packages/board
+      '@human-chess/lichess':
+        specifier: workspace:*
+        version: link:../../packages/lichess
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules

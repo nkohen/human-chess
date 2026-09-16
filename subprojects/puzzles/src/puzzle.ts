@@ -17,9 +17,14 @@
 // against this exact shape. `puzzle.initialPly` is the ply count of `game.pgn`; the number of
 // plies parsed out of the pgn must equal `initialPly + 1` — a guard against lichess ever
 // changing this contract silently, since a silently-wrong puzzle position would violate A1.
+import { cachedLichessJson, lichessFetch, type LichessFetchImpl } from '@human-chess/lichess';
 import {
   fenOf, parsePgnGame, playUci, positionFromFen, turn, type Color,
 } from '@human-chess/rules';
+
+// Puzzles are immutable once created (lichess never edits a puzzle's game/solution in place),
+// so an individual puzzle fetched by id is safe to cache for a long time.
+const PUZZLE_BY_ID_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export class PuzzleError extends Error {}
 
@@ -104,7 +109,7 @@ export function parseLichessPuzzle(json: unknown): ParsedPuzzle {
   };
 }
 
-type FetchFn = typeof fetch;
+type FetchFn = LichessFetchImpl;
 
 async function parseFetchedPuzzle(res: Response, notFoundMessage: string): Promise<ParsedPuzzle> {
   if (res.status === 404) throw new PuzzleError(notFoundMessage);
@@ -114,16 +119,33 @@ async function parseFetchedPuzzle(res: Response, notFoundMessage: string): Promi
   return parseLichessPuzzle(json);
 }
 
-/** Fetches a fresh puzzle from https://lichess.org/api/puzzle/next. */
-export async function fetchNextPuzzle(fetchImpl: FetchFn = fetch): Promise<ParsedPuzzle> {
+/** Fetches a fresh puzzle from https://lichess.org/api/puzzle/next. Never cached — "next" must
+ * return a different puzzle each time. */
+export async function fetchNextPuzzle(fetchImpl: FetchFn = lichessFetch): Promise<ParsedPuzzle> {
   const res = await fetchImpl('https://lichess.org/api/puzzle/next');
   return parseFetchedPuzzle(res, 'lichess had no next puzzle to give');
 }
 
-/** Fetches a specific puzzle by id from https://lichess.org/api/puzzle/{id}. */
-export async function fetchPuzzleById(id: string, fetchImpl: FetchFn = fetch): Promise<ParsedPuzzle> {
+/**
+ * Fetches a specific puzzle by id from https://lichess.org/api/puzzle/{id}, through the shared
+ * 24 h localStorage cache (puzzles are immutable, so a cache hit is always correct). A cache
+ * hit resolves from localStorage with no network call and no queue interaction, per cache.ts.
+ * On a miss, `fetchImpl` runs and its status is checked before the (2xx-only) response reaches
+ * the cache, so a 404/429/other error is never itself cached.
+ */
+export async function fetchPuzzleById(id: string, fetchImpl: FetchFn = lichessFetch): Promise<ParsedPuzzle> {
   const trimmed = id.trim();
   if (!trimmed) throw new PuzzleError('a puzzle id is required');
-  const res = await fetchImpl(`https://lichess.org/api/puzzle/${encodeURIComponent(trimmed)}`);
-  return parseFetchedPuzzle(res, `no puzzle found with id "${trimmed}"`);
+  const url = `https://lichess.org/api/puzzle/${encodeURIComponent(trimmed)}`;
+
+  const statusCheckedFetchImpl: FetchFn = async (input, init) => {
+    const res = await fetchImpl(input, init);
+    if (res.status === 404) throw new PuzzleError(`no puzzle found with id "${trimmed}"`);
+    if (res.status === 429) throw new PuzzleError('lichess rate-limited this request (HTTP 429) — wait a moment and try again');
+    if (!res.ok) throw new PuzzleError(`lichess puzzle API returned HTTP ${res.status} ${res.statusText}`);
+    return res;
+  };
+
+  const json = await cachedLichessJson<unknown>(url, PUZZLE_BY_ID_CACHE_TTL_MS, undefined, statusCheckedFetchImpl);
+  return parseLichessPuzzle(json);
 }

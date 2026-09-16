@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
+import { completeLichessLogin, installLichessAuth } from '@human-chess/lichess';
+import { LichessLogin } from '@human-chess/lichess/react';
 import { EndgamesIntro } from '@human-chess/endgames-intro';
 import { GuessTheEval } from '@human-chess/guess-the-eval';
 import { VisualizationTrainer } from '@human-chess/visualization-trainer';
@@ -26,6 +28,12 @@ const routes: { hash: string; title: string; blurb: string }[] = [
   { hash: '#/chessitout', title: 'Chessitout (solo)', blurb: 'Judge an imbalanced position, then play your side out against a rated engine.' },
   { hash: '#/review', title: 'Game reviewer', blurb: 'Import a game and see every move evaluated, classified, and compared with the best.' },
 ];
+
+// Module-level (not component state) so React 19 StrictMode's dev-only double-invoke of the
+// effect below reuses the same in-flight promise instead of exchanging the same OAuth code
+// twice: the second call's completeLichessLogin() would otherwise race the first, since the URL
+// isn't cleaned (and the code hasn't been consumed) until the first call's await resolves.
+let lichessLoginCompletion: Promise<unknown> | undefined;
 
 function useHash(): string {
   const [hash, setHash] = useState(() => window.location.hash);
@@ -66,10 +74,21 @@ export function App(): React.JSX.Element {
   const hash = useHash();
   const engine = useEngine();
   const engineLine = engine instanceof Error ? `engine: failed to load (${engine.message})` : engine ? `engine: ${engine.name}` : 'engine: loading…';
+
+  useEffect(() => {
+    installLichessAuth();
+    lichessLoginCompletion ??= completeLichessLogin().catch((err: unknown) => {
+      // A failed login (bad state, lichess-reported error, ...) shouldn't break the rest of the
+      // app; the user can just try logging in again from LichessLogin.
+      console.error('lichess login did not complete:', err);
+    });
+  }, []);
+
   return (
     <div className="app">
       <header className="app-header">
         <a href="#/">human-chess</a>
+        <LichessLogin />
         <span className="app-engine">{engineLine}</span>
       </header>
       {hash === '#/endgames' ? (

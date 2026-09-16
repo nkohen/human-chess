@@ -56,3 +56,12 @@ searches at depth 20 by default (6..30, persisted) with lines streamed while sea
 "Add these opponent replies to the tree" button on the opponent's turn (engine-based: the lichess
 explorer now needs a login); bot-rating has a board editor for the start position (shared
 `BoardEditor`). Reviewer findings on each fixed before commit.
+Lichess access (2026-09-16, user: "yes add oauth, and avoid hitting lichess limits"): every lichess
+call now goes through `packages/lichess` (one request in flight, a 60 s app-wide cooldown after a
+429 persisted across reloads, same-URL dedupe, localStorage cache; puzzle-by-id and explorer
+responses cached, "next puzzle" never). OAuth PKCE login lives in the app header (client_id
+`human-chess`, no registration, redirect to the app root, token in localStorage ~1 year, no
+refresh). Verified only in a headless browser with lichess's endpoints faked at the network layer;
+the user must try the real login themselves. Bugs found in that smoke and fixed: the restored
+hash after the redirect fired no hashchange (the app stayed on home), and a deduped GET whose
+leader was aborted pre-send under StrictMode's double mount rejected its joiner too.
