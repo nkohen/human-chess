@@ -12,7 +12,7 @@ import {
   currentFen, describeEnd, isInCheck, isPlayersTurn, lastMove, limitedStrength, playerDests, sideToMove,
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
-import { inCheck, pieceCounts, positionFromFen, turn, START_FEN, type Color } from '@human-chess/rules';
+import { inCheck, pieceCounts, positionFromFen, turn, START_FEN, type Color, type SquareName } from '@human-chess/rules';
 import { describeMaterialDifference } from './material';
 import { judgeVote, type Vote } from './vote';
 import './chessitout.css';
@@ -201,6 +201,13 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
 
   if (phase === 'voting' || phase === 'choose-side') {
     const pos = positionFromFen(position.fen);
+    // position.moves is the real self-play move list mined to reach this position (A1); the
+    // last entry is the move that produced position.fen, so this is a real previous move, not
+    // an invented one.
+    const lastMined = position.moves[position.moves.length - 1];
+    const miningLastMove: [SquareName, SquareName] | undefined = lastMined
+      ? [lastMined.slice(0, 2) as SquareName, lastMined.slice(2, 4) as SquareName]
+      : undefined;
     return (
       <div className="chessitout">
         <h2>Chessitout</h2>
@@ -210,6 +217,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
           turnColor={turn(pos)}
           dests={new Map()}
           movableColor={undefined}
+          lastMove={miningLastMove}
           check={inCheck(pos)}
           onMove={() => undefined}
         />

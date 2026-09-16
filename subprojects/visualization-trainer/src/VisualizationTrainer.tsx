@@ -10,7 +10,7 @@ import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { endPosition, PIECE_ON_OPTIONS, questionsFor, type Position, type Question } from '@human-chess/facts';
 import { fenOf, inCheck, positionFromFen, turn, type SquareName } from '@human-chess/rules';
-import { LINE_PLIES, ROUNDS, randomStartFen } from './exercise';
+import { LINE_PLIES, ROUNDS, randomStartPosition } from './exercise';
 import './visualization-trainer.css';
 
 /** Search depth for the engine line the learner is asked to visualize. */
@@ -41,7 +41,8 @@ const formatSigned = (n: number): string => (n > 0 ? `+${n}` : `${n}`);
 
 export function VisualizationTrainer({ engine }: VisualizationTrainerProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
-  const [startFen, setStartFen] = useState(() => randomStartFen());
+  const [startPosition, setStartPosition] = useState(() => randomStartPosition());
+  const { fen: startFen, moves: startMoves } = startPosition;
   const [exercise, setExercise] = useState<ExerciseState>({ kind: 'loading' });
   const [answers, setAnswers] = useState<Answers>(EMPTY_ANSWERS);
   const [revealed, setRevealed] = useState(false);
@@ -77,10 +78,23 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
   }, [readyEngine, startFen]);
 
   const startPos = useMemo(() => positionFromFen(startFen), [startFen]);
+  // startMoves is the real setup-ply sequence that produced startFen (randomStartPosition); its
+  // last entry is the move that reached this position, never invented (A1/V3).
+  const startLastMove: [SquareName, SquareName] | undefined = useMemo(() => {
+    const lastUci = startMoves[startMoves.length - 1];
+    return lastUci ? [lastUci.slice(0, 2) as SquareName, lastUci.slice(2, 4) as SquareName] : undefined;
+  }, [startMoves]);
   const end: Position | undefined = useMemo(
     () => (exercise.kind === 'ready' ? endPosition(exercise.startFen, exercise.ucis) : undefined),
     [exercise],
   );
+  // The line's own last ply, so the end board's highlight is the real move that reached it,
+  // never invented (A1/V3).
+  const endLastMove: [SquareName, SquareName] | undefined = useMemo(() => {
+    if (exercise.kind !== 'ready') return undefined;
+    const lastUci = exercise.ucis[exercise.ucis.length - 1];
+    return lastUci ? [lastUci.slice(0, 2) as SquareName, lastUci.slice(2, 4) as SquareName] : undefined;
+  }, [exercise]);
   const questions: Question[] | undefined = useMemo(
     () => (exercise.kind === 'ready' ? questionsFor(exercise.startFen, exercise.ucis) : undefined),
     [exercise],
@@ -89,7 +103,7 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
 
   /** Fetches another line for the same round (used when the engine returned none — this never
    * happened as far as the learner is concerned, so it does not consume a round). */
-  const retryExercise = (): void => setStartFen(randomStartFen());
+  const retryExercise = (): void => setStartPosition(randomStartPosition());
 
   /** Advances to the next round, or — after the last one — ends the session. */
   const nextExercise = (): void => {
@@ -98,14 +112,14 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
       return;
     }
     setRound(r => r + 1);
-    setStartFen(randomStartFen());
+    setStartPosition(randomStartPosition());
   };
 
   const playAgain = (): void => {
     setTally({ correct: 0, total: 0 });
     setRound(1);
     setSessionDone(false);
-    setStartFen(randomStartFen());
+    setStartPosition(randomStartPosition());
   };
 
   const checkAnswers = (): void => {
@@ -155,6 +169,7 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
               turnColor={turn(startPos)}
               dests={EMPTY_DESTS}
               movableColor={undefined}
+              lastMove={startLastMove}
               check={inCheck(startPos)}
               onMove={() => undefined}
               // Drawing the line's arrows on the start board would do the visualizing for the learner.
@@ -249,7 +264,16 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
                 <div className="viz-end">
                   <p>The end position:</p>
                   <div className="viz-board">
-                    <Board fen={fenOf(end)} orientation="white" turnColor={turn(end)} dests={EMPTY_DESTS} movableColor={undefined} check={inCheck(end)} onMove={() => undefined} />
+                    <Board
+                      fen={fenOf(end)}
+                      orientation="white"
+                      turnColor={turn(end)}
+                      dests={EMPTY_DESTS}
+                      movableColor={undefined}
+                      lastMove={endLastMove}
+                      check={inCheck(end)}
+                      onMove={() => undefined}
+                    />
                   </div>
                   <button onClick={nextExercise}>{round >= ROUNDS ? 'See results' : 'Next'}</button>
                 </div>

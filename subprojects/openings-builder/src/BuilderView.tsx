@@ -30,6 +30,10 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
   const fen = fenAt(currentEpd);
   const pos = useMemo(() => positionFromFen(fen), [fen]);
   const dests = useMemo(() => legalDests(pos), [pos]);
+  const lastPathMove = path.length ? path[path.length - 1] : undefined;
+  const lastMove: [SquareName, SquareName] | undefined = lastPathMove
+    ? [lastPathMove.uci.slice(0, 2) as SquareName, lastPathMove.uci.slice(2, 4) as SquareName]
+    : undefined;
 
   const playAndAdd = (uci: string): void => {
     const updated = addMove(opening, currentEpd, uci);
@@ -82,6 +86,7 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
           turnColor={turn(pos)}
           dests={dests}
           movableColor={turn(pos)}
+          lastMove={lastMove}
           check={inCheck(pos)}
           onMove={onBoardMove}
         />

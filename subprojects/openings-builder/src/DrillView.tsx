@@ -77,6 +77,10 @@ export function DrillView({ opening }: DrillViewProps): React.JSX.Element {
   };
 
   const dests = usersTurn && status === 'playing' ? legalDests(pos) : new Map<SquareName, SquareName[]>();
+  const lastTrailUci = trail[trail.length - 1];
+  const lastMove: [SquareName, SquareName] | undefined = lastTrailUci
+    ? [lastTrailUci.slice(0, 2) as SquareName, lastTrailUci.slice(2, 4) as SquareName]
+    : undefined;
 
   return (
     <div className="ob-drill">
@@ -87,6 +91,7 @@ export function DrillView({ opening }: DrillViewProps): React.JSX.Element {
           turnColor={turn(pos)}
           dests={dests}
           movableColor={usersTurn && status === 'playing' ? opening.color : undefined}
+          lastMove={lastMove}
           check={inCheck(pos)}
           onMove={onBoardMove}
         />

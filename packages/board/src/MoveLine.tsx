@@ -6,7 +6,7 @@
 // can never push layout around (no scrollbar/reflow feedback loop) and can never itself receive
 // the pointer (so it cannot trigger a mouseenter/mouseleave loop with the move it is anchored to).
 import { useEffect, useMemo, useState } from 'react';
-import { annotateLine, inCheck, positionFromFen, turn, type Color, type LinePly } from '@human-chess/rules';
+import { annotateLine, inCheck, positionFromFen, turn, type Color, type LinePly, type SquareName } from '@human-chess/rules';
 import { Board } from './Board';
 
 export interface MoveLineProps {
@@ -79,6 +79,9 @@ export function MoveLine({ startFen, ucis, preview = true, orientation = 'white'
 
   const shown = preview && hovered !== undefined ? plies[hovered] : undefined;
   const shownPos = shown ? positionFromFen(shown.fenAfter) : undefined;
+  const shownLastMove: [SquareName, SquareName] | undefined = shown
+    ? [shown.uci.slice(0, 2) as SquareName, shown.uci.slice(2, 4) as SquareName]
+    : undefined;
 
   const hover = (i: number, target: Element): void => {
     setHovered(i);
@@ -103,7 +106,7 @@ export function MoveLine({ startFen, ucis, preview = true, orientation = 'white'
       ))}
       {shown && shownPos && rect && (
         <span className="hc-moveline-preview" style={previewStyle(rect, previewPx)}>
-          <Board fen={shown.fenAfter} orientation={orientation} turnColor={turn(shownPos)} dests={EMPTY_DESTS} movableColor={undefined} check={inCheck(shownPos)} onMove={() => undefined} />
+          <Board fen={shown.fenAfter} orientation={orientation} turnColor={turn(shownPos)} dests={EMPTY_DESTS} movableColor={undefined} lastMove={shownLastMove} check={inCheck(shownPos)} onMove={() => undefined} />
           <span style={{ fontSize: '0.8rem', color: '#333' }}>after {plyLabel(shown)}</span>
         </span>
       )}

@@ -141,7 +141,13 @@ function ReviewScreen({
             : 'The very first move you entered did not match the real game.'}
       </p>
 
-      {realFens.length > 1 && <ReplayBoard fens={realFens.slice(0, lastMatchPly + 1)} orientation={game.playedAs ?? 'white'} />}
+      {realFens.length > 1 && (
+        <ReplayBoard
+          fens={realFens.slice(0, lastMatchPly + 1)}
+          ucis={game.ucis.slice(0, lastMatchPly)}
+          orientation={game.playedAs ?? 'white'}
+        />
+      )}
 
       {diverged.length === 0 && segments.length > 0 && <p>No divergence — you reconstructed the whole game you entered.</p>}
 
@@ -166,9 +172,16 @@ function ReviewScreen({
   );
 }
 
-function ReplayBoard({ fens, orientation }: { fens: string[]; orientation: Color }): React.JSX.Element {
+function ReplayBoard({ fens, ucis, orientation }: { fens: string[]; ucis: string[]; orientation: Color }): React.JSX.Element {
   const [index, setIndex] = useState(0);
-  const fen = fens[Math.min(index, fens.length - 1)] ?? fens[0]!;
+  const clampedIndex = Math.min(index, fens.length - 1);
+  const fen = fens[clampedIndex] ?? fens[0]!;
+  // fens[0] is the start position (no previous move); fens[i] for i > 0 is the position after
+  // ucis[i - 1], so that is the real move that produced the position now shown.
+  const uci = clampedIndex > 0 ? ucis[clampedIndex - 1] : undefined;
+  const lastMove: [SquareName, SquareName] | undefined = uci
+    ? [uci.slice(0, 2) as SquareName, uci.slice(2, 4) as SquareName]
+    : undefined;
   return (
     <div className="memory-trainer-replay">
       <Board
@@ -177,6 +190,7 @@ function ReplayBoard({ fens, orientation }: { fens: string[]; orientation: Color
         turnColor="white"
         dests={new Map()}
         movableColor={undefined}
+        lastMove={lastMove}
         check={false}
         onMove={() => {}}
       />

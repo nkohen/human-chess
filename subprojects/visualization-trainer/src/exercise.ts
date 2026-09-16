@@ -19,14 +19,23 @@ export const ROUNDS = 5;
 /**
  * A varied start position: `SETUP_PLIES` uniformly random legal moves played from the initial
  * position. Every move is drawn via `randomLegalMove` (a board-state read, never guessed) and
- * played through `playUci`; nothing here judges legality itself.
+ * played through `playUci`; nothing here judges legality itself. Returns the moves played too
+ * (`moves`), so a caller showing this position on a board can highlight the real move that
+ * produced it rather than showing none or inventing one (A1/V3).
  */
-export function randomStartFen(random: () => number = Math.random): string {
+export function randomStartPosition(random: () => number = Math.random): { fen: string; moves: string[] } {
   let pos = positionFromFen(INITIAL_FEN);
+  const moves: string[] = [];
   for (let i = 0; i < SETUP_PLIES; i++) {
     const uci = randomLegalMove(pos, random);
     if (!uci) break;
     pos = playUci(pos, uci).pos;
+    moves.push(uci);
   }
-  return fenOf(pos);
+  return { fen: fenOf(pos), moves };
+}
+
+/** `randomStartPosition`'s fen alone, for callers that have no use for the setup moves. */
+export function randomStartFen(random: () => number = Math.random): string {
+  return randomStartPosition(random).fen;
 }

@@ -224,6 +224,13 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
 
   const roundResult = results[results.length - 1];
   const runningTotal = results.reduce((sum, r) => sum + r.points, 0);
+  // position.moves is the real self-play move list mined to reach position.fen (A1); its last
+  // entry is the move that produced this position, so this is a real previous move, not one
+  // invented for display.
+  const lastMinedMove = position.moves[position.moves.length - 1];
+  const lastMove: [SquareName, SquareName] | undefined = lastMinedMove
+    ? [lastMinedMove.slice(0, 2) as SquareName, lastMinedMove.slice(2, 4) as SquareName]
+    : undefined;
 
   return (
     <div className="gte">
@@ -238,6 +245,7 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
         turnColor={turn(pos)}
         dests={EMPTY_DESTS}
         movableColor={undefined}
+        lastMove={lastMove}
         check={inCheck(pos)}
         onMove={() => undefined}
       />
