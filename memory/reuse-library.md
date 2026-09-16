@@ -1,0 +1,57 @@
+# Reuse library ledger
+
+Every piece of outside code or data that enters human-chess is recorded here BEFORE it lands,
+with its license and what that license obligates, and the user is told (CLAUDE.md, L2/L3).
+Status column: `candidate` (surveyed, not adopted), `adopted` (user said yes, code present),
+`rejected`. Nothing is adopted yet. Project license: AGPL-3.0-or-later (user, 2026-09-15). Stack decided
+2026-09-15: TypeScript, with Rust-to-wasm for compute-heavy parts. Every surveyed candidate
+below is AGPL-compatible except: cm-chessboard's default NC piece art, chessdriller and any
+other item with no license file, and unverified items.
+
+Full survey with sources: docs/research/2026-09-15-reuse-survey.md.
+
+## Obligation summary
+
+- **MIT / BSD / Apache-2.0 / CC0**: attribution (and NOTICE handling for Apache). No effect on
+  human-chess's license.
+- **GPL-3.0**: linking or bundling into one program makes the whole program GPL-3.0 when
+  distributed. Running a GPL engine as a separate process over UCI does not. Compatible with
+  human-chess being GPL-3.0 or AGPL-3.0.
+- **AGPL-3.0**: as GPL, plus running a modified copy as a network service obliges source
+  release to its users. Running an unmodified copy, or calling lichess's public endpoints,
+  does not modify anything.
+
+## Ledger (verified from license files on 2026-09-15 unless marked)
+
+| Piece | License | Obligation if used | Status |
+|---|---|---|---|
+| chessops (npm `chessops`) | GPL-3.0 | app becomes GPL-3.0 | candidate, rules library for a TS stack |
+| chessground (`@lichess-org/chessground`) | GPL-3.0 | app becomes GPL-3.0 | candidate, board |
+| pgn-viewer (`@lichess-org/pgn-viewer`) | GPL-3.0 | app becomes GPL-3.0 | candidate |
+| stockfish-web (`@lichess-org/stockfish-web`) | GPL-3.0 | bundled wasm: app becomes GPL-3.0 | candidate, browser engine |
+| scalachess | MIT | attribution | rejected 2026-09-15: stack is TypeScript, not JVM |
+| shakmaty (Rust crate, GPL-3.0+ per COPYING and Cargo.toml) and shakmaty-syzygy (GPL-3.0+ per Cargo.toml) | GPL-3.0+ | a Rust/wasm module linking it is GPL | candidate, only for a Rust compute module |
+| python-chess (pip `chess`) | GPL-3.0+ | any Python program importing it is GPL | candidate, data sidecar |
+| berserk | GPL-3.0 | same as above | candidate |
+| Stockfish binary | GPL-3.0 | none when run as separate UCI process; if redistributed, ship source/offer | candidate, server engine |
+| lc0 binary | GPL-3.0 + NVIDIA §7 permission | as Stockfish; weights terms unaudited | candidate |
+| Maia nets (maia-chess) | GPL-3.0 (code); weights not separately stated | unclear for weights: ask before bundling | candidate, bot-rating test |
+| maia2 | MIT | attribution | candidate |
+| maia3 | AGPL-3.0 | source release if modified and hosted | candidate |
+| Fathom | MIT | attribution | candidate, tablebase probing |
+| lila-tablebase | AGPL-3.0 | run unmodified or use public endpoint | candidate |
+| lila-openingexplorer | AGPL-3.0 | run unmodified or use public endpoint | candidate |
+| lichess game and puzzle dumps | CC0 | none | candidate, data |
+| lichess broadcast games | CC BY-SA 4.0 | attribution, share-alike on the data | candidate, data |
+| chess-openings (ECO TSV) | CC0 | none | candidate, data |
+| chess-coach (qam4) | Apache-2.0 | attribution + NOTICE | candidate, game-reviewer grounding pattern |
+| boardgame.io | MIT | attribution | candidate, group chess |
+| cm-chessboard | MIT code; Staunty pieces CC BY-NC-SA 4.0 | swap piece art for commercial use | candidate |
+| chess.js | BSD-2-Clause | attribution | candidate only if the lichess-rules rule is relaxed |
+| openingtree | GPL-3.0 | compatible with AGPL-3.0; keep notices, attribute | **candidate, user-directed 2026-09-16**: reuse its played-games opening tree and lichess/chess.com importer for the openings builder; specific files to be listed before landing |
+| en-croissant | GPL-3.0 | app becomes GPL-3.0 if code is copied | design reference |
+| Listudy, blind.tactics, lichess-bot | AGPL-3.0 | source release if modified and hosted | design references |
+| lila (server) | AGPL-3.0 | not separable; reference only | reference |
+| chessdriller | no license file | cannot be reused until the author licenses it | design reference only |
+| fishtest, syzygy1/tb code | no license file found | methodology / data files only | reference |
+| Lichess Elite Database | unverified | confirm with curator | unverified |

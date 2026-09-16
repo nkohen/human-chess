@@ -11,12 +11,14 @@ tools, and mini-games — each one called a subproject. Named subprojects includ
 builder and trainer, a Chessitout variant for training mid-games, an endgames-focused
 introduction to chess for new players, an openings heuristic finder, a memory trainer, a
 visualization trainer, a bot-rating test, group chess, an N-move opening game, a game
-reviewer, and more (the full list is in `memory/subprojects-overview.md`).
+reviewer, puzzles, guess-the-eval, Hand and Brain, and more (the full list is in
+`memory/subprojects-overview.md`).
 
-This is a fresh repository: no code and no command set exist yet. The stack is **not yet
-settled** — the stated intent is to mimic lichess' stack, since many of the open-source
-projects human-chess will draw from do the same. Treat the stack as an open decision to be
-made deliberately, not as an established fact.
+This is a fresh repository: no code and no command set exist yet. **Stack (user, 2026-09-15):
+TypeScript for everything that is not computationally intensive; Rust compiled to WebAssembly
+is the option for compute-heavy parts.** Rules come from chessops (the lichess TypeScript rules
+library; shakmaty is the Rust counterpart if a Rust module ever needs rules); the board is
+chessground. Basis: docs/research/2026-09-15-reuse-survey.md, section 4.
 
 ## Getting started
 
@@ -55,8 +57,10 @@ subproject takes shape; do not assume any exist yet.
   project enters the reuse library or a subproject, record its license and what that
   license obligates (AGPL: running a modified service triggers source release; GPL:
   linking makes the whole program GPL) in `memory/reuse-library.md`, and tell the user
-  before it lands. Never mix licenses silently. The project's own license is undecided
-  until the user says otherwise. (L2, L3)
+  before it lands. Never mix licenses silently. **The project's license is AGPL-3.0-or-later (user,
+  2026-09-15; text in LICENSE).** Anything that enters must be AGPL-compatible: GPL-3.0,
+  MIT, BSD, Apache-2.0, CC0 and CC BY-SA are; non-commercial (NC) content and unlicensed
+  code are not. (L2, L3)
 
 ## Delegation: thin coordinator, workers on the cheaper tier (adopted 2026-09-15)
 

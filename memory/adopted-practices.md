@@ -56,6 +56,15 @@ Applied on the user's ask ("is there config we did for autochess that we didn't 
 | researcher on Sonnet; code-reviewer, claim-auditor, red-team on inherit | agent frontmatter `model:` | yes | same as above / a gate misses what the strong tier catches |
 | Thin-coordinator rule, shape-triggered | CLAUDE.md §Delegation | no (prose) | friction says a dispatch cost more than in-thread, twice |
 
+## 2026-09-15 — user decisions that touch the table above
+
+- Project license: AGPL-3.0-or-later (user, 2026-09-15). This meets half of the licensing row's
+  drop condition (one license picked). The other half, every reused source compatible, holds
+  for everything surveyed except NC content and unlicensed repos, so per-item recording in
+  memory/reuse-library.md is kept for attribution and for catching those two cases. Whether to
+  thin the CLAUDE.md line is the user's call; not done.
+- Stack: TypeScript, Rust-to-wasm for compute-heavy parts (user, 2026-09-15).
+
 ## Circle-back (due after ~10 sessions or the first subproject, whichever first)
 
 - Did the no-fabrication and grounded-explanation lines get followed without a friction
