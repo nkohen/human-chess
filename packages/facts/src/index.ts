@@ -88,7 +88,12 @@ function pieceOnQuestion(end: Position, random: () => number): Question {
 
 function materialQuestion(end: Position): Question {
   const { balance } = materialPoints(end);
-  return { kind: 'material', prompt: 'What is the material balance (white minus black, in points)?', answer: balance };
+  return {
+    kind: 'material',
+    prompt:
+      'What is the material balance (white minus black, in points)? (standard count: pawn 1, knight 3, bishop 3, rook 5, queen 9)',
+    answer: balance,
+  };
 }
 
 /** Exactly three questions about `end`: whether the side to move is in check, what is on a

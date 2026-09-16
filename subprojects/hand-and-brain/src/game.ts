@@ -5,11 +5,9 @@
 // from chessops through @human-chess/rules; nothing here generates or judges moves itself.
 import {
   fenOf, inCheck, isPromotionMove, legalDestsByRole, playMove, positionEnd, positionFromFen,
-  repetitionKey, roleAt, turn,
+  repetitionKey, roleAt, START_FEN, turn,
   type Color, type GameEnd, type Position, type Role, type SquareName,
 } from '@human-chess/rules';
-
-const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 export interface MoveRecord {
   color: Color;

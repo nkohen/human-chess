@@ -1,17 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { band, BAND_CLEAR_CP, BAND_SLIGHT_CP, BAND_WINNING_CP, describeBand, grade, whitePerspective } from './scoring';
+import { band, BAND_CLEAR_CP, BAND_SLIGHT_CP, BAND_WINNING_CP, describeBand, grade } from './scoring';
 
-describe('whitePerspective', () => {
-  it('keeps a White-to-move score as is', () => {
-    expect(whitePerspective({ type: 'cp', value: 50 }, 'white')).toEqual({ type: 'cp', value: 50 });
-    expect(whitePerspective({ type: 'mate', value: 3 }, 'white')).toEqual({ type: 'mate', value: 3 });
-  });
-
-  it('negates a Black-to-move score, cp and mate alike', () => {
-    expect(whitePerspective({ type: 'cp', value: 50 }, 'black')).toEqual({ type: 'cp', value: -50 });
-    expect(whitePerspective({ type: 'mate', value: -3 }, 'black')).toEqual({ type: 'mate', value: 3 });
-  });
-});
+// whitePerspective's tests moved to packages/engine/src/score.test.ts along with the function.
 
 describe('band', () => {
   it('reports equal near zero', () => {

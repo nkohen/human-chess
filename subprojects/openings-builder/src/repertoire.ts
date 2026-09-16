@@ -2,7 +2,9 @@
 // transpositions merge into one node, per the user's spec (memory/subprojects/openings-builder-trainer.md,
 // "Structure"). This file is pure and has no React or engine dependency; everything here is a
 // plain function over plain data, unit-tested in repertoire.test.ts.
-import { fenOf, playUci, positionFromFen, repetitionKey, turn, type Color } from '@human-chess/rules';
+import { fenOf, playUci, positionFromFen, repetitionKey, START_FEN, turn, type Color } from '@human-chess/rules';
+
+export { START_FEN };
 
 /** One edge out of a node: the move played, its SAN, and the EPD it lands on. */
 export interface OpeningMove {
@@ -25,8 +27,6 @@ export interface Opening {
   /** Keyed by EPD; transpositions within one opening land on the same key. */
   nodes: Record<string, OpeningNode>;
 }
-
-export const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 function genId(): string {
   return `op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -91,11 +91,41 @@ export function serialize(opening: Opening): string {
   return JSON.stringify(opening);
 }
 
+/**
+ * Full structural validation, not just a shallow field check: every node key must parse as a
+ * position (via `positionFromFen`, never hand-checked) and every move needs string uci/san/to
+ * fields whose `to` names an actual node — otherwise a corrupt opening would pass this gate and
+ * only blow up later, inside render (`BuilderView`/`DrillView` walking the tree). One invalid
+ * node or move invalidates the whole opening; the caller (loadRepertoire) drops it and keeps
+ * the rest.
+ */
 function isOpeningShape(value: unknown): value is Opening {
   if (!value || typeof value !== 'object') return false;
   const o = value as Record<string, unknown>;
-  return typeof o['id'] === 'string' && typeof o['name'] === 'string' && (o['color'] === 'white' || o['color'] === 'black')
-    && typeof o['root'] === 'string' && typeof o['nodes'] === 'object' && o['nodes'] !== null;
+  if (typeof o['id'] !== 'string' || typeof o['name'] !== 'string') return false;
+  if (o['color'] !== 'white' && o['color'] !== 'black') return false;
+  if (typeof o['root'] !== 'string') return false;
+  if (typeof o['nodes'] !== 'object' || o['nodes'] === null) return false;
+
+  const nodes = o['nodes'] as Record<string, unknown>;
+  const nodeKeys = new Set(Object.keys(nodes));
+  for (const [epd, node] of Object.entries(nodes)) {
+    try {
+      positionFromFen(epd);
+    } catch {
+      return false;
+    }
+    if (!node || typeof node !== 'object') return false;
+    const moves = (node as Record<string, unknown>)['moves'];
+    if (!Array.isArray(moves)) return false;
+    for (const m of moves) {
+      if (!m || typeof m !== 'object') return false;
+      const mv = m as Record<string, unknown>;
+      if (typeof mv['uci'] !== 'string' || typeof mv['san'] !== 'string' || typeof mv['to'] !== 'string') return false;
+      if (!nodeKeys.has(mv['to'])) return false;
+    }
+  }
+  return true;
 }
 
 export function deserialize(json: string): Opening {

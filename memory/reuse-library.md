@@ -42,7 +42,7 @@ Full survey with sources: docs/research/2026-09-15-reuse-survey.md.
 | Fathom | MIT | attribution | candidate, tablebase probing |
 | lila-tablebase | AGPL-3.0 | run unmodified or use public endpoint | candidate |
 | lila-openingexplorer | AGPL-3.0 | run unmodified or use public endpoint | candidate |
-| lichess game and puzzle dumps | CC0 | none | candidate, data |
+| lichess game and puzzle dumps, incl. the per-user game export API (`/api/games/user/{username}`, same underlying data) | CC0 | none | **adopted 2026-09-16** in packages/import (`fetchLatestLichessGame`); first live lichess API call in the repo, flagged for the user; puzzle dumps still candidate; the puzzle API (`/api/puzzle/next`, `/api/puzzle/{id}`, same CC0 data) **adopted 2026-09-16** in subprojects/puzzles |
 | lichess broadcast games | CC BY-SA 4.0 | attribution, share-alike on the data | candidate, data |
 | chess-openings (ECO TSV) | CC0 | none | candidate, data |
 | chess-coach (qam4) | Apache-2.0 | attribution + NOTICE | candidate, game-reviewer grounding pattern |

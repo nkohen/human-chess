@@ -1,13 +1,12 @@
 // Groups legal destinations by piece type: what "call a piece type before moving" needs
 // (Hand and Brain and anything similar). Built entirely from legalDests plus the board's own
 // piece at each origin square; no move generation or legality logic lives here.
-import { parseSquare } from 'chessops/util';
 import type { Role, SquareName } from 'chessops/types';
-import { legalDests, type Position } from './index';
+import { legalDests, pieceAt, type Position } from './index';
 
-/** The role of the piece on `square`, or undefined if the square is empty. */
+/** The role of the piece on `square`, or undefined if the square is empty. Built on the one board read in `pieceAt`. */
 export function roleAt(pos: Position, square: SquareName): Role | undefined {
-  return pos.board.get(parseSquare(square))?.role;
+  return pieceAt(pos, square)?.role;
 }
 
 /** Legal destinations per origin square, grouped by the role of the piece being moved. */

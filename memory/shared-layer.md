@@ -31,7 +31,7 @@ numbers; focus on concepts applied in practice rather than comparison to expert 
 ## Directory decomposition (2026-09-16, first slice built)
 
 One line per top-level directory, as CLAUDE.md requires. Built: rules, board, engine, play,
-positions, subprojects/endgames-intro, apps/web. Reserved (named, not created): the rest.
+positions, facts, import, seven subprojects, apps/web. Reserved (named, not created): the rest.
 
 | Directory | Responsibility | Interview pieces it will absorb |
 |---|---|---|
@@ -41,7 +41,7 @@ positions, subprojects/endgames-intro, apps/web. Reserved (named, not created): 
 | `packages/play` | opponents: maximal resistance now; UCI_Elo / Skill Level / Maia calibration later | rating-calibrated engine play |
 | `packages/positions` | curated + mined position pools with validation tests | position store and mining |
 | `packages/tablebase` (reserved) | syzygy truth for won/drawn and max-resistance defence | tablebase access |
-| `packages/import` (reserved) | lichess / chess.com / PGN import with provenance tags | game import |
+| `packages/import` | lichess fetch + pasted-PGN import into one ImportedGame shape; PGN parsing delegated to `packages/rules` (`parsePgnGame`); chess.com and provenance tags still to add | game import |
 | `packages/store` (reserved) | persistence: accounts, linked ratings, games, repertoires | account layer |
 | `packages/facts` (built 2026-09-16) | plain-language board-state facts and questions, each answered by a chessops query (check, piece on square, material by the 1/3/3/5/9 convention); engine comparison still to come | fact extraction, reasoning check |
 | `packages/concepts` (reserved) | concept vocabulary with board-state tests | concept library |

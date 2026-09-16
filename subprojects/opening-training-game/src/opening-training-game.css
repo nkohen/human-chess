@@ -1,0 +1,12 @@
+.otg { max-width: 40rem; padding: 1rem; margin: 0 auto; }
+.otg-setup { display: flex; flex-direction: column; gap: 1rem; }
+.otg-field { display: flex; flex-direction: column; gap: 0.35rem; }
+.otg-choices { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.otg-choices button.selected { font-weight: bold; outline: 2px solid currentColor; }
+.otg-note { font-size: 0.85rem; opacity: 0.7; }
+.otg-play { display: flex; flex-direction: column; gap: 0.5rem; align-items: center; }
+.otg-status { min-height: 1.5em; }
+.otg-moves { width: 100%; max-width: 32rem; font-family: monospace; }
+.otg-verdict { margin-top: 0.5rem; text-align: center; }
+.otg-provenance { color: #666; font-size: 0.9em; }
+.otg-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }

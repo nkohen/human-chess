@@ -12,12 +12,14 @@ import { loadRepertoire, saveRepertoire } from './storage';
 import './openings-builder.css';
 
 export interface OpeningsBuilderProps {
-  engine: UciEngine | undefined;
+  /** A ready (initialised) engine, or undefined while it loads; or an Error when it could not load. */
+  engine: UciEngine | Error | undefined;
 }
 
 type Mode = 'build' | 'drill';
 
 export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Element {
+  const readyEngine = engine instanceof Error ? undefined : engine;
   const [openings, setOpenings] = useState<Opening[]>(() => loadRepertoire());
   const [selectedId, setSelectedId] = useState<string | undefined>(() => openings[0]?.id);
   const [mode, setMode] = useState<Mode>('build');
@@ -96,8 +98,9 @@ export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Ele
         )}
       </header>
 
+      {engine instanceof Error && <p className="ob-multipv-status">The engine could not be loaded: {engine.message}</p>}
       {!selected && <p className="ob-multipv-status">Pick or create an opening to get started.</p>}
-      {selected && mode === 'build' && <BuilderView opening={selected} onOpeningChange={updateOpening} engine={engine} />}
+      {selected && mode === 'build' && <BuilderView opening={selected} onOpeningChange={updateOpening} engine={readyEngine} />}
       {selected && mode === 'drill' && <DrillView opening={selected} />}
     </div>
   );

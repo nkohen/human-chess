@@ -26,8 +26,28 @@ const label = (color: string): string => color[0]!.toUpperCase() + color.slice(1
 export function HandAndBrain(): React.JSX.Element {
   const [game, setGame] = useState<HandAndBrainGame>(() => startGame());
 
-  const onCall = (role: Role): void => setGame(g => call(g, role));
-  const onMove = useCallback((from: SquareName, to: SquareName) => setGame(g => move(g, from, to)), []);
+  // call()/move() throw on an invalid action (wrong phase, stale click after the state already
+  // advanced, etc). A setState updater must stay pure and side-effect free, so an invalid action
+  // is ignored here — the board just keeps its current state — rather than thrown from inside it.
+  const onCall = (role: Role): void =>
+    setGame(g => {
+      try {
+        return call(g, role);
+      } catch {
+        return g;
+      }
+    });
+  const onMove = useCallback(
+    (from: SquareName, to: SquareName) =>
+      setGame(g => {
+        try {
+          return move(g, from, to);
+        } catch {
+          return g;
+        }
+      }),
+    [],
+  );
 
   const newGame = (): void => {
     if (!game.end && !window.confirm('Start a new game? This discards the current game.')) return;

@@ -12,6 +12,9 @@ import type { Color, Move, Role, SquareName } from 'chessops/types';
 
 export type { Color, Role, SquareName };
 
+/** The standard chess starting position, as FEN. The one literal every start-position caller shares. */
+export const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
 /** A chess position. Opaque outside this package; use the functions below. */
 export type Position = Chess;
 
@@ -33,6 +36,9 @@ export const repetitionKey = (pos: Position): string => makeFen(pos.toSetup(), {
 export const turn = (pos: Position): Color => pos.turn;
 export const opposite = (color: Color): Color => opp(color);
 export const inCheck = (pos: Position): boolean => pos.isCheck();
+
+/** The fullmove number, read straight off the position (chessops tracks it; never hand-parse a FEN field for it). */
+export const fullmove = (pos: Position): number => pos.fullmoves;
 
 /** Legal destinations per origin square, in the shape chessground expects. */
 export const legalDests = (pos: Position): Map<SquareName, SquareName[]> => chessgroundDests(pos);
@@ -171,3 +177,4 @@ export function mirrorColors(pos: Position): Position {
 }
 
 export * from './roles';
+export * from './pgn';

@@ -46,11 +46,12 @@ first slice was smoke-tested by hand through the Chrome DevTools protocol (2026-
 - `packages/play` — opponents built on the engine: maximal resistance now, rating-calibrated later.
 - `packages/positions` — curated and mined position pools, each validated by tests.
 - `packages/facts` — plain-language board-state facts and questions, each answered by a chessops query; no evaluation.
+- `packages/import` — games from lichess (public export API) or pasted PGN into one ImportedGame shape; parsing via rules.
 - `subprojects/<name>` — one self-standing tool each; consumes packages, never duplicates them.
 - `apps/web` — the Vite app hosting every subproject behind a hash route.
 - `scripts/` — repo scripts (copying the wasm engine into the web app's public folder).
 
-Reserved package names for pieces not yet built: `tablebase`, `import`, `store`,
+Reserved package names for pieces not yet built: `tablebase`, `store`,
 `concepts`, `review`, `rooms`, `srs`, `opening-tree`. Add a package only with a one-line
 responsibility here and in memory/shared-layer.md.
 

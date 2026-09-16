@@ -60,3 +60,4 @@ export const endgameLadder: EndgameLesson[] = [
       'them, then check with the rook to push the enemy king back.',
   },
 ];
+export * from './imbalanced';

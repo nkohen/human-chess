@@ -5,6 +5,11 @@ import { GuessTheEval } from '@human-chess/guess-the-eval';
 import { VisualizationTrainer } from '@human-chess/visualization-trainer';
 import { HandAndBrain } from '@human-chess/hand-and-brain';
 import { OpeningsBuilder } from '@human-chess/openings-builder';
+import { MemoryTrainer } from '@human-chess/memory-trainer';
+import { OpeningTrainingGame } from '@human-chess/opening-training-game';
+import { BotRatingTest } from '@human-chess/bot-rating-test';
+import { Puzzles } from '@human-chess/puzzles';
+import { Chessitout } from '@human-chess/chessitout';
 import { loadBrowserEngine } from './engine';
 
 const routes: { hash: string; title: string; blurb: string }[] = [
@@ -13,6 +18,11 @@ const routes: { hash: string; title: string; blurb: string }[] = [
   { hash: '#/visualization', title: 'Visualization trainer', blurb: 'Read a short line in your head, then answer questions about where it ends.' },
   { hash: '#/hand-and-brain', title: 'Hand and Brain', blurb: 'Two teams on one screen: the brain names a piece type, the hand moves it.' },
   { hash: '#/openings', title: 'Openings builder', blurb: 'Build an opening tree with a multi-line engine beside you, then drill it.' },
+  { hash: '#/memory', title: 'Memory trainer', blurb: 'Replay your latest game from memory, then see where it diverged.' },
+  { hash: '#/opening-game', title: 'Opening training game', blurb: 'Play N moves against a rated engine; the engine judges who stands better.' },
+  { hash: '#/bot-rating', title: 'Bot-rating test', blurb: 'Play engines at set Elo levels and keep the record of what you beat.' },
+  { hash: '#/puzzles', title: 'Puzzles', blurb: 'Solve lichess puzzles, one after another.' },
+  { hash: '#/chessitout', title: 'Chessitout (solo)', blurb: 'Judge an imbalanced position, then play your side out against a rated engine.' },
 ];
 
 function useHash(): string {
@@ -68,8 +78,18 @@ export function App(): React.JSX.Element {
         <VisualizationTrainer engine={engine} />
       ) : hash === '#/hand-and-brain' ? (
         <HandAndBrain />
+      ) : hash === '#/memory' ? (
+        <MemoryTrainer />
+      ) : hash === '#/opening-game' ? (
+        <OpeningTrainingGame engine={engine} />
+      ) : hash === '#/bot-rating' ? (
+        <BotRatingTest engine={engine} />
+      ) : hash === '#/puzzles' ? (
+        <Puzzles />
+      ) : hash === '#/chessitout' ? (
+        <Chessitout engine={engine} />
       ) : hash === '#/openings' ? (
-        <OpeningsBuilder engine={engine instanceof Error ? undefined : engine} />
+        <OpeningsBuilder engine={engine} />
       ) : (
         <main className="home">
           <h1>human-chess</h1>

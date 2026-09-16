@@ -4,9 +4,7 @@
 // random draw (`randomLegalMove`) or a real engine move (`bestMove`); nothing here fabricates
 // a position or a move (A1).
 import type { UciEngine } from '@human-chess/engine';
-import { fenOf, playUci, positionEnd, positionFromFen, randomLegalMove, type Position } from '@human-chess/rules';
-
-const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+import { fenOf, playUci, positionEnd, positionFromFen, randomLegalMove, START_FEN, type Position } from '@human-chess/rules';
 
 export interface SelfPlayPosition {
   fen: string;

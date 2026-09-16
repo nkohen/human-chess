@@ -1,7 +1,8 @@
 // Pure scoring: no engine calls, no React. Every input here is a real Score from an
-// engine Analysis (A1) — this module only reshapes it into perspective, bands and a grade.
+// engine Analysis (A1) — this module only reshapes it into bands and a grade.
+// whitePerspective moved to @human-chess/engine (packages/engine/src/score.ts): it belongs
+// with Score itself, not with this subproject's banding.
 import type { Score } from '@human-chess/engine';
-import type { Color } from '@human-chess/rules';
 
 export type Band =
   | 'black-winning'
@@ -16,12 +17,6 @@ export type Band =
 export const BAND_SLIGHT_CP = 30;
 export const BAND_CLEAR_CP = 100;
 export const BAND_WINNING_CP = 200;
-
-/** UCI reports scores from the side to move's point of view; this flips a Black-to-move score to White's. */
-export function whitePerspective(score: Score, sideToMove: Color): Score {
-  if (sideToMove === 'white') return score;
-  return { type: score.type, value: -score.value };
-}
 
 /** Which qualitative band a White-perspective score falls in. A mate always counts as winning for its side. */
 export function band(score: Score): Band {

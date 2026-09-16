@@ -1,0 +1,12 @@
+.brt { max-width: 40rem; padding: 1rem; margin: 0 auto; }
+.brt-setup { display: flex; flex-direction: column; gap: 0.75rem; }
+.brt-setup label { display: flex; flex-direction: column; gap: 0.25rem; }
+.brt-error { color: #b00020; }
+.brt-status { min-height: 1.5em; }
+.brt-moves { font-family: monospace; white-space: pre-wrap; }
+.brt-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.brt-postgame { margin-top: 0.75rem; }
+.brt-summary table { border-collapse: collapse; margin-top: 0.5rem; }
+.brt-summary th, .brt-summary td { border: 1px solid #ccc; padding: 0.25rem 0.5rem; text-align: right; }
+.brt-summary th:first-child, .brt-summary td:first-child { text-align: left; }
+.brt-highest { font-weight: bold; }

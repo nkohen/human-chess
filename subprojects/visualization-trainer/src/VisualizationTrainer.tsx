@@ -9,8 +9,11 @@ import { Board } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { endPosition, PIECE_ON_OPTIONS, questionsFor, type Position, type Question } from '@human-chess/facts';
 import { fenOf, inCheck, positionFromFen, turn, type SquareName } from '@human-chess/rules';
-import { formatLine, lineSans, randomStartFen } from './exercise';
+import { formatLine, lineSans, LINE_PLIES, randomStartFen } from './exercise';
 import './visualization-trainer.css';
+
+/** Search depth for the engine line the learner is asked to visualize. */
+const ANALYSE_DEPTH = 10;
 
 export interface VisualizationTrainerProps {
   /** A ready (initialised) engine, or undefined while it loads; or an Error when it could not load. */
@@ -28,6 +31,10 @@ type Answers = { check: boolean | undefined; pieceOn: string | undefined; materi
 const EMPTY_ANSWERS: Answers = { check: undefined, pieceOn: undefined, material: '' };
 const EMPTY_DESTS = new Map<SquareName, SquareName[]>();
 
+/** An empty material answer is unanswered, not a guess of 0 — `Number('')` is 0 and would
+ * otherwise silently count as correct whenever the true balance happens to be 0. */
+const isMaterialCorrect = (value: string, answer: number): boolean => value !== '' && Number(value) === answer;
+
 export function VisualizationTrainer({ engine }: VisualizationTrainerProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
   const [startFen, setStartFen] = useState(() => randomStartFen());
@@ -43,7 +50,7 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
     if (!readyEngine) return;
     let cancelled = false;
     readyEngine
-      .analyse(startFen, [], { depth: 10 })
+      .analyse(startFen, [], { depth: ANALYSE_DEPTH })
       .then(analysis => {
         if (cancelled) return;
         const pv = analysis.lines[0]?.pv ?? [];
@@ -51,7 +58,7 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
           setExercise({ kind: 'no-line' });
           return;
         }
-        const ucis = pv.slice(0, 4);
+        const ucis = pv.slice(0, LINE_PLIES);
         setExercise({ kind: 'ready', startFen, ucis, sans: lineSans(startFen, ucis) });
       })
       .catch((err: unknown) => {
@@ -59,6 +66,7 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
       });
     return () => {
       cancelled = true;
+      readyEngine.stop();
     };
   }, [readyEngine, startFen]);
 
@@ -77,7 +85,7 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
     let correct = 0;
     if (checkQ?.kind === 'check' && answers.check === checkQ.answer) correct++;
     if (pieceOnQ?.kind === 'piece-on' && answers.pieceOn === pieceOnQ.answer) correct++;
-    if (materialQ?.kind === 'material' && Number(answers.material) === materialQ.answer) correct++;
+    if (materialQ?.kind === 'material' && isMaterialCorrect(answers.material, materialQ.answer)) correct++;
     setTally(t => ({ correct: t.correct + correct, total: t.total + questions.length }));
     setRevealed(true);
   };
@@ -174,8 +182,8 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
             <p>{materialQ?.kind === 'material' ? materialQ.prompt : ''}</p>
             <input type="number" disabled={revealed} value={answers.material} onChange={e => setAnswers(a => ({ ...a, material: e.target.value }))} />
             {revealed && materialQ?.kind === 'material' && (
-              <span className={Number(answers.material) === materialQ.answer ? 'viz-correct' : 'viz-wrong'}>
-                {Number(answers.material) === materialQ.answer ? 'Correct' : `Wrong — it was ${materialQ.answer}`}
+              <span className={isMaterialCorrect(answers.material, materialQ.answer) ? 'viz-correct' : 'viz-wrong'}>
+                {isMaterialCorrect(answers.material, materialQ.answer) ? 'Correct' : `Wrong — it was ${materialQ.answer}`}
               </span>
             )}
           </div>

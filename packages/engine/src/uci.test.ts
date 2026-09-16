@@ -127,6 +127,56 @@ describe('option restoration', () => {
   });
 });
 
+describe('stop', () => {
+  it('sends stop to end an in-flight search early, and the pending analyse still resolves', async () => {
+    const sent: string[] = [];
+    let onLine: (line: string) => void = () => {};
+    let onGo: (() => void) | undefined;
+    const transport: UciTransport = {
+      send(line) {
+        sent.push(line);
+        if (line === 'uci') {
+          onLine('id name FakeEngine');
+          onLine('uciok');
+        } else if (line === 'isready') {
+          onLine('readyok');
+        } else if (line.startsWith('go')) {
+          // Deliberately does not answer: the search only ends once `stop` arrives.
+          onGo?.();
+        } else if (line === 'stop') {
+          onLine('bestmove e2e4');
+        }
+      },
+      onLine(cb) {
+        onLine = cb;
+      },
+      onError() {},
+      close() {},
+    };
+    const engine = new UciEngine(transport);
+    await engine.init();
+    const startpos = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+    const goSent = new Promise<void>(resolve => {
+      onGo = resolve;
+    });
+    const analysing = engine.analyse(startpos, [], { movetime: 5000 });
+    await goSent;
+    engine.stop();
+    const a = await analysing;
+    expect(a.bestmove).toBe('e2e4');
+    expect(sent).toContain('stop');
+  });
+
+  it('is a no-op when no search is in flight', async () => {
+    const { transport, sent } = fakeEngine();
+    const engine = new UciEngine(transport);
+    await engine.init();
+    engine.stop();
+    expect(sent.some(l => l === 'stop')).toBe(false);
+  });
+});
+
 describe('transport failures', () => {
   it('reject the in-flight exchange with the real cause', async () => {
     let fail: ((err: Error) => void) | undefined;

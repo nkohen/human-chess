@@ -67,6 +67,9 @@ export class UciEngine {
   private identity: EngineIdentity | undefined;
   private currentMultiPv = 1;
   private closed = false;
+  /** True while an `analyse` search's `go` is outstanding; lets `stop()` know whether sending
+   * `stop` would land on a live search rather than firing at an arbitrary, unrelated time. */
+  private searching = false;
   /** Every option name ever set, via `setOption` or a search's `options` param — restored to
    * its engine-reported default before any search that does not itself request it (A1: a
    * shared engine must never stay weakened for whoever uses it next). */
@@ -176,24 +179,29 @@ export class UciEngine {
       this.transport.send(`position fen ${fen}${moves.length ? ' moves ' + moves.join(' ') : ''}`);
       let bestmove: string | undefined;
       let ponder: string | undefined;
-      await this.exchange(`go${goArgs(limit)}`, line => {
-        if (line.startsWith('info ')) {
-          const pv = parseInfo(line);
-          if (pv) lines.set(pv.multipv, pv);
+      this.searching = true;
+      try {
+        await this.exchange(`go${goArgs(limit)}`, line => {
+          if (line.startsWith('info ')) {
+            const pv = parseInfo(line);
+            if (pv) lines.set(pv.multipv, pv);
+            return false;
+          }
+          if (line.startsWith('bestmove')) {
+            const parts = line.split(/\s+/);
+            bestmove = parts[1] === '(none)' || parts[1] === undefined ? undefined : parts[1];
+            if (parts[2] === 'ponder' && parts[3]) ponder = parts[3];
+            return true;
+          }
           return false;
-        }
-        if (line.startsWith('bestmove')) {
-          const parts = line.split(/\s+/);
-          bestmove = parts[1] === '(none)' || parts[1] === undefined ? undefined : parts[1];
-          if (parts[2] === 'ponder' && parts[3]) ponder = parts[3];
-          return true;
-        }
-        return false;
-      }, timeout, async () => {
-        // Let the aborted search finish so its late bestmove cannot be mistaken for the next one's.
-        this.transport.send('stop');
-        await this.waitForLine(line => line.startsWith('bestmove'), 3000).catch(() => undefined);
-      });
+        }, timeout, async () => {
+          // Let the aborted search finish so its late bestmove cannot be mistaken for the next one's.
+          this.transport.send('stop');
+          await this.waitForLine(line => line.startsWith('bestmove'), 3000).catch(() => undefined);
+        });
+      } finally {
+        this.searching = false;
+      }
       const analysis: Analysis = {
         engine: this.name,
         fen,
@@ -219,6 +227,16 @@ export class UciEngine {
     const analysis = await this.analyse(fen, moves, limit, 1, options);
     if (!analysis.bestmove) throw new EngineError(`${analysis.engine} returned no move for ${fen}`);
     return { move: analysis.bestmove, analysis };
+  }
+
+  /**
+   * Ends an in-flight search early, if one is running: sends `stop` so the engine's pending
+   * `bestmove` arrives now instead of at the search's full depth/time, letting the already
+   * pending `analyse`/`bestMove` promise resolve early rather than queuing behind a superseded
+   * search. A no-op when nothing is searching.
+   */
+  stop(): void {
+    if (this.searching) this.transport.send('stop');
   }
 
   quit(): void {

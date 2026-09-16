@@ -5,8 +5,8 @@
 // query from ever being applied, and the render itself re-checks `analysis.fen === fen` as a
 // second guard.
 import { useEffect, useState } from 'react';
-import type { Analysis, Score, UciEngine } from '@human-chess/engine';
-import { positionFromFen, sanLine } from '@human-chess/rules';
+import { whitePerspective, type Analysis, type Score, type UciEngine } from '@human-chess/engine';
+import { positionFromFen, sanLine, turn } from '@human-chess/rules';
 
 export interface MultiPvPanelProps {
   engine: UciEngine | undefined;
@@ -47,6 +47,7 @@ export function MultiPvPanel({ engine, fen, onPlayMove }: MultiPvPanelProps): Re
       });
     return () => {
       cancelled = true;
+      engine.stop();
     };
   }, [engine, fen]);
 
@@ -72,10 +73,12 @@ export function MultiPvPanel({ engine, fen, onPlayMove }: MultiPvPanelProps): Re
     );
   }
 
+  const pos = positionFromFen(fen);
+
   return (
     <div className="ob-multipv">
       <p className="ob-multipv-provenance">
-        {analysis.engine}, depth {analysis.lines[0]?.depth ?? DEPTH}, multipv {analysis.multipv}
+        {analysis.engine}, depth {analysis.lines[0]?.depth ?? DEPTH}, multipv {analysis.multipv} — scores from White's perspective
       </p>
       {analysis.lines.length === 0 && <p className="ob-multipv-status">No lines returned.</p>}
       <ol className="ob-multipv-lines">
@@ -91,7 +94,7 @@ export function MultiPvPanel({ engine, fen, onPlayMove }: MultiPvPanelProps): Re
           return (
             <li key={line.multipv}>
               <button disabled={!first} onClick={() => first && onPlayMove(first)}>
-                <strong>{formatScore(line.score)}</strong> {san}
+                <strong>{formatScore(whitePerspective(line.score, turn(pos)))}</strong> {san}
               </button>
             </li>
           );

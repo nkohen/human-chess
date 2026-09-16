@@ -5,10 +5,10 @@
 // Design record: memory/subprojects/guess-the-eval.md. Minimal slice: memory/minimal-slices.md row 2.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Board } from '@human-chess/board';
-import type { Analysis, Score, UciEngine } from '@human-chess/engine';
+import { formatScore, whitePerspective, type Analysis, type UciEngine } from '@human-chess/engine';
 import { generateSelfPlayPosition, type SelfPlayPosition } from '@human-chess/positions';
 import { inCheck, positionFromFen, sanLine, turn } from '@human-chess/rules';
-import { band, describeBand, grade, whitePerspective } from './scoring';
+import { band, describeBand, grade } from './scoring';
 import './guess-the-eval.css';
 
 export interface GuessTheEvalProps {
@@ -25,11 +25,6 @@ function formatPawns(cp: number): string {
   const pawns = cp / 100;
   const sign = pawns > 0 ? '+' : '';
   return `${sign}${pawns.toFixed(1)}`;
-}
-
-function formatScore(score: Score): string {
-  if (score.type === 'mate') return `mate in ${Math.abs(score.value)} for ${score.value >= 0 ? 'White' : 'Black'}`;
-  return `${formatPawns(score.value)} pawns`;
 }
 
 export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
@@ -73,9 +68,19 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
   const lockIn = useCallback(() => {
     if (!readyEngine || !position) return;
     setPhase('evaluating');
+  }, [readyEngine, position]);
+
+  // The actual engine call for a locked-in guess, as an effect (not inline in `lockIn`) so that
+  // leaving this phase early — the component unmounting, or a future revision that lets the
+  // player back out — has a cleanup that stops the superseded search rather than leaving it to
+  // finish unobserved.
+  useEffect(() => {
+    if (!readyEngine || !position || phase !== 'evaluating') return;
+    let cancelled = false;
     readyEngine
       .analyse(position.fen, [], { depth: ANALYSE_DEPTH })
       .then(a => {
+        if (cancelled) return;
         const line = a.lines[0];
         if (!line) {
           setError(`${a.engine} returned no evaluation line for this position`);
@@ -90,10 +95,16 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
         setTally(t => ({ sameBand: t.sameBand + (sameBand ? 1 : 0), total: t.total + 1 }));
       })
       .catch((err: unknown) => {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : String(err));
         setPhase('guessing');
       });
-  }, [readyEngine, position, guessCp]);
+    return () => {
+      cancelled = true;
+      readyEngine.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyEngine, position, phase]);
 
   const pos = useMemo(() => (position ? positionFromFen(position.fen) : undefined), [position]);
   const line = analysis?.lines[0];

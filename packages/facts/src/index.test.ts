@@ -61,7 +61,7 @@ describe('questionsFor', () => {
     const [, , material] = questionsFor(endPosition(KR_VS_K, []), () => 0);
     expect(material).toEqual({
       kind: 'material',
-      prompt: 'What is the material balance (white minus black, in points)?',
+      prompt: 'What is the material balance (white minus black, in points)? (standard count: pawn 1, knight 3, bishop 3, rook 5, queen 9)',
       answer: 5,
     });
   });

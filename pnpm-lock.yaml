@@ -29,6 +29,12 @@ importers:
       '@human-chess/board':
         specifier: workspace:*
         version: link:../../packages/board
+      '@human-chess/bot-rating-test':
+        specifier: workspace:*
+        version: link:../../subprojects/bot-rating-test
+      '@human-chess/chessitout':
+        specifier: workspace:*
+        version: link:../../subprojects/chessitout
       '@human-chess/endgames-intro':
         specifier: workspace:*
         version: link:../../subprojects/endgames-intro
@@ -41,9 +47,18 @@ importers:
       '@human-chess/hand-and-brain':
         specifier: workspace:*
         version: link:../../subprojects/hand-and-brain
+      '@human-chess/memory-trainer':
+        specifier: workspace:*
+        version: link:../../subprojects/memory-trainer
+      '@human-chess/opening-training-game':
+        specifier: workspace:*
+        version: link:../../subprojects/opening-training-game
       '@human-chess/openings-builder':
         specifier: workspace:*
         version: link:../../subprojects/openings-builder
+      '@human-chess/puzzles':
+        specifier: workspace:*
+        version: link:../../subprojects/puzzles
       '@human-chess/visualization-trainer':
         specifier: workspace:*
         version: link:../../subprojects/visualization-trainer
@@ -91,6 +106,12 @@ importers:
         specifier: workspace:*
         version: link:../rules
 
+  packages/import:
+    dependencies:
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../rules
+
   packages/play:
     dependencies:
       '@human-chess/engine':
@@ -117,6 +138,45 @@ importers:
       chessops:
         specifier: ^0.15.1
         version: 0.15.1
+
+  subprojects/bot-rating-test:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
+      '@human-chess/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@human-chess/play':
+        specifier: workspace:*
+        version: link:../../packages/play
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
+  subprojects/chessitout:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
+      '@human-chess/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@human-chess/play':
+        specifier: workspace:*
+        version: link:../../packages/play
+      '@human-chess/positions':
+        specifier: workspace:*
+        version: link:../../packages/positions
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
 
   subprojects/endgames-intro:
     dependencies:
@@ -169,6 +229,39 @@ importers:
         specifier: ^19.0.0
         version: 19.3.0
 
+  subprojects/memory-trainer:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
+      '@human-chess/import':
+        specifier: workspace:*
+        version: link:../../packages/import
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
+  subprojects/opening-training-game:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
+      '@human-chess/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@human-chess/play':
+        specifier: workspace:*
+        version: link:../../packages/play
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
   subprojects/openings-builder:
     dependencies:
       '@human-chess/board':
@@ -177,6 +270,18 @@ importers:
       '@human-chess/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
+  subprojects/puzzles:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules

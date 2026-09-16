@@ -2,3 +2,4 @@
 // Node transports live in `@human-chess/engine/node` so this entry stays browser-safe.
 export * from './uci';
 export * from './worker';
+export * from './score';
