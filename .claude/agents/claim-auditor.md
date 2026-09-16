@@ -1,4 +1,5 @@
 ---
+model: inherit
 name: claim-auditor
 description: >
   Entailment/soundness reviewer for a WRITTEN research claim in this project — a ledger

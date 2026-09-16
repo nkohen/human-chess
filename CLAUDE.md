@@ -58,6 +58,29 @@ subproject takes shape; do not assume any exist yet.
   before it lands. Never mix licenses silently. The project's own license is undecided
   until the user says otherwise. (L2, L3)
 
+## Delegation: thin coordinator, workers on the cheaper tier (adopted 2026-09-15)
+
+<!-- Source: ~/dev/ct-research notes/model-tiering-proposal.md (MEASURED on one external project,
+     n=1, keep-verdict 2026-09-08) and its CLAUDE.md §Delegation; applied here the way autochess
+     has it (2026-09-14), on the user's ask. Mechanically backed parts: settings.json sets
+     autoCompactWindow=230000 and CLAUDE_CODE_SUBAGENT_MODEL=sonnet; the researcher agent pins
+     model: sonnet; code-reviewer, claim-auditor and red-team pin model: inherit (they are gates).
+     The delegation RULE below is prose — nothing enforces it. Falsifier: friction says a dispatch
+     cost more than doing it in-thread, twice. -->
+
+This thread is the **coordinator**. Standing authorization: dispatch **heavy-in, small-out** work
+to a fresh-context subagent without asking, announce each dispatch in one line, and relay the
+conclusion, not the transcript. Shapes that qualify here: a broad search across the tree or
+across the open-source projects being surveyed, a long test or engine-batch run once one
+exists, a research or literature pass, a license audit of a candidate library. Keep in this
+thread: design discussion, edits that need surrounding context, and tight back-and-forth
+iteration. **Trigger on task shape, not on "context feels large"** — delegation is not free (a
+worker starts cold), so it wins for dispatchable units, not chatty shared-context work.
+Subagents default to Sonnet (settings.json); the reviewer and audit agents stay on the session's
+model because they are gates. **Never `Read` a subagent's `tasks/<id>.output` file** — it is the
+raw JSONL transcript and reading it overflows context; use the completion notification's result.
+Your own `run_in_background` command outputs under the same path are plain text and fine to Read.
+
 ## Memory system
 
 Cross-session context lives in `memory/MEMORY.md` (the index) and individual topic files

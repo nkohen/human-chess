@@ -1,4 +1,5 @@
 ---
+model: inherit
 name: red-team
 description: >
   Adversarial skeptic for a single claim in this project's ledger. The decision rule vs

@@ -42,6 +42,20 @@ is AGPL, Stockfish/Leela/chessground/python-chess are GPL, and what that means f
 library of reusable code — is the user's decision; the cards are still his to read. Also for his survey step: the doc's "Stack OPTIONS" section
 (what lichess and the named projects actually use, cited, no recommendation).
 
+## 2026-09-15 — from ~/dev/ct-research (notes/model-tiering-proposal.md + CLAUDE.md §Delegation), as applied in ~/dev/autochess
+
+Tier: MEASURED on one external project (n=1; ~90% of output tokens in the main thread, Sonnet
+workers landed more commits per output token at the same friction rate; keep-verdict 2026-09-08).
+Applied on the user's ask ("is there config we did for autochess that we didn't do here?",
+2026-09-15), ahead of the almanac spine question that will make this a consented default.
+
+| Adopted | Where it landed | Mechanical? | Drop it when |
+|---|---|---|---|
+| autoCompactWindow = 230000 | .claude/settings.json | yes | a compaction loses something a session needed, twice |
+| Subagents default to Sonnet | .claude/settings.json env CLAUDE_CODE_SUBAGENT_MODEL | yes | a Sonnet worker's output is redone on the strong tier, twice |
+| researcher on Sonnet; code-reviewer, claim-auditor, red-team on inherit | agent frontmatter `model:` | yes | same as above / a gate misses what the strong tier catches |
+| Thin-coordinator rule, shape-triggered | CLAUDE.md §Delegation | no (prose) | friction says a dispatch cost more than in-thread, twice |
+
 ## Circle-back (due after ~10 sessions or the first subproject, whichever first)
 
 - Did the no-fabrication and grounded-explanation lines get followed without a friction

@@ -35,6 +35,7 @@ Not complete by design: what wasn't asked was assumed. The loop corrects this fi
 - opt-in: loop-surface (Q8, 2026-09-15)
 - opt-in: claim-audit (Q2, 2026-09-15)
 - opt-in: guarded-enforcement (Q3, 2026-09-15)
+- opt-in: model-tiering (by hand ahead of spine Q9, 2026-09-15)
 
 ## Follow-ups used (0 of 3)
 
@@ -61,3 +62,15 @@ None.
 - **Inferred-by-generator (notation formats: PGN and FEN): DROPPED** — the user: "That is not a harness concern but an implementation concern." Removed from the researcher charter and the CLAUDE.md agent-roles line. The lesson is about the generator, not the guess: implementation detail (which formats, which libraries) does not belong in harness prose at all, and should not have been put to the user as a harness decision.
 - **Fidelity fix:** the emitted brief and memory topic had listed four of the ten subprojects the user named and renamed "openings heuristic finder" to "trainer"; both now carry the user's own list (grounded in docs/goals.md, the verbatim Q1 answer). Logged as almanac friction (an emission-gate gap, not a target defect).
 - **Class-practice review adopted in part** on the user's delegation ("let's go with your recommendation"): four practices into CLAUDE.md conventions + code-reviewer, recorded with drop conditions in memory/adopted-practices.md; the four licensing cards are reserved for the user's own read and nothing from them was applied. All PRACTICE-ASSERTED; none is mechanically enforced.
+
+## 2026-09-15 — model tiering + compaction knobs (user-directed, ahead of the spine)
+
+The user asked whether human-chess had the config autochess got (auto-compaction limit, delegation
+directives); it did not, because the spine question for it (v0.7 Q9) is not built and the
+interviewer did not apply it by hand this time. Applied now the way autochess has it: autoCompactWindow
+230000, CLAUDE_CODE_SUBAGENT_MODEL=sonnet, researcher `model: sonnet`, code-reviewer /
+claim-auditor / red-team `model: inherit`, a CLAUDE.md §Delegation rule labeled prose. Source
+evidence: ct-research's measured tiering note (n=1 external project). Not elicited by the
+interview; recorded so the spine question, when it exists, can confirm or amend rather than assume.
+Takes effect at the next session start.
+  Falsified when: a friction entry says a dispatch or a compaction cost more than it saved.

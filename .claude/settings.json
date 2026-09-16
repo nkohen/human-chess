@@ -130,5 +130,9 @@
         ]
       }
     ]
+  },
+  "autoCompactWindow": 230000,
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
   }
 }
