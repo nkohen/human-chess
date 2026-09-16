@@ -4,7 +4,7 @@
 // shown here traces to useEngineGame/the play package; nothing is generated free-form (A1, V3).
 // Design record: memory/subprojects/bot-rating-test.md.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Board } from '@human-chess/board';
+import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import {
   describeEnd,
@@ -43,18 +43,6 @@ interface ActiveGame {
 function pickColor(choice: ColorChoice): Color {
   if (choice === 'random') return Math.random() < 0.5 ? 'white' : 'black';
   return choice;
-}
-
-/** Numbered SAN move list, e.g. "1. e4 e5 2. Nf3 Nc6" — every SAN here is the played game's own. */
-function formatSanLine(sans: string[]): string {
-  const parts: string[] = [];
-  for (let i = 0; i < sans.length; i += 2) {
-    const moveNo = i / 2 + 1;
-    const white = sans[i];
-    const black = sans[i + 1];
-    parts.push(black ? `${moveNo}. ${white} ${black}` : `${moveNo}. ${white}`);
-  }
-  return parts.join(' ');
 }
 
 function SummaryTable({ records }: { records: BotRatingRecord[] }): React.JSX.Element {
@@ -162,7 +150,6 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
   }, [fenText, elo, colorChoice, beginGame]);
 
   const dests = useMemo(() => playerDests(game), [game]);
-  const sanLine = useMemo(() => formatSanLine(game.moves.map(m => m.san)), [game.moves]);
 
   if (engine instanceof Error) {
     return (
@@ -244,7 +231,9 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
       <p className="brt-status" aria-live="polite">
         {statusText()}
       </p>
-      <p className="brt-moves">{sanLine || '(no moves yet)'}</p>
+      <div className="brt-moves">
+        {game.moves.length === 0 ? '(no moves yet)' : <MoveLine startFen={game.startFen} ucis={uciMoves(game)} orientation={active.playerColor} />}
+      </div>
 
       {!ended && (
         <div className="brt-actions">

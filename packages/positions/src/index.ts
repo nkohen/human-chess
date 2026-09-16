@@ -61,3 +61,4 @@ export const endgameLadder: EndgameLesson[] = [
   },
 ];
 export * from './imbalanced';
+export * from './recipes';

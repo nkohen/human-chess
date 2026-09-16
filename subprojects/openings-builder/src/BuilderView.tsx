@@ -3,7 +3,7 @@
 // "Building a repertoire"). Every move played is added to the tree. The MultiPV panel on the
 // right gives the multi-line engine the user's interview asked for (priority 1, same file).
 import { useMemo, useState } from 'react';
-import { Board } from '@human-chess/board';
+import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, type SquareName } from '@human-chess/rules';
 import { MultiPvPanel } from './MultiPvPanel';
@@ -57,19 +57,23 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
           check={inCheck(pos)}
           onMove={onBoardMove}
         />
-        <p className="ob-breadcrumb">
+        <div className="ob-breadcrumb">
           <button onClick={() => setPath([])} disabled={path.length === 0}>
             Root
           </button>
           <button onClick={() => setPath(p => p.slice(0, -1))} disabled={path.length === 0}>
             Back
           </button>
-          <span className="ob-breadcrumb-line">{path.length === 0 ? '(start)' : path.map(m => m.san).join(' ')}</span>
-        </p>
+          {path.length === 0 ? (
+            <span className="ob-breadcrumb-line">(start)</span>
+          ) : (
+            <MoveLine startFen={fenAt(opening.root)} ucis={path.map(m => m.uci)} orientation={opening.color} />
+          )}
+        </div>
       </div>
 
       <div className="ob-side-col">
-        <MultiPvPanel engine={engine} fen={fen} onPlayMove={playAndAdd} />
+        <MultiPvPanel engine={engine} fen={fen} onPlayMove={playAndAdd} orientation={opening.color} />
         <div className="ob-children">
           <h4>Tree at this position</h4>
           {children.length === 0 && <p className="ob-multipv-status">No moves recorded here yet.</p>}

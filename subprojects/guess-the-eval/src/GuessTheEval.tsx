@@ -1,14 +1,19 @@
-// Guess the eval, endless mode: generate a self-play position, guess White's eval on a
-// centipawn slider, lock in, reveal the real engine evaluation and top line. Every number
-// shown comes from an Analysis returned by the engine, never invented (A1); every engine
-// failure is shown as text, never swallowed.
+// Guess the eval: a round of ROUNDS positions, each generated from a randomly picked "recipe"
+// (packages/positions' recipes.ts) so rounds vary in material and game phase rather than always
+// looking like a quiet early middlegame. Per position: guess White's eval on a centipawn slider,
+// lock in, then see the real engine evaluation, the top line, and where the guess and the answer
+// land on a coloured band scale; scored GeoGuessr-style (scoring.ts's `points`) into a running
+// total, with a summary screen and "Play again" after the last position. Every number shown
+// comes from an Analysis returned by the engine, never invented (A1); every engine failure is
+// shown as text, never swallowed.
 // Design record: memory/subprojects/guess-the-eval.md. Minimal slice: memory/minimal-slices.md row 2.
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Board } from '@human-chess/board';
-import { formatScore, whitePerspective, type Analysis, type UciEngine } from '@human-chess/engine';
-import { generateSelfPlayPosition, type SelfPlayPosition } from '@human-chess/positions';
-import { inCheck, positionFromFen, sanLine, turn } from '@human-chess/rules';
-import { band, describeBand, grade } from './scoring';
+import { Board, MoveLine } from '@human-chess/board';
+import { EngineError, formatPawns, formatScore, whitePerspective, type Analysis, type Score, type UciEngine } from '@human-chess/engine';
+import { generateRecipePosition, pickRecipe, type RecipePosition } from '@human-chess/positions';
+import { inCheck, positionFromFen, turn } from '@human-chess/rules';
+import { EvalScale } from './EvalScale';
+import { band, describeBand, grade, MAX_POINTS, points, SLIDER_MAX_CP, SLIDER_MIN_CP } from './scoring';
 import './guess-the-eval.css';
 
 export interface GuessTheEvalProps {
@@ -16,28 +21,37 @@ export interface GuessTheEvalProps {
   engine: UciEngine | Error | undefined;
 }
 
-type Phase = 'generating' | 'guessing' | 'evaluating' | 'revealed';
+type Phase = 'generating' | 'guessing' | 'evaluating' | 'revealed' | 'summary';
 
-const RANDOM_PLIES = 6;
-const ANALYSE_DEPTH = 14;
-
-function formatPawns(cp: number): string {
-  const pawns = cp / 100;
-  const sign = pawns > 0 ? '+' : '';
-  return `${sign}${pawns.toFixed(1)}`;
+interface RoundResult {
+  truth: Score;
+  guessCp: number;
+  points: number;
+  /** The recipe description shown in the summary list, alongside the reveal (never before it —
+   * it can hint at the answer, see describeRecipe). */
+  recipeDescription: string;
 }
+
+// First guess (user feedback, 2026-09-16, items 4 and 6): a GeoGuessr-style round of 5. Tune
+// once there is a sense of how long a round should feel.
+const ROUNDS = 5;
+const ANALYSE_DEPTH = 14;
 
 export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
-  const [position, setPosition] = useState<SelfPlayPosition | undefined>(undefined);
+  const [position, setPosition] = useState<RecipePosition | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>('generating');
   const [error, setError] = useState<string | undefined>(undefined);
   const [guessCp, setGuessCp] = useState(0);
   const [analysis, setAnalysis] = useState<Analysis | undefined>(undefined);
-  const [tally, setTally] = useState({ sameBand: 0, total: 0 });
+  const [roundIndex, setRoundIndex] = useState(0);
+  const [results, setResults] = useState<RoundResult[]>([]);
   const [generation, setGeneration] = useState(0);
 
-  const next = useCallback(() => {
+  // Resets everything needed to generate a fresh position for the *current* round (or a retry of
+  // it after an engine failure); round bookkeeping (roundIndex, results) is left alone so a retry
+  // does not cost the player their progress.
+  const startGeneration = useCallback(() => {
     setGeneration(g => g + 1);
     setPosition(undefined);
     setAnalysis(undefined);
@@ -46,10 +60,27 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
     setPhase('generating');
   }, []);
 
+  const advance = useCallback(() => {
+    if (roundIndex + 1 >= ROUNDS) {
+      setPhase('summary');
+      return;
+    }
+    setRoundIndex(r => r + 1);
+    startGeneration();
+  }, [roundIndex, startGeneration]);
+
+  const playAgain = useCallback(() => {
+    setRoundIndex(0);
+    setResults([]);
+    startGeneration();
+  }, [startGeneration]);
+
   useEffect(() => {
     if (!readyEngine || phase !== 'generating') return;
     let cancelled = false;
-    generateSelfPlayPosition(readyEngine, { randomPlies: RANDOM_PLIES })
+    const controller = new AbortController();
+    const recipe = pickRecipe();
+    generateRecipePosition(readyEngine, recipe, { signal: controller.signal })
       .then(pos => {
         if (cancelled) return;
         setPosition(pos);
@@ -57,10 +88,18 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
+        // An EngineError comes from the engine itself (a real UCI/transport failure); anything
+        // else (including a mining-loop exhaustion in packages/positions) is a generation
+        // failure, not an engine failure — label them differently so the player isn't told the
+        // engine failed when it didn't (A1).
+        const message = err instanceof Error ? err.message : String(err);
+        const prefix = err instanceof EngineError ? 'The engine failed' : 'Could not generate a position';
+        setError(`${prefix}: ${message}`);
       });
     return () => {
       cancelled = true;
+      controller.abort();
+      readyEngine.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readyEngine, phase, generation]);
@@ -83,7 +122,7 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
         if (cancelled) return;
         const line = a.lines[0];
         if (!line) {
-          setError(`${a.engine} returned no evaluation line for this position`);
+          setError(`The engine failed: ${a.engine} returned no evaluation line for this position`);
           setPhase('guessing');
           return;
         }
@@ -91,12 +130,11 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
         setPhase('revealed');
         const sideToMove = turn(positionFromFen(position.fen));
         const truth = whitePerspective(line.score, sideToMove);
-        const { sameBand } = grade(guessCp, truth);
-        setTally(t => ({ sameBand: t.sameBand + (sameBand ? 1 : 0), total: t.total + 1 }));
+        setResults(rs => [...rs, { truth, guessCp, points: points(guessCp, truth), recipeDescription: position.description }]);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(`The engine failed: ${err instanceof Error ? err.message : String(err)}`);
         setPhase('guessing');
       });
     return () => {
@@ -110,14 +148,6 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
   const line = analysis?.lines[0];
   const truth = line && pos ? whitePerspective(line.score, turn(pos)) : undefined;
   const gradeResult = truth ? grade(guessCp, truth) : undefined;
-  const topLineSan = useMemo((): { san: string } | { error: string } | undefined => {
-    if (!pos || !line) return undefined;
-    try {
-      return { san: sanLine(pos, line.pv).join(' ') };
-    } catch (err: unknown) {
-      return { error: err instanceof Error ? err.message : String(err) };
-    }
-  }, [pos, line]);
 
   if (engine instanceof Error) {
     return (
@@ -136,8 +166,29 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
   if (error) {
     return (
       <div className="gte">
-        <p className="gte-status">The engine failed: {error}</p>
-        <button onClick={next}>Try again</button>
+        <p className="gte-status">{error}</p>
+        <button onClick={startGeneration}>Try again</button>
+      </div>
+    );
+  }
+  if (phase === 'summary') {
+    const total = results.reduce((sum, r) => sum + r.points, 0);
+    return (
+      <div className="gte">
+        <h2>Guess the eval</h2>
+        <div className="gte-summary">
+          <p className="gte-summary-total">
+            Total: {total} / {ROUNDS * MAX_POINTS}
+          </p>
+          <ol>
+            {results.map((r, i) => (
+              <li key={i}>
+                Eval {formatScore(r.truth)}, your guess {formatPawns(r.guessCp)} — {r.points} points ({r.recipeDescription})
+              </li>
+            ))}
+          </ol>
+          <button onClick={playAgain}>Play again</button>
+        </div>
       </div>
     );
   }
@@ -149,9 +200,16 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
     );
   }
 
+  const roundResult = results[results.length - 1];
+  const runningTotal = results.reduce((sum, r) => sum + r.points, 0);
+
   return (
     <div className="gte">
       <h2>Guess the eval</h2>
+      <p className="gte-round">
+        Position {roundIndex + 1} of {ROUNDS}
+      </p>
+      <p className="gte-turn">{turn(pos) === 'white' ? 'White to move' : 'Black to move'}</p>
       <Board
         fen={position.fen}
         orientation="white"
@@ -161,7 +219,7 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
         check={inCheck(pos)}
         onMove={() => undefined}
       />
-      <p className="gte-source">Position source: engine self-play, {RANDOM_PLIES} random opening plies.</p>
+      {phase !== 'revealed' && <p className="gte-source">Position source: engine self-play.</p>}
 
       {phase !== 'revealed' && (
         <div className="gte-guess">
@@ -171,8 +229,8 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
           <input
             id="gte-slider"
             type="range"
-            min={-1000}
-            max={1000}
+            min={SLIDER_MIN_CP}
+            max={SLIDER_MAX_CP}
             step={10}
             value={guessCp}
             disabled={phase === 'evaluating'}
@@ -184,25 +242,27 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
         </div>
       )}
 
-      {phase === 'revealed' && truth && gradeResult && (
+      {phase === 'revealed' && truth && gradeResult && line && roundResult && (
         <div className="gte-reveal">
+          <p className="gte-source">Position source: {position.description}.</p>
           <p>
             Engine evaluation, White's perspective: <strong>{formatScore(truth)}</strong>{' '}
-            <span className="gte-provenance">({analysis?.engine}, depth {line?.depth})</span>
+            <span className="gte-provenance">
+              ({analysis?.engine}, depth {line.depth})
+            </span>
           </p>
           <p>{describeBand(band(truth))}.</p>
+          <EvalScale guessCp={guessCp} truth={truth} />
           <p>
             Your guess of {formatPawns(guessCp)} was {gradeResult.sameBand ? 'in the same band.' : 'in a different band.'}
           </p>
-          {gradeResult.distanceCp !== undefined && <p>Distance from the truth: {(gradeResult.distanceCp / 100).toFixed(2)} pawns.</p>}
-          <p>
-            Top line:{' '}
-            {topLineSan && 'san' in topLineSan ? topLineSan.san : `${line?.pv.join(' ')} (SAN unavailable: ${topLineSan?.error ?? 'no line'})`}
+          <p className="gte-score">
+            Points this position: {roundResult.points} · Running total: {runningTotal}
           </p>
-          <p className="gte-tally">
-            Same band: {tally.sameBand} of {tally.total}
-          </p>
-          <button onClick={next}>Next position</button>
+          <div className="gte-topline">
+            Top line: <MoveLine startFen={position.fen} ucis={line.pv} />
+          </div>
+          <button onClick={advance}>{roundIndex + 1 >= ROUNDS ? 'See results' : 'Next position'}</button>
         </div>
       )}
     </div>

@@ -1,15 +1,16 @@
-// Visualization trainer: the learner sees a position and a short engine-chosen line in SAN,
-// answers questions about the end position without seeing it, then sees it. Design record:
-// memory/subprojects/visualization-trainer.md. This is the minimal slice: a fixed random start
-// position, a fixed-depth engine line, and three facts-package questions (V3). The line and the
-// end position are never invented — they come from a real engine call and @human-chess/rules
-// board-state reads (A1).
+// Visualization trainer: the learner sees a position and a short engine-chosen line (via
+// @human-chess/board's MoveLine, notation-only until the reveal), answers questions about the
+// end position without seeing it, then sees it. A session is ROUNDS exercises; the learner sees
+// which exercise they are on and a running score, then a summary with a "play again" restart.
+// Design record: memory/subprojects/visualization-trainer.md. The line and the end position are
+// never invented — they come from a real engine call and @human-chess/rules board-state reads
+// (A1); the questions themselves come from @human-chess/facts, never generated free-form (V3).
 import { useEffect, useMemo, useState } from 'react';
-import { Board } from '@human-chess/board';
+import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { endPosition, PIECE_ON_OPTIONS, questionsFor, type Position, type Question } from '@human-chess/facts';
 import { fenOf, inCheck, positionFromFen, turn, type SquareName } from '@human-chess/rules';
-import { formatLine, lineSans, LINE_PLIES, randomStartFen } from './exercise';
+import { LINE_PLIES, ROUNDS, randomStartFen } from './exercise';
 import './visualization-trainer.css';
 
 /** Search depth for the engine line the learner is asked to visualize. */
@@ -24,7 +25,7 @@ type ExerciseState =
   | { kind: 'loading' }
   | { kind: 'no-line' }
   | { kind: 'failed'; message: string }
-  | { kind: 'ready'; startFen: string; ucis: string[]; sans: string[] };
+  | { kind: 'ready'; startFen: string; ucis: string[] };
 
 type Answers = { check: boolean | undefined; pieceOn: string | undefined; material: string };
 
@@ -35,6 +36,9 @@ const EMPTY_DESTS = new Map<SquareName, SquareName[]>();
  * otherwise silently count as correct whenever the true balance happens to be 0. */
 const isMaterialCorrect = (value: string, answer: number): boolean => value !== '' && Number(value) === answer;
 
+/** Formats a signed integer with an explicit sign, e.g. "+2", "0", "-3". */
+const formatSigned = (n: number): string => (n > 0 ? `+${n}` : `${n}`);
+
 export function VisualizationTrainer({ engine }: VisualizationTrainerProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
   const [startFen, setStartFen] = useState(() => randomStartFen());
@@ -42,6 +46,8 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
   const [answers, setAnswers] = useState<Answers>(EMPTY_ANSWERS);
   const [revealed, setRevealed] = useState(false);
   const [tally, setTally] = useState({ correct: 0, total: 0 });
+  const [round, setRound] = useState(1);
+  const [sessionDone, setSessionDone] = useState(false);
 
   useEffect(() => {
     setExercise({ kind: 'loading' });
@@ -59,7 +65,7 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
           return;
         }
         const ucis = pv.slice(0, LINE_PLIES);
-        setExercise({ kind: 'ready', startFen, ucis, sans: lineSans(startFen, ucis) });
+        setExercise({ kind: 'ready', startFen, ucis });
       })
       .catch((err: unknown) => {
         if (!cancelled) setExercise({ kind: 'failed', message: err instanceof Error ? err.message : String(err) });
@@ -75,10 +81,32 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
     () => (exercise.kind === 'ready' ? endPosition(exercise.startFen, exercise.ucis) : undefined),
     [exercise],
   );
-  const questions: Question[] | undefined = useMemo(() => (end ? questionsFor(end) : undefined), [end]);
+  const questions: Question[] | undefined = useMemo(
+    () => (exercise.kind === 'ready' ? questionsFor(exercise.startFen, exercise.ucis) : undefined),
+    [exercise],
+  );
   const [checkQ, pieceOnQ, materialQ] = questions ?? [];
 
-  const nextExercise = (): void => setStartFen(randomStartFen());
+  /** Fetches another line for the same round (used when the engine returned none — this never
+   * happened as far as the learner is concerned, so it does not consume a round). */
+  const retryExercise = (): void => setStartFen(randomStartFen());
+
+  /** Advances to the next round, or — after the last one — ends the session. */
+  const nextExercise = (): void => {
+    if (round >= ROUNDS) {
+      setSessionDone(true);
+      return;
+    }
+    setRound(r => r + 1);
+    setStartFen(randomStartFen());
+  };
+
+  const playAgain = (): void => {
+    setTally({ correct: 0, total: 0 });
+    setRound(1);
+    setSessionDone(false);
+    setStartFen(randomStartFen());
+  };
 
   const checkAnswers = (): void => {
     if (!questions) return;
@@ -103,107 +131,130 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
   return (
     <div className="viz">
       <h2>Visualization trainer</h2>
-      <p className="viz-tally">
-        Score: {tally.correct} / {tally.total}
-      </p>
 
-      <div className="viz-board">
-        <Board
-          fen={startFen}
-          orientation="white"
-          turnColor={turn(startPos)}
-          dests={EMPTY_DESTS}
-          movableColor={undefined}
-          check={inCheck(startPos)}
-          onMove={() => undefined}
-        />
-      </div>
-
-      {statusText && (
-        <p className="viz-status" aria-live="polite">
-          {statusText}
-        </p>
-      )}
-
-      {exercise.kind === 'no-line' && (
-        <div className="viz-dialog" role="dialog">
-          <p>The engine returned no line.</p>
-          <button onClick={nextExercise}>Try another</button>
+      {sessionDone ? (
+        <div className="viz-summary">
+          <p className="viz-summary-score">
+            Session complete: {tally.correct} / {tally.total} correct
+          </p>
+          <button onClick={playAgain}>Play again</button>
         </div>
-      )}
+      ) : (
+        <>
+          <p className="viz-round">
+            Exercise {round} of {ROUNDS}
+          </p>
+          <p className="viz-tally">
+            Score: {tally.correct} / {tally.total}
+          </p>
 
-      {exercise.kind === 'ready' && (
-        <div className="viz-exercise">
-          <p className="viz-line">Visualize this line: {formatLine(exercise.startFen, exercise.sans)}</p>
-
-          <div className="viz-question">
-            <p>{checkQ?.kind === 'check' ? checkQ.prompt : ''}</p>
-            <button
-              className={answers.check === true ? 'selected' : ''}
-              disabled={revealed}
-              onClick={() => setAnswers(a => ({ ...a, check: true }))}
-            >
-              Yes
-            </button>
-            <button
-              className={answers.check === false ? 'selected' : ''}
-              disabled={revealed}
-              onClick={() => setAnswers(a => ({ ...a, check: false }))}
-            >
-              No
-            </button>
-            {revealed && checkQ?.kind === 'check' && (
-              <span className={answers.check === checkQ.answer ? 'viz-correct' : 'viz-wrong'}>
-                {answers.check === checkQ.answer ? 'Correct' : `Wrong — it was ${checkQ.answer ? 'yes' : 'no'}`}
-              </span>
-            )}
+          <div className="viz-board">
+            <Board
+              fen={startFen}
+              orientation="white"
+              turnColor={turn(startPos)}
+              dests={EMPTY_DESTS}
+              movableColor={undefined}
+              check={inCheck(startPos)}
+              onMove={() => undefined}
+            />
           </div>
 
-          <div className="viz-question">
-            <p>{pieceOnQ?.kind === 'piece-on' ? pieceOnQ.prompt : ''}</p>
-            <select disabled={revealed} value={answers.pieceOn ?? ''} onChange={e => setAnswers(a => ({ ...a, pieceOn: e.target.value }))}>
-              <option value="" disabled>
-                choose…
-              </option>
-              {PIECE_ON_OPTIONS.map(o => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-            {revealed && pieceOnQ?.kind === 'piece-on' && (
-              <span className={answers.pieceOn === pieceOnQ.answer ? 'viz-correct' : 'viz-wrong'}>
-                {answers.pieceOn === pieceOnQ.answer ? 'Correct' : `Wrong — it was ${pieceOnQ.answer}`}
-              </span>
-            )}
-          </div>
-
-          <div className="viz-question">
-            <p>{materialQ?.kind === 'material' ? materialQ.prompt : ''}</p>
-            <input type="number" disabled={revealed} value={answers.material} onChange={e => setAnswers(a => ({ ...a, material: e.target.value }))} />
-            {revealed && materialQ?.kind === 'material' && (
-              <span className={isMaterialCorrect(answers.material, materialQ.answer) ? 'viz-correct' : 'viz-wrong'}>
-                {isMaterialCorrect(answers.material, materialQ.answer) ? 'Correct' : `Wrong — it was ${materialQ.answer}`}
-              </span>
-            )}
-          </div>
-
-          {!revealed && (
-            <button className="viz-check" onClick={checkAnswers}>
-              Check answers
-            </button>
+          {statusText && (
+            <p className="viz-status" aria-live="polite">
+              {statusText}
+            </p>
           )}
 
-          {revealed && end && (
-            <div className="viz-end">
-              <p>The end position:</p>
-              <div className="viz-board">
-                <Board fen={fenOf(end)} orientation="white" turnColor={turn(end)} dests={EMPTY_DESTS} movableColor={undefined} check={inCheck(end)} onMove={() => undefined} />
-              </div>
-              <button onClick={nextExercise}>Next</button>
+          {exercise.kind === 'no-line' && (
+            <div className="viz-dialog" role="dialog">
+              <p>The engine returned no line.</p>
+              <button onClick={retryExercise}>Try another</button>
             </div>
           )}
-        </div>
+
+          {exercise.kind === 'ready' && (
+            <div className="viz-exercise">
+              <div className="viz-line">
+                Visualize this line: <MoveLine startFen={exercise.startFen} ucis={exercise.ucis} preview={revealed} />
+              </div>
+
+              <div className="viz-question">
+                <p>{checkQ?.kind === 'check' ? checkQ.prompt : ''}</p>
+                <button
+                  className={answers.check === true ? 'selected' : ''}
+                  disabled={revealed}
+                  onClick={() => setAnswers(a => ({ ...a, check: true }))}
+                >
+                  Yes
+                </button>
+                <button
+                  className={answers.check === false ? 'selected' : ''}
+                  disabled={revealed}
+                  onClick={() => setAnswers(a => ({ ...a, check: false }))}
+                >
+                  No
+                </button>
+                {revealed && checkQ?.kind === 'check' && (
+                  <span className={answers.check === checkQ.answer ? 'viz-correct' : 'viz-wrong'}>
+                    {answers.check === checkQ.answer ? 'Correct' : `Wrong — it was ${checkQ.answer ? 'yes' : 'no'}`}
+                  </span>
+                )}
+              </div>
+
+              <div className="viz-question">
+                <p>{pieceOnQ?.kind === 'piece-on' ? pieceOnQ.prompt : ''}</p>
+                <select disabled={revealed} value={answers.pieceOn ?? ''} onChange={e => setAnswers(a => ({ ...a, pieceOn: e.target.value }))}>
+                  <option value="" disabled>
+                    choose…
+                  </option>
+                  {PIECE_ON_OPTIONS.map(o => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+                {revealed && pieceOnQ?.kind === 'piece-on' && (
+                  <span className={answers.pieceOn === pieceOnQ.answer ? 'viz-correct' : 'viz-wrong'}>
+                    {answers.pieceOn === pieceOnQ.answer ? 'Correct' : `Wrong — it was ${pieceOnQ.answer}`}
+                  </span>
+                )}
+              </div>
+
+              <div className="viz-question">
+                {materialQ?.kind === 'material' && (
+                  <p className="viz-material-before">
+                    Material now: White {materialQ.before.white}, Black {materialQ.before.black} (balance{' '}
+                    {formatSigned(materialQ.before.balance)}).
+                  </p>
+                )}
+                <p>{materialQ?.kind === 'material' ? materialQ.prompt : ''}</p>
+                <input type="number" disabled={revealed} value={answers.material} onChange={e => setAnswers(a => ({ ...a, material: e.target.value }))} />
+                {revealed && materialQ?.kind === 'material' && (
+                  <span className={isMaterialCorrect(answers.material, materialQ.answer) ? 'viz-correct' : 'viz-wrong'}>
+                    {isMaterialCorrect(answers.material, materialQ.answer) ? 'Correct' : `Wrong — it was ${formatSigned(materialQ.answer)}`}
+                  </span>
+                )}
+              </div>
+
+              {!revealed && (
+                <button className="viz-check" onClick={checkAnswers}>
+                  Check answers
+                </button>
+              )}
+
+              {revealed && end && (
+                <div className="viz-end">
+                  <p>The end position:</p>
+                  <div className="viz-board">
+                    <Board fen={fenOf(end)} orientation="white" turnColor={turn(end)} dests={EMPTY_DESTS} movableColor={undefined} check={inCheck(end)} onMove={() => undefined} />
+                  </div>
+                  <button onClick={nextExercise}>{round >= ROUNDS ? 'See results' : 'Next'}</button>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

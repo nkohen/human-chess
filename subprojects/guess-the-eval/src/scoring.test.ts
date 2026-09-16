@@ -1,7 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { band, BAND_CLEAR_CP, BAND_SLIGHT_CP, BAND_WINNING_CP, describeBand, grade } from './scoring';
+import { band, BAND_CLEAR_CP, BAND_SLIGHT_CP, BAND_WINNING_CP, describeBand, DECAY_CP, grade, mateSide, MAX_POINTS, points } from './scoring';
 
 // whitePerspective's tests moved to packages/engine/src/score.test.ts along with the function.
+
+describe('mateSide', () => {
+  it('reads a positive mate value as White mating', () => {
+    expect(mateSide({ type: 'mate', value: 5 })).toBe('white');
+  });
+
+  it('reads a negative mate value as Black mating', () => {
+    expect(mateSide({ type: 'mate', value: -3 })).toBe('black');
+  });
+
+  it('reads mate-0 for a mated Black (-0 after whitePerspective negates) as Black, not White', () => {
+    // whitePerspective flips a Black-to-move "mate 0" by negating it: -0. `-0 >= 0` is `true` in
+    // JS, so a naive sign check misreads this as White mating; Object.is must catch it.
+    expect(Object.is(-0, -0)).toBe(true);
+    expect(mateSide({ type: 'mate', value: -0 })).toBe('black');
+  });
+
+  it('reads mate-0 for a mated White (untouched +0) as White', () => {
+    expect(mateSide({ type: 'mate', value: 0 })).toBe('white');
+  });
+});
 
 describe('band', () => {
   it('reports equal near zero', () => {
@@ -50,5 +71,36 @@ describe('grade', () => {
     const g = grade(900, { type: 'mate', value: 4 });
     expect(g.sameBand).toBe(true);
     expect(g.distanceCp).toBeUndefined();
+  });
+});
+
+describe('points', () => {
+  it('awards the maximum for an exact guess', () => {
+    expect(points(120, { type: 'cp', value: 120 })).toBe(MAX_POINTS);
+    expect(points(0, { type: 'cp', value: 0 })).toBe(MAX_POINTS);
+  });
+
+  it('decays by e^-1 at one DECAY_CP of distance', () => {
+    expect(points(0, { type: 'cp', value: DECAY_CP })).toBe(Math.round(MAX_POINTS * Math.exp(-1)));
+    expect(points(0, { type: 'cp', value: DECAY_CP })).toBe(1839);
+  });
+
+  it('scores a mate for White against a maxed-out guess as an exact hit', () => {
+    expect(points(1000, { type: 'mate', value: 4 })).toBe(MAX_POINTS);
+  });
+
+  it('scores a mate for Black against a maxed-out White guess as tiny', () => {
+    const p = points(1000, { type: 'mate', value: -3 });
+    expect(p).toBeGreaterThanOrEqual(0);
+    expect(p).toBeLessThan(5);
+  });
+
+  it('clamps a truth beyond the slider range before computing distance', () => {
+    // 1500 cp clamps to 1000, same as a truth of exactly 1000.
+    expect(points(1000, { type: 'cp', value: 1500 })).toBe(points(1000, { type: 'cp', value: 1000 }));
+  });
+
+  it('is symmetric in the sign of the distance', () => {
+    expect(points(50, { type: 'cp', value: 200 })).toBe(points(-50, { type: 'cp', value: -200 }));
   });
 });

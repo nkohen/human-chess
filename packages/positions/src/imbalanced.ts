@@ -8,8 +8,10 @@ import { whitePerspective } from '@human-chess/engine';
 import { pieceCounts, positionFromFen, turn, type Color, type Role } from '@human-chess/rules';
 import { generateSelfPlayPosition } from './selfPlay';
 
-const RANDOM_PLIES = 8;
-const ENGINE_PLIES = 10;
+// Exported so recipes.ts can compute RECIPE_PLY_RANGES for 'imbalanced' from the same numbers
+// used here, rather than duplicating them.
+export const RANDOM_PLIES = 8;
+export const ENGINE_PLIES = 10;
 const MINE_DEPTH = 6;
 const EVAL_DEPTH = 10;
 // First-guess bands, not yet tuned by the user: a "non-obvious slight edge" is read here as a
@@ -34,6 +36,9 @@ export interface ImbalancedPosition {
 
 export interface ImbalancedPositionOpts {
   random?: () => number;
+  /** Aborts generation; see SelfPlayOpts.signal for the contract. Checked before every mining
+   * attempt and before the eval-check engine call. */
+  signal?: AbortSignal;
 }
 
 /** True when the two sides' piece counts are not an identical vector across every role. */
@@ -51,15 +56,18 @@ export async function generateImbalancedPosition(
   opts: ImbalancedPositionOpts = {},
 ): Promise<ImbalancedPosition> {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    opts.signal?.throwIfAborted();
     const selfPlay = await generateSelfPlayPosition(engine, {
       randomPlies: RANDOM_PLIES,
       enginePlies: ENGINE_PLIES,
       depth: MINE_DEPTH,
       ...(opts.random ? { random: opts.random } : {}),
+      ...(opts.signal ? { signal: opts.signal } : {}),
     });
     const pos = positionFromFen(selfPlay.fen);
     if (!isMaterialImbalanced(pieceCounts(pos))) continue;
 
+    opts.signal?.throwIfAborted();
     const analysis = await engine.analyse(selfPlay.fen, [], { depth: EVAL_DEPTH });
     const line = analysis.lines[0];
     if (!line) continue;

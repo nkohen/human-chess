@@ -1,6 +1,10 @@
 .viz { max-width: 32rem; padding: 1rem; margin: 0 auto; }
+.viz-round { font-weight: bold; margin: 0 0 0.25rem; }
 .viz-tally { font-weight: bold; }
 .viz-board { max-width: 24rem; margin: 0 auto 1rem; }
+.viz-summary { text-align: center; padding: 2rem 0; }
+.viz-summary-score { font-weight: bold; font-size: 1.1rem; }
+.viz-material-before { margin: 0 0 0.25rem; font-style: italic; min-width: 100%; }
 .viz-status { min-height: 1.5em; }
 .viz-dialog { border: 1px solid #8886; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0; }
 .viz-line { font-size: 1.1rem; margin: 1rem 0; }

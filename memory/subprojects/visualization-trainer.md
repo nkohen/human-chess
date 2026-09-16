@@ -52,6 +52,15 @@ a square; material points by the 1/3/3/5/9 convention), check answers, reveal th
 next. Not built: best-move and who-is-better questions (engine-graded), the player's own line with
 claims, back-and-forth correction dialogue, coordinate drills, blindfold hand-off, time element.
 
+**User feedback on the first slice (2026-09-16), all addressed in the second pass:**
+- Asking what is on a square the line never touched, with the board visible, is silly (→ the
+  piece-on square is always one the line touched or changed).
+- For the material question, show the balance before the line so the learner only thinks
+  about the difference (→ prompt carries the start material).
+- Rounds to go were not shown (→ five exercises per session, "Exercise n of 5", summary).
+- Cross-cutting: hover a move in a displayed line to see the position; in this tool only
+  after the reveal, never while answering.
+
 ## Open questions (not yet asked)
 - Time element on the main exercises; hand-off into a blindfold game vs engine.
 - Feedback and grounding: the resulting position is computed by chessops; correctness is

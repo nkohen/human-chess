@@ -178,3 +178,4 @@ export function mirrorColors(pos: Position): Position {
 
 export * from './roles';
 export * from './pgn';
+export * from './line';

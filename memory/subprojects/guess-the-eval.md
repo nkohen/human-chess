@@ -51,6 +51,17 @@ engine score from White's perspective with engine name and depth on screen, band
 endless "next". Not built: adaptive difficulty, win-probability presentation, real-game or
 curated positions, saving results. Reviewed by the code-reviewer agent 2026-09-16; findings fixed.
 
+**User feedback on the first slice (2026-09-16), all addressed in the second pass:**
+- Say whose turn it is (it affects the eval).
+- After guessing, show the bands, the guess and the answer on the slider's line.
+- Positions were all equal-material early middlegames; wants more variation (→ position
+  recipes in packages/positions: quiet, sharp, late, imbalanced).
+- Rounds to go were not shown (→ five positions per round, "Position n of 5").
+- Default mode should score more like GeoGuessr (→ points per position decaying with the
+  distance from the truth, total over the round; the exact curve is a first guess to tune).
+- Cross-cutting: hovering a move in any displayed line should show the position (→ MoveLine
+  in packages/board).
+
 ## Open questions (not yet asked)
 - Adaptive difficulty.
 - Eval presentation: centipawns vs win probability.

@@ -35,8 +35,8 @@ positions, facts, import, seven subprojects, apps/web. Reserved (named, not crea
 
 | Directory | Responsibility | Interview pieces it will absorb |
 |---|---|---|
-| `packages/rules` | rules and notation over chessops; only importer of chessops | rules/board row; mirroring, repetition keys, promotion detection |
-| `packages/board` | chessground as a React component; only importer of chessground | board; later the shared analysis board's board part |
+| `packages/rules` | rules and notation over chessops; only importer of chessops; `annotateLine`/`formatLine` (SAN + move numbers + FEN per ply, 2026-09-16) | rules/board row; mirroring, repetition keys, promotion detection |
+| `packages/board` | chessground as a React component; only importer of chessground; `MoveLine` (numbered SAN line, hover shows the position; `preview={false}` for exercises) used by every subproject that displays a line (user, 2026-09-16) | board; later the shared analysis board's board part |
 | `packages/engine` | typed UCI client with provenance on every result; Worker + Node transports | engine service |
 | `packages/play` | opponents: maximal resistance now; UCI_Elo / Skill Level / Maia calibration later | rating-calibrated engine play |
 | `packages/positions` | curated + mined position pools with validation tests | position store and mining |

@@ -5,14 +5,17 @@
 // query from ever being applied, and the render itself re-checks `analysis.fen === fen` as a
 // second guard.
 import { useEffect, useState } from 'react';
+import { MoveLine } from '@human-chess/board';
 import { whitePerspective, type Analysis, type Score, type UciEngine } from '@human-chess/engine';
-import { positionFromFen, sanLine, turn } from '@human-chess/rules';
+import { positionFromFen, turn, type Color } from '@human-chess/rules';
 
 export interface MultiPvPanelProps {
   engine: UciEngine | undefined;
   fen: string;
   /** Plays the clicked line's first move (both on the board and into the tree). */
   onPlayMove: (uci: string) => void;
+  /** The learner's colour, used to orient each line's hover preview board. Defaults to white. */
+  orientation?: Color;
 }
 
 const DEPTH = 14;
@@ -26,7 +29,7 @@ function formatScore(score: Score): string {
   return `${sign}${pawns.toFixed(2)}`;
 }
 
-export function MultiPvPanel({ engine, fen, onPlayMove }: MultiPvPanelProps): React.JSX.Element {
+export function MultiPvPanel({ engine, fen, onPlayMove, orientation }: MultiPvPanelProps): React.JSX.Element {
   const [analysis, setAnalysis] = useState<Analysis | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
 
@@ -84,17 +87,11 @@ export function MultiPvPanel({ engine, fen, onPlayMove }: MultiPvPanelProps): Re
       <ol className="ob-multipv-lines">
         {analysis.lines.map(line => {
           const first = line.pv[0];
-          const san = (() => {
-            try {
-              return sanLine(positionFromFen(fen), line.pv.slice(0, PV_SAN_MOVES)).join(' ');
-            } catch {
-              return line.pv.slice(0, PV_SAN_MOVES).join(' ') + ' (SAN unavailable)';
-            }
-          })();
           return (
             <li key={line.multipv}>
               <button disabled={!first} onClick={() => first && onPlayMove(first)}>
-                <strong>{formatScore(whitePerspective(line.score, turn(pos)))}</strong> {san}
+                <strong>{formatScore(whitePerspective(line.score, turn(pos)))}</strong>{' '}
+                <MoveLine startFen={fen} ucis={line.pv.slice(0, PV_SAN_MOVES)} {...(orientation ? { orientation } : {})} />
               </button>
             </li>
           );

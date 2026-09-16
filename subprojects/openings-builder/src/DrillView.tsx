@@ -7,7 +7,7 @@
 // about the tree, not a generated claim about the position (V3 is about engine/board-state
 // claims; this is neither, it's a lookup).
 import { useEffect, useState } from 'react';
-import { Board } from '@human-chess/board';
+import { Board, MoveLine } from '@human-chess/board';
 import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, type SquareName } from '@human-chess/rules';
 import { childrenOf, fenAt, repertoireMoves, type Opening } from './repertoire';
 
@@ -54,7 +54,7 @@ export function DrillView({ opening }: DrillViewProps): React.JSX.Element {
     if (usersTurn) return;
     const pick = kids[Math.floor(Math.random() * kids.length)]!;
     const timer = setTimeout(() => {
-      setTrail(t => [...t, pick.san]);
+      setTrail(t => [...t, pick.uci]);
       setEpd(pick.to);
     }, OPPONENT_MOVE_DELAY_MS);
     return () => clearTimeout(timer);
@@ -68,7 +68,7 @@ export function DrillView({ opening }: DrillViewProps): React.JSX.Element {
     const own = repertoireMoves(opening, epd);
     const match = own.find(m => m.uci === played.uci);
     if (match) {
-      setTrail(t => [...t, match.san]);
+      setTrail(t => [...t, match.uci]);
       setEpd(match.to);
       return;
     }
@@ -90,7 +90,13 @@ export function DrillView({ opening }: DrillViewProps): React.JSX.Element {
           check={inCheck(pos)}
           onMove={onBoardMove}
         />
-        <p className="ob-breadcrumb-line">{trail.length === 0 ? '(start)' : trail.join(' ')}</p>
+        {trail.length === 0 ? (
+          <p className="ob-breadcrumb-line">(start)</p>
+        ) : (
+          <div className="ob-breadcrumb-line">
+            <MoveLine startFen={fenAt(opening.root)} ucis={trail} orientation={opening.color} />
+          </div>
+        )}
       </div>
 
       <div className="ob-side-col">

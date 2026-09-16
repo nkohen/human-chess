@@ -32,3 +32,14 @@ routes passed (no exceptions; endgames move + engine reply, guess-the-eval revea
 verified). All 11 slices reviewed by the code-reviewer agent and their findings fixed (last batch: restart-in-effect bugs in Chessitout and the bot-rating test, checkmate shown as "mate lost" in the reviewer, review cancellation, import screen lifted into `packages/import/react`). All bands and thresholds (draw band 30 cp, imbalance band 150 cp,
 classification cutoffs) are first guesses marked in code for the user to tune.
 Follow-up: memory-trainer/src/reconstruction.ts duplicates packages/play game state (no-playerColor mode); auto-queen idiom repeated in six files, wants one helper.
+
+Feedback pass 1 (2026-09-16, after the user played guess-the-eval and visualization): nine
+comments, all built the same day by three Sonnet workers and reviewed. Shared: `MoveLine` in
+packages/board (hover a move in any displayed line → position; adopted in guess-the-eval,
+visualization, openings builder, bot-rating test) on `annotateLine` in packages/rules; position
+recipes in packages/positions (quiet / sharp / late / imbalanced). Guess-the-eval: turn shown,
+band scale with guess and answer markers after the reveal, five positions per round with
+GeoGuessr-style points (5000 × exp(−distance/150 cp), first guess), summary. Visualization: the
+piece-on square is always one the line touched, material before the line shown, five exercises
+per session, hover previews only after the reveal. The user's remaining comments on the other
+nine slices are still to come.

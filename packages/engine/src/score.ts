@@ -9,7 +9,7 @@ export function whitePerspective(score: Score, sideToMove: 'white' | 'black'): S
   return { type: score.type, value: -score.value };
 }
 
-function formatPawns(cp: number): string {
+export function formatPawns(cp: number): string {
   const pawns = cp / 100;
   const sign = pawns > 0 ? '+' : '';
   return `${sign}${pawns.toFixed(1)}`;
