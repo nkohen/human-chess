@@ -21,7 +21,7 @@ export interface GameReviewerProps {
 
 type Screen = { kind: 'import' } | { kind: 'review'; game: ImportedGame };
 
-const ANALYSE_DEPTH = 12;
+const ANALYSE_DEPTH = 20;
 const STORAGE_KEY = 'human-chess.game-reviewer.lichess-username';
 
 export function GameReviewer({ engine }: GameReviewerProps): React.JSX.Element {

@@ -79,3 +79,8 @@ Interview closed 2026-09-16; the user may add more later.
 ## Open questions (not yet asked)
 - Shareable reviews (coach).
 - Sources: linked accounts, PGN, in-app games.
+
+**User feedback on the first slice (2026-09-16):** review at depth 20 by default (was 12); both the
+screen's constant and `packages/review`'s default changed. Not yet configurable in the UI; a
+full game at depth 20 on the wasm engine takes minutes, so a depth control like the openings
+builder's is the natural next step if the user finds it slow.

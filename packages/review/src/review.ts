@@ -56,7 +56,7 @@ export interface GameReview {
 }
 
 export interface ReviewOptions {
-  /** Search depth for every position. Defaults to 12. */
+  /** Search depth for every position. Defaults to 20 (user, 2026-09-16). */
   depth?: number;
   /** Checked before each analyse() call; an already-aborted signal throws ReviewCancelled
    * instead of starting another search the caller no longer wants. */
@@ -79,7 +79,7 @@ export async function reviewGame(
   options: ReviewOptions = {},
   onProgress?: (progress: ReviewProgress) => void,
 ): Promise<GameReview> {
-  const depth = options.depth ?? 12;
+  const depth = options.depth ?? 20;
   const limit: SearchLimit = { depth };
   const total = game.ucis.length;
 
