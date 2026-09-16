@@ -28,6 +28,11 @@ function wdlPercents(m: { white: number; draws: number; black: number; total: nu
   };
 }
 
+/** The bar's hover text: the three percentages, and how many games they come from. */
+function wdlTitle(pct: { white: number; draws: number; black: number }, total: number): string {
+  return `White wins ${pct.white.toFixed(1)}% · Draw ${pct.draws.toFixed(1)}% · Black wins ${pct.black.toFixed(1)}% (${total.toLocaleString()} games)`;
+}
+
 export function ExplorerPanel({ fen, onAddMoves }: ExplorerPanelProps): React.JSX.Element {
   const { session } = useLichessSession();
   // The effect keys on the token string: currentLichessSession() builds a fresh object on every
@@ -114,10 +119,10 @@ export function ExplorerPanel({ fen, onAddMoves }: ExplorerPanelProps): React.JS
                     <button onClick={() => onAddMoves([m.uci])}>
                       {m.san} — {(m.share * 100).toFixed(1)}%
                     </button>
-                    <span className="ob-explorer-wdl">
-                      <span className="ob-explorer-wdl-white" style={{ width: `${pct.white}%` }} />
-                      <span className="ob-explorer-wdl-draw" style={{ width: `${pct.draws}%` }} />
-                      <span className="ob-explorer-wdl-black" style={{ width: `${pct.black}%` }} />
+                    <span className="ob-explorer-wdl" title={wdlTitle(pct, m.total)}>
+                      <span className="ob-explorer-wdl-white" style={{ width: `${pct.white}%` }} title={`White wins ${pct.white.toFixed(1)}%`} />
+                      <span className="ob-explorer-wdl-draw" style={{ width: `${pct.draws}%` }} title={`Draw ${pct.draws.toFixed(1)}%`} />
+                      <span className="ob-explorer-wdl-black" style={{ width: `${pct.black}%` }} title={`Black wins ${pct.black.toFixed(1)}%`} />
                     </span>
                   </li>
                 );

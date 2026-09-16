@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addMove, childrenOf, createOpening, deserialize, removeMove, repertoireMoves, serialize } from './repertoire';
+import { addMove, childrenOf, createOpening, deserialize, movesBeyond, removeMove, repertoireMoves, serialize } from './repertoire';
 
 describe('repertoire', () => {
   it('adds moves and records SAN + the resulting EPD', () => {
@@ -42,6 +42,20 @@ describe('repertoire', () => {
     opening = addMove(opening, opening.root, 'e2e4');
     opening = removeMove(opening, opening.root, 'e2e4');
     expect(childrenOf(opening, opening.root)).toHaveLength(0);
+  });
+
+  it('counts the moves recorded beyond a node once each, transpositions included', () => {
+    let o = createOpening('count', 'white');
+    o = addMove(o, o.root, 'e2e4');
+    const afterE4 = childrenOf(o, o.root)[0]!.to;
+    o = addMove(o, afterE4, 'e7e5');
+    o = addMove(o, afterE4, 'c7c5');
+    const afterE5 = childrenOf(o, afterE4)[0]!.to;
+    o = addMove(o, afterE5, 'g1f3');
+    expect(movesBeyond(o, o.root)).toBe(4);
+    expect(movesBeyond(o, afterE4)).toBe(3);
+    expect(movesBeyond(o, afterE5)).toBe(1);
+    expect(movesBeyond(o, childrenOf(o, afterE5)[0]!.to)).toBe(0);
   });
 
   it('round-trips through serialize/deserialize', () => {

@@ -77,6 +77,24 @@ export function removeMove(opening: Opening, fromEpd: string, uci: string): Open
   return { ...opening, nodes };
 }
 
+/** How many moves are recorded at and beyond `epd` (each edge once, transpositions merged), so the
+ * UI can say what a removal takes with it. */
+export function movesBeyond(opening: Opening, epd: string): number {
+  const seen = new Set<string>();
+  const stack = [epd];
+  let count = 0;
+  while (stack.length > 0) {
+    const cur = stack.pop() as string;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    for (const m of childrenOf(opening, cur)) {
+      count++;
+      stack.push(m.to);
+    }
+  }
+  return count;
+}
+
 export function childrenOf(opening: Opening, epd: string): OpeningMove[] {
   return opening.nodes[epd]?.moves ?? [];
 }

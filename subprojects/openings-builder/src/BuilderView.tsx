@@ -8,7 +8,7 @@ import type { UciEngine } from '@human-chess/engine';
 import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, type SquareName } from '@human-chess/rules';
 import { ExplorerPanel } from './ExplorerPanel';
 import { MultiPvPanel } from './MultiPvPanel';
-import { addMove, childrenOf, fenAt, type Opening, type OpeningMove } from './repertoire';
+import { addMove, childrenOf, fenAt, movesBeyond, removeMove, type Opening, type OpeningMove } from './repertoire';
 
 export interface BuilderViewProps {
   opening: Opening;
@@ -59,6 +59,14 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
     setReplyError(failed.length > 0 ? `Could not add: ${failed.join(', ')}` : undefined);
   };
 
+  // Removing an edge whose continuation has recorded moves takes those with it (they become
+  // unreachable), so that case asks first; a leaf goes without a prompt.
+  const removeReply = (m: OpeningMove): void => {
+    const beyond = movesBeyond(opening, m.to);
+    if (beyond > 0 && !window.confirm(`Remove ${m.san} and the ${beyond} move${beyond === 1 ? '' : 's'} recorded after it?`)) return;
+    onOpeningChange(removeMove(opening, currentEpd, m.uci));
+  };
+
   const onBoardMove = (from: SquareName, to: SquareName): void => {
     const promotion = isPromotionMove(pos, from, to) ? 'queen' : undefined;
     const played = playMove(pos, from, to, promotion);
@@ -93,6 +101,25 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
       </div>
 
       <div className="ob-side-col">
+        <div className="ob-children">
+          <h4>Tree at this position</h4>
+          {children.length === 0 && <p className="ob-multipv-status">No moves recorded here yet.</p>}
+          <ul>
+            {children.map(m => (
+              <li key={m.uci}>
+                <button onClick={() => setPath(p => [...p, m])}>{m.san}</button>
+                <button
+                  className="ob-remove"
+                  title={`Remove ${m.san} from the tree`}
+                  aria-label={`Remove ${m.san} from the tree`}
+                  onClick={() => removeReply(m)}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
         <MultiPvPanel
           engine={engine}
           fen={fen}
@@ -103,17 +130,6 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
         />
         {turn(pos) !== opening.color && <ExplorerPanel fen={fen} onAddMoves={addReplies} />}
         {replyError && <p className="ob-reply-error">{replyError}</p>}
-        <div className="ob-children">
-          <h4>Tree at this position</h4>
-          {children.length === 0 && <p className="ob-multipv-status">No moves recorded here yet.</p>}
-          <ul>
-            {children.map(m => (
-              <li key={m.uci}>
-                <button onClick={() => setPath(p => [...p, m])}>{m.san}</button>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
     </div>
   );
