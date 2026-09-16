@@ -48,3 +48,11 @@ MoveLine preview made position-fixed and pointer-transparent (the old absolute p
 page and flickered); primary "Next position" at the top of the reveal; chessground drawing
 (right-click circles, right-drag arrows) on by default for every Board, shapes kept across
 re-renders and cleared on a FEN change; bar-based results page.
+Feedback pass 3 (2026-09-16, chessitout, game reviewer, openings builder, bot-rating): Chessitout
+says whose move it is; the import screen's lichess fetch silently dropped every result under
+StrictMode's double mount (fixed; note lichess 404s non-browser user agents and rate-limits an IP
+for a long time after a burst, so test it with a real browser UA and sparingly); openings builder
+searches at depth 20 by default (6..30, persisted) with lines streamed while searching and an
+"Add these opponent replies to the tree" button on the opponent's turn (engine-based: the lichess
+explorer now needs a login); bot-rating has a board editor for the start position (shared
+`BoardEditor`). Reviewer findings on each fixed before commit.
