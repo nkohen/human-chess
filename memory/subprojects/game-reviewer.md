@@ -89,3 +89,12 @@ builder's is the natural next step if the user finds it slow.
 lichess-style chart (zero line mid-height, White ahead filled white above, Black ahead dark
 below, evals through lichess's winning-chance curve so the middle has the resolution, coloured
 markers for inaccuracy/mistake/blunder/mate-lost/mate-allowed, click a ply to select it).
+
+**Timing (2026-09-17):** depth 20 alone let a single complex middlegame position on a real
+chess.com game run the single-threaded wasm engine past `packages/engine`'s own analyse()
+timeout ("the engine failed: no answer to go depth 20 within 65000 ms"). Fix: a per-position
+movetime cap, default 5s, alongside depth 20 — the engine now stops at whichever limit comes
+first. Both depth and the time cap are persisted settings on the review screen (openings
+builder's depth pattern), default 20 / 5s. The reached depth was always read from the engine's
+own report (never the requested depth), so with the cap in place the "depth X → Y" provenance
+display is now honestly a real, possibly-below-20 reached depth rather than an assumed 20.

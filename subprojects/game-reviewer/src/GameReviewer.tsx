@@ -12,6 +12,9 @@ import {
   ReviewCancelled, reviewGame, type Classification, type EvalOrEnd, type GameReview, type ReviewedMove, type ReviewProgress,
 } from '@human-chess/review';
 import { inCheck, positionFromFen, uciSquares, type SquareName } from '@human-chess/rules';
+import {
+  loadDepth, loadMovetimeSeconds, MAX_DEPTH, MAX_MOVETIME_SECONDS, MIN_DEPTH, MIN_MOVETIME_SECONDS, saveDepth, saveMovetimeSeconds,
+} from './storage';
 import './game-reviewer.css';
 
 export interface GameReviewerProps {
@@ -21,7 +24,6 @@ export interface GameReviewerProps {
 
 type Screen = { kind: 'import' } | { kind: 'review'; game: ImportedGame };
 
-const ANALYSE_DEPTH = 20;
 const STORAGE_KEY = 'human-chess.game-reviewer.import-username';
 
 export function GameReviewer({ engine }: GameReviewerProps): React.JSX.Element {
@@ -56,6 +58,36 @@ function ReviewScreen({
   const [error, setError] = useState<string | undefined>(undefined);
   const [selectedPly, setSelectedPly] = useState(0);
 
+  // Persisted per the openings builder's depth pattern (subprojects/openings-builder/src/
+  // storage.ts): both settings survive a reload, and either one changing restarts the review
+  // (the effect below depends on them) since a review already computed at the old settings
+  // would misreport its own provenance.
+  const [depth, setDepth] = useState<number>(() => loadDepth());
+  const [depthText, setDepthText] = useState<string>(() => String(depth));
+  const [movetimeSeconds, setMovetimeSeconds] = useState<number>(() => loadMovetimeSeconds());
+  const [movetimeText, setMovetimeText] = useState<string>(() => String(movetimeSeconds));
+  // Wall-clock start of the review currently running, for the "about N left" progress estimate;
+  // read only, never rendered directly — reset at the top of every effect run.
+  const startedAtRef = useRef<number | undefined>(undefined);
+
+  function finalizeDepth(raw: string): void {
+    const n = Number(raw);
+    const clamped = raw.trim() !== '' && Number.isFinite(n) ? Math.min(MAX_DEPTH, Math.max(MIN_DEPTH, Math.round(n))) : depth;
+    setDepth(clamped);
+    saveDepth(clamped);
+    setDepthText(String(clamped));
+  }
+
+  function finalizeMovetimeSeconds(raw: string): void {
+    const n = Number(raw);
+    const clamped = raw.trim() !== '' && Number.isFinite(n)
+      ? Math.min(MAX_MOVETIME_SECONDS, Math.max(MIN_MOVETIME_SECONDS, Math.round(n)))
+      : movetimeSeconds;
+    setMovetimeSeconds(clamped);
+    saveMovetimeSeconds(clamped);
+    setMovetimeText(String(clamped));
+  }
+
   useEffect(() => {
     if (!readyEngine) {
       setPhase('waiting-for-engine');
@@ -67,10 +99,11 @@ function ReviewScreen({
     setProgress(undefined);
     setError(undefined);
     setReview(undefined);
+    startedAtRef.current = Date.now();
     reviewGame(
       readyEngine,
       { startFen: game.startFen, ucis: game.ucis },
-      { depth: ANALYSE_DEPTH, signal: controller.signal },
+      { depth, movetime: movetimeSeconds * 1000, signal: controller.signal },
       p => {
         if (!cancelled) setProgress(p);
       },
@@ -95,8 +128,7 @@ function ReviewScreen({
       controller.abort();
       readyEngine.stop();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readyEngine, game]);
+  }, [readyEngine, game, depth, movetimeSeconds]);
 
   if (engine instanceof Error) {
     return (
@@ -106,20 +138,36 @@ function ReviewScreen({
       </div>
     );
   }
+  const settingsRow = (
+    <ReviewSettings
+      depth={depth}
+      depthText={depthText}
+      onDepthChange={setDepthText}
+      onDepthCommit={finalizeDepth}
+      movetimeSeconds={movetimeSeconds}
+      movetimeText={movetimeText}
+      onMovetimeChange={setMovetimeText}
+      onMovetimeCommit={finalizeMovetimeSeconds}
+    />
+  );
+
   if (phase === 'waiting-for-engine') {
     return (
       <div className="gr">
+        {settingsRow}
         <p className="gr-status">Loading the engine…</p>
       </div>
     );
   }
   if (phase === 'analysing') {
-    const k = progress?.ply ?? 0;
-    const n = progress?.total ?? game.ucis.length;
+    const k = progress?.searched ?? 0;
+    const n = progress?.toSearch ?? game.ucis.length;
+    const eta = reviewEta(progress, startedAtRef.current);
     return (
       <div className="gr">
+        {settingsRow}
         <p className="gr-status">
-          Analysing move {k} of {n}…
+          Analysing position {k} of {n} · {eta}
         </p>
       </div>
     );
@@ -130,6 +178,8 @@ function ReviewScreen({
         <p className="gr-status" role="alert">
           The engine failed: {error}
         </p>
+        {settingsRow}
+        <p className="gr-settings-hint">Changing a setting retries the review.</p>
         <button onClick={onAnotherGame}>Another game</button>
       </div>
     );
@@ -192,6 +242,88 @@ function ReviewScreen({
       <button onClick={onAnotherGame}>Another game</button>
     </div>
   );
+}
+
+/** Depth and per-position time cap, persisted (subprojects/openings-builder's depth pattern),
+ * shown before/while reviewing so the settings that produced the currently running (or about
+ * to run) review are visible, not hidden behind a menu. Free text while focused, committed on
+ * blur/Enter — same reasoning as the openings builder's depth field: committing every keystroke
+ * would restart the review mid-type. */
+function ReviewSettings({
+  depth,
+  depthText,
+  onDepthChange,
+  onDepthCommit,
+  movetimeSeconds,
+  movetimeText,
+  onMovetimeChange,
+  onMovetimeCommit,
+}: {
+  depth: number;
+  depthText: string;
+  onDepthChange: (raw: string) => void;
+  onDepthCommit: (raw: string) => void;
+  movetimeSeconds: number;
+  movetimeText: string;
+  onMovetimeChange: (raw: string) => void;
+  onMovetimeCommit: (raw: string) => void;
+}): React.JSX.Element {
+  return (
+    <div className="gr-settings">
+      <label className="gr-setting">
+        Depth{' '}
+        <input
+          type="number"
+          min={MIN_DEPTH}
+          max={MAX_DEPTH}
+          value={depthText}
+          onChange={e => onDepthChange(e.target.value)}
+          onBlur={e => onDepthCommit(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') onDepthCommit(e.currentTarget.value);
+          }}
+        />
+      </label>
+      <label className="gr-setting">
+        Max seconds per move{' '}
+        <input
+          type="number"
+          min={MIN_MOVETIME_SECONDS}
+          max={MAX_MOVETIME_SECONDS}
+          value={movetimeText}
+          onChange={e => onMovetimeChange(e.target.value)}
+          onBlur={e => onMovetimeCommit(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') onMovetimeCommit(e.currentTarget.value);
+          }}
+        />
+      </label>
+      <p className="gr-settings-hint">
+        Depth {depth}, at most {movetimeSeconds} s per move (whichever comes first).
+      </p>
+    </div>
+  );
+}
+
+/** A wall-clock estimate of time remaining, from elapsed time / moves done * moves left — never
+ * an engine claim, just arithmetic over this screen's own progress callbacks, so it carries no
+ * false provenance. "estimating…" until at least 2 positions are done (one data point is too
+ * noisy: the very first position's search time is a poor predictor of the rest). */
+function reviewEta(progress: ReviewProgress | undefined, startedAt: number | undefined): string {
+  if (!progress || !startedAt || progress.searched < 2) return 'estimating…';
+  const elapsedMs = Date.now() - startedAt;
+  const remaining = progress.toSearch - progress.searched;
+  if (remaining <= 0) return 'almost done';
+  const remainingMs = (elapsedMs / progress.searched) * remaining;
+  return `about ${formatDuration(remainingMs)} left`;
+}
+
+/** Rounds to minutes above 90s, else to seconds — matches the resolution a user actually reads
+ * an ETA at (nobody parses "about 137 s left"). */
+function formatDuration(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds > 90) return `${Math.round(ms / 60_000)} min`;
+  return `${Math.max(1, Math.round(seconds))} s`;
 }
 
 function MoveDetail({ move }: { move: ReviewedMove }): React.JSX.Element {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Analysis, Score } from '@human-chess/engine';
+import type { Analysis, Score, SearchLimit } from '@human-chess/engine';
 import { classify, terminalEval } from './classify';
 import { ReviewCancelled, reviewGame, type AnalysingEngine, type ReviewProgress } from './review';
 
@@ -13,13 +13,17 @@ interface ScriptedResponse {
 
 /** A fake engine implementing just the `analyse` surface reviewGame calls, answering with one
  * scripted response per call in order (reviewGame's calls are deterministic and sequential, so
- * call order is enough — no need to parse or match on the fen). */
-function scriptedEngine(responses: ScriptedResponse[]): { engine: AnalysingEngine; calls: string[] } {
+ * call order is enough — no need to parse or match on the fen). Also records the `limit` each
+ * call received, so a test can assert reviewGame builds the right depth/movetime combination
+ * without needing a real engine. */
+function scriptedEngine(responses: ScriptedResponse[]): { engine: AnalysingEngine; calls: string[]; limits: SearchLimit[] } {
   const calls: string[] = [];
+  const limits: SearchLimit[] = [];
   let next = 0;
   const engine: AnalysingEngine = {
-    analyse(fen) {
+    analyse(fen, _moves, limit) {
       calls.push(fen);
+      limits.push(limit);
       const r = responses[next++];
       if (!r) throw new Error(`scriptedEngine: no response scripted for call ${next}`);
       const score: Score = r.scoreMate !== undefined ? { type: 'mate', value: r.scoreMate } : { type: 'cp', value: r.scoreCp ?? 0 };
@@ -27,16 +31,16 @@ function scriptedEngine(responses: ScriptedResponse[]): { engine: AnalysingEngin
         engine: 'FakeEngine',
         fen,
         moves: [],
-        limit: { depth: 6 },
+        limit: { ...limit },
         multipv: 1,
         bestmove: r.bestmove,
-        lines: [{ multipv: 1, depth: 6, score, pv: [r.bestmove] }],
+        lines: [{ multipv: 1, depth: limit.depth ?? 6, score, pv: [r.bestmove] }],
         elapsedMs: 1,
       };
       return Promise.resolve(analysis);
     },
   };
-  return { engine, calls };
+  return { engine, calls, limits };
 }
 
 describe('reviewGame', () => {
@@ -55,10 +59,10 @@ describe('reviewGame', () => {
     // Qh4# leaves White with no legal move, so the final position is never sent to the engine.
     expect(calls).toHaveLength(4);
     expect(progress).toEqual([
-      { ply: 1, total: 4 },
-      { ply: 2, total: 4 },
-      { ply: 3, total: 4 },
-      { ply: 4, total: 4 },
+      { searched: 1, toSearch: 4 },
+      { searched: 2, toSearch: 4 },
+      { searched: 3, toSearch: 4 },
+      { searched: 4, toSearch: 4 },
     ]);
     expect(review.end).toEqual({ ply: 4, end: { kind: 'checkmate', winner: 'black' } });
     expect(review.moves).toHaveLength(4);
@@ -128,6 +132,29 @@ describe('reviewGame', () => {
       reviewGame(wrapped, { startFen: START_FEN, ucis }, { depth: 6, signal: controller.signal }),
     ).rejects.toThrow(ReviewCancelled);
     expect(calls).toHaveLength(2);
+  });
+
+  it('includes movetime in every search limit when the option is given', async () => {
+    const { engine, limits } = scriptedEngine([
+      { bestmove: 'e2e4', scoreCp: 15 },
+      { bestmove: 'e7e5', scoreCp: -10 },
+      { bestmove: 'g1f3', scoreCp: 12 },
+    ]);
+    await reviewGame(engine, { startFen: START_FEN, ucis: ['e2e4', 'e7e5'] }, { depth: 20, movetime: 5000 });
+    expect(limits).toEqual([{ depth: 20, movetime: 5000 }, { depth: 20, movetime: 5000 }, { depth: 20, movetime: 5000 }]);
+  });
+
+  it('omits movetime from the search limit when the option is not given', async () => {
+    const { engine, limits } = scriptedEngine([
+      { bestmove: 'e2e4', scoreCp: 15 },
+      { bestmove: 'e7e5', scoreCp: -10 },
+      { bestmove: 'g1f3', scoreCp: 12 },
+    ]);
+    await reviewGame(engine, { startFen: START_FEN, ucis: ['e2e4', 'e7e5'] }, { depth: 20 });
+    for (const limit of limits) {
+      expect(limit).toEqual({ depth: 20 });
+      expect('movetime' in limit).toBe(false);
+    }
   });
 });
 

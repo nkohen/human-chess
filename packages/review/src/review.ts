@@ -56,16 +56,34 @@ export interface GameReview {
 }
 
 export interface ReviewOptions {
-  /** Search depth for every position. Defaults to 20 (user, 2026-09-16). */
+  /**
+   * Search depth for every position. Defaults to 20 (user, 2026-09-16). With `movetime` also
+   * set, this is a target, not a guarantee: the engine stops at whichever limit — depth or
+   * time — it reaches first, so the depth actually reached on a given position can be lower.
+   * The reached depth is always read back from the engine's own report (`bestLine.depth` /
+   * `nextLine.depth` in `provenance`), never assumed to equal this requested value.
+   */
   depth?: number;
+  /**
+   * Per-position time cap in milliseconds, on top of `depth`. Without it, a single complex
+   * position can run for tens of seconds at depth 20 on the single-threaded wasm engine, and
+   * `packages/engine`'s own analyse() timeout (60s + grace when there is no movetime) can be
+   * hit on the hardest positions — this is the fix for "the engine failed: no answer to go
+   * depth 20 within 65000 ms" (2026-09-17). When set, the search limit becomes
+   * `{ depth, movetime }` and Stockfish stops at whichever limit comes first.
+   */
+  movetime?: number;
   /** Checked before each analyse() call; an already-aborted signal throws ReviewCancelled
    * instead of starting another search the caller no longer wants. */
   signal?: AbortSignal;
 }
 
+/** Progress in POSITIONS searched, not moves: a game of N moves searches N positions plus the
+ * final one when it still has a legal move, so `toSearch` is N or N + 1. Counting positions
+ * lets a caller's time estimate cover the last search too. */
 export interface ReviewProgress {
-  ply: number;
-  total: number;
+  searched: number;
+  toSearch: number;
 }
 
 /**
@@ -80,7 +98,7 @@ export async function reviewGame(
   onProgress?: (progress: ReviewProgress) => void,
 ): Promise<GameReview> {
   const depth = options.depth ?? 20;
-  const limit: SearchLimit = { depth };
+  const limit: SearchLimit = options.movetime !== undefined ? { depth, movetime: options.movetime } : { depth };
   const total = game.ucis.length;
 
   const positions: Position[] = [positionFromFen(game.startFen)];
@@ -93,11 +111,14 @@ export async function reviewGame(
     sans.push(played.san);
   }
 
+  const finalSearchable = total > 0 && hasLegalMoves(positions[total]!);
+  const toSearch = total + (finalSearchable ? 1 : 0);
+
   const analyses: Analysis[] = [];
   for (let i = 0; i < total; i++) {
     if (options.signal?.aborted) throw new ReviewCancelled('review cancelled');
     analyses.push(await engine.analyse(fens[i]!, [], limit, 1));
-    onProgress?.({ ply: i + 1, total });
+    onProgress?.({ searched: i + 1, toSearch });
   }
 
   // The position after the last move: search it too, unless it has no legal move to search
@@ -107,9 +128,10 @@ export async function reviewGame(
   let finalAnalysis: Analysis | undefined;
   if (total > 0) {
     const finalPos = positions[total]!;
-    if (hasLegalMoves(finalPos)) {
+    if (finalSearchable) {
       if (options.signal?.aborted) throw new ReviewCancelled('review cancelled');
       finalAnalysis = await engine.analyse(fens[total]!, [], limit, 1);
+      onProgress?.({ searched: toSearch, toSearch });
     } else {
       const howEnded = positionEnd(finalPos);
       if (!howEnded) throw new ReviewError('final position has no legal moves but positionEnd() did not classify it');
