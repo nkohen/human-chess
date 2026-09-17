@@ -42,6 +42,7 @@ first slice was smoke-tested by hand through the Chrome DevTools protocol (2026-
 
 - `packages/rules` — chess rules and notation: thin wrappers over chessops; the only importer of chessops.
 - `packages/board` — the board UI: chessground as a React component; the only importer of chessground.
+- `packages/ui` — the shared look: design tokens, native-control base styles, a handful of primitives, and the two page layouts every subproject renders inside.
 - `packages/engine` — typed UCI client whose results carry provenance; Web Worker and Node transports.
 - `packages/play` — opponents built on the engine: maximal resistance now, rating-calibrated later.
 - `packages/positions` — curated and mined position pools, each validated by tests.

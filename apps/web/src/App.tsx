@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
 import { completeLichessLogin, installLichessAuth } from '@human-chess/lichess';
+import { AppShell, Card, CardGrid, Page } from '@human-chess/ui';
 import { EndgamesIntro } from '@human-chess/endgames-intro';
 import { GuessTheEval } from '@human-chess/guess-the-eval';
 import { VisualizationTrainer } from '@human-chess/visualization-trainer';
@@ -84,11 +85,7 @@ export function App(): React.JSX.Element {
   }, []);
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <a href="#/">human-chess</a>
-        <span className="app-engine">{engineLine}</span>
-      </header>
+    <AppShell brand={<a href="#/">human-chess</a>} right={<span className="app-engine">{engineLine}</span>}>
       {hash === '#/endgames' ? (
         <EndgamesIntro engine={engine} />
       ) : hash === '#/guess-the-eval' ? (
@@ -112,17 +109,14 @@ export function App(): React.JSX.Element {
       ) : hash === '#/openings' ? (
         <OpeningsBuilder engine={engine} />
       ) : (
-        <main className="home">
-          <h1>human-chess</h1>
-          <ul>
+        <Page width="wide">
+          <CardGrid>
             {routes.map(r => (
-              <li key={r.hash}>
-                <a href={r.hash}>{r.title}</a> — {r.blurb}
-              </li>
+              <Card key={r.hash} title={r.title} blurb={r.blurb} href={r.hash} />
             ))}
-          </ul>
-        </main>
+          </CardGrid>
+        </Page>
       )}
-    </div>
+    </AppShell>
   );
 }

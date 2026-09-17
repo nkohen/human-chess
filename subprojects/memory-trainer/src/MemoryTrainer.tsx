@@ -44,7 +44,7 @@ const ordinalMove = (
 };
 
 /**
- * The viewport height available below the app's header (`.app-header`, rendered by apps/web's
+ * The viewport height available below the app's header (`.hc-app-shell__header`, rendered by apps/web's
  * App.tsx — outside this subproject, so its height is read from the DOM rather than assumed).
  * Recomputed on window resize and whenever the header itself resizes (login state changing,
  * engine status text wrapping, ...). Undefined until the first measurement lands; callers fall
@@ -53,7 +53,7 @@ const ordinalMove = (
 function useAvailableHeight(): number | undefined {
   const [height, setHeight] = useState<number | undefined>(undefined);
   useEffect(() => {
-    const header = document.querySelector<HTMLElement>('.app-header');
+    const header = document.querySelector<HTMLElement>('.hc-app-shell__header');
     const compute = (): void => setHeight(window.innerHeight - (header?.getBoundingClientRect().height ?? 0));
     compute();
     window.addEventListener('resize', compute);

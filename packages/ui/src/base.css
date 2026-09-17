@@ -1,0 +1,443 @@
+/* Base styles for the shared look (docs/design/2026-09-17-ui.md). Two things live here because
+ * the package keeps only two stylesheets total: (1) native-element defaults, so a screen that
+ * hasn't adopted a primitive yet still looks right, and (2) the styling for every primitive in
+ * components.tsx and every layout in layouts.tsx, since there is nowhere else for it to live.
+ * Everything below reads its colours, spacing and type from tokens.css; nothing here hardcodes
+ * a value tokens.css already names. */
+
+/* ---------- document ---------- */
+
+body {
+  margin: 0;
+  background: var(--hc-bg);
+  color: var(--hc-text);
+  font-family: var(--hc-font);
+  font-size: var(--hc-text-base);
+  line-height: var(--hc-line-height);
+}
+
+a {
+  color: var(--hc-accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--hc-focus);
+  outline-offset: 2px;
+}
+
+pre,
+code {
+  font-family: var(--hc-mono);
+}
+
+pre {
+  font-size: var(--hc-text-sm);
+  background: var(--hc-surface);
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+  padding: var(--hc-space-3);
+  overflow: auto;
+}
+
+/* ---------- native controls ----------
+ * Plain `button`/`select`/`input`/`textarea` get the secondary look for free. `.hc-primary` on
+ * any of them (native or via the Button component) is the primary look; `.hc-quiet` is
+ * borderless. This is what lets a screen look right before it adopts Button/Field. */
+
+button,
+select,
+input,
+textarea {
+  font: inherit;
+  font-size: var(--hc-text-base);
+  color: var(--hc-text);
+  background: var(--hc-surface-2);
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+  padding: var(--hc-space-2) var(--hc-space-3);
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+select:hover:not(:disabled) {
+  background: var(--hc-border);
+}
+
+button:active:not(:disabled) {
+  background: var(--hc-border);
+  transform: translateY(1px);
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+textarea:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.hc-primary {
+  background: var(--hc-accent);
+  border-color: var(--hc-accent);
+  color: var(--hc-on-accent);
+}
+
+button.hc-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+button.hc-quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--hc-text-muted);
+}
+
+button.hc-quiet:hover:not(:disabled) {
+  background: var(--hc-surface-2);
+  color: var(--hc-text);
+}
+
+/* ---------- Button (components.tsx) ---------- */
+
+.hc-button {
+  font-size: var(--hc-text-base);
+}
+
+.hc-button--sm {
+  font-size: var(--hc-text-sm);
+  padding: var(--hc-space-1) var(--hc-space-2);
+}
+
+/* ---------- Field ---------- */
+
+.hc-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-1);
+  margin-bottom: var(--hc-space-3);
+}
+
+.hc-field__label {
+  font-size: var(--hc-text-sm);
+  color: var(--hc-text-muted);
+}
+
+.hc-field__hint {
+  font-size: var(--hc-text-sm);
+  color: var(--hc-text-muted);
+}
+
+/* ---------- SegmentedControl ---------- */
+
+.hc-segmented {
+  display: inline-flex;
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+  overflow: hidden;
+}
+
+.hc-segmented__option {
+  font: inherit;
+  font-size: var(--hc-text-base);
+  color: var(--hc-text);
+  background: var(--hc-surface-2);
+  border: none;
+  border-right: 1px solid var(--hc-border);
+  padding: var(--hc-space-2) var(--hc-space-3);
+  cursor: pointer;
+}
+
+.hc-segmented__option:last-child {
+  border-right: none;
+}
+
+/* The group clips overflow for its rounded corners, so the ring is drawn inside the segment. */
+.hc-segmented__option:focus-visible {
+  outline-offset: -2px;
+}
+
+.hc-segmented__option:hover:not(:disabled):not(.hc-segmented__option--selected) {
+  background: var(--hc-border);
+}
+
+.hc-segmented__option--selected {
+  background: var(--hc-accent);
+  color: var(--hc-on-accent);
+}
+
+/* ---------- Status ---------- */
+
+.hc-status {
+  display: flex;
+  align-items: center;
+  gap: var(--hc-space-2);
+  font-size: var(--hc-text-sm);
+}
+
+.hc-status__icon {
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.hc-status--info {
+  color: var(--hc-text-muted);
+}
+
+.hc-status--success {
+  color: var(--hc-success);
+}
+
+.hc-status--error {
+  color: var(--hc-danger);
+}
+
+.hc-status--busy {
+  color: var(--hc-text-muted);
+}
+
+.hc-status--busy .hc-status__icon {
+  animation: hc-spin 0.9s linear infinite;
+}
+
+@keyframes hc-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Panel ---------- */
+
+.hc-panel {
+  background: var(--hc-surface);
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+  padding: var(--hc-space-4);
+}
+
+.hc-panel__title {
+  margin: 0 0 var(--hc-space-2);
+  font-size: var(--hc-text-lg);
+}
+
+/* ---------- Toolbar ---------- */
+
+.hc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--hc-space-2);
+}
+
+/* ---------- Card / CardGrid ---------- */
+
+.hc-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--hc-space-4);
+}
+
+.hc-card {
+  display: block;
+  background: var(--hc-surface);
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+  padding: var(--hc-space-4);
+  text-decoration: none;
+  color: inherit;
+}
+
+.hc-card:hover {
+  border-color: var(--hc-accent);
+}
+
+.hc-card__title {
+  margin: 0 0 var(--hc-space-1);
+  font-size: var(--hc-text-lg);
+  color: var(--hc-accent);
+}
+
+.hc-card__blurb {
+  margin: 0;
+  font-size: var(--hc-text-sm);
+  color: var(--hc-text-muted);
+}
+
+/* ---------- AppShell (layouts.tsx) ---------- */
+
+.hc-app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.hc-app-shell__header {
+  flex: 0 0 auto;
+  height: var(--hc-header);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hc-space-4);
+  padding: 0 var(--hc-space-4);
+  border-bottom: 1px solid var(--hc-border);
+}
+
+.hc-app-shell__brand {
+  font-size: var(--hc-text-lg);
+}
+
+.hc-app-shell__brand a {
+  font-weight: bold;
+  text-decoration: none;
+  color: var(--hc-text);
+}
+
+.hc-app-shell__right {
+  font-size: var(--hc-text-sm);
+  color: var(--hc-text-muted);
+}
+
+.hc-app-shell__main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ---------- Page ---------- */
+
+.hc-page {
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: var(--hc-space-5) var(--hc-space-4);
+}
+
+.hc-page--narrow {
+  max-width: 28rem;
+}
+
+.hc-page--medium {
+  max-width: 36rem;
+}
+
+.hc-page--wide {
+  max-width: 60rem;
+}
+
+.hc-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--hc-space-4);
+  margin-bottom: var(--hc-space-4);
+}
+
+.hc-page__title {
+  margin: 0;
+  font-size: var(--hc-text-xl);
+}
+
+.hc-page__intro {
+  margin: var(--hc-space-1) 0 0;
+  color: var(--hc-text-muted);
+}
+
+.hc-page__actions {
+  flex: 0 0 auto;
+}
+
+/* ---------- Workbench ---------- */
+
+.hc-workbench {
+  box-sizing: border-box;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--hc-aside);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'board title'
+    'board status'
+    'board primary'
+    'board extra'
+    'board children'
+    'board footer';
+  gap: 0 var(--hc-space-4);
+  padding: var(--hc-space-4);
+}
+
+.hc-workbench__board {
+  grid-area: board;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hc-workbench__title {
+  grid-area: title;
+  margin: 0;
+  font-size: var(--hc-text-lg);
+}
+
+.hc-workbench__status {
+  grid-area: status;
+  margin-top: var(--hc-space-2);
+}
+
+.hc-workbench__primary {
+  grid-area: primary;
+  margin-top: var(--hc-space-3);
+}
+
+.hc-workbench__extra {
+  grid-area: extra;
+  margin-top: var(--hc-space-3);
+  min-height: 0;
+}
+
+.hc-workbench__children {
+  grid-area: children;
+  margin-top: var(--hc-space-3);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.hc-workbench__footer {
+  grid-area: footer;
+  margin-top: var(--hc-space-3);
+}
+
+@media (max-width: 60rem) {
+  /* Stacked: the board is a square of the full width (capped so the primary block stays in
+   * reach), and the page scrolls normally — the never-scrolls rule is for the two-column
+   * layout, where the side column scrolls internally instead. */
+  .hc-workbench {
+    height: auto;
+    min-height: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto auto auto;
+    grid-template-areas:
+      'board'
+      'primary'
+      'title'
+      'status'
+      'extra'
+      'children'
+      'footer';
+  }
+
+  .hc-workbench__board {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    max-height: 70vh;
+  }
+
+  .hc-workbench__children {
+    overflow-y: visible;
+  }
+}

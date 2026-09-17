@@ -1,0 +1,64 @@
+/* Design tokens for the shared look (docs/design/2026-09-17-ui.md): CSS custom properties on
+ * :root, dark by default (lichess's own default), light values under
+ * prefers-color-scheme: light. Nothing in this file draws anything on screen — base.css and
+ * the components/layouts in this package are the only readers of these properties, and a
+ * subproject reads them too rather than hardcoding a colour or a spacing value. */
+:root {
+  /* Lets the browser pick matching native chrome (scrollbars, form-control chrome not covered
+   * by base.css) for whichever of the two palettes below is active; apps/web's old root rule
+   * set this unconditionally to 'light dark' and this package is now the one place that does. */
+  color-scheme: light dark;
+
+  /* colour */
+  --hc-bg: #14181b;
+  --hc-surface: #1e2226;
+  --hc-surface-2: #272b30;
+  --hc-border: #3a3f44;
+  --hc-text: #e6e6e6;
+  --hc-text-muted: #9aa0a6;
+  --hc-accent: #4a90d9;
+  --hc-on-accent: #f5f9ff;
+  --hc-success: #4caf6e;
+  --hc-warning: #d9a441;
+  --hc-danger: #d95f4a;
+  --hc-focus: #6fb1f0;
+
+  /* space */
+  --hc-space-1: 4px;
+  --hc-space-2: 8px;
+  --hc-space-3: 12px;
+  --hc-space-4: 16px;
+  --hc-space-5: 24px;
+  --hc-space-6: 32px;
+
+  /* type */
+  --hc-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --hc-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --hc-text-sm: 13px;
+  --hc-text-base: 15px;
+  --hc-text-lg: 18px;
+  --hc-text-xl: 22px;
+  --hc-line-height: 1.4;
+
+  /* shape */
+  --hc-radius: 6px;
+  --hc-aside: 24rem;
+  --hc-header: 3rem;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --hc-bg: #f7f7f8;
+    --hc-surface: #ffffff;
+    --hc-surface-2: #eceef0;
+    --hc-border: #d4d7db;
+    --hc-text: #1c1f22;
+    --hc-text-muted: #5c636a;
+    --hc-accent: #3378bd;
+    --hc-on-accent: #ffffff;
+    --hc-success: #2f8a52;
+    --hc-warning: #a3781e;
+    --hc-danger: #b8412c;
+    --hc-focus: #3378bd;
+  }
+}
