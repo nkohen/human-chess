@@ -30,6 +30,7 @@ Full survey with sources: docs/research/2026-09-15-reuse-survey.md.
 | pgn-viewer (`@lichess-org/pgn-viewer`) | GPL-3.0 | app becomes GPL-3.0 | candidate |
 | stockfish-web (npm `lila-stockfish-web` 0.0.11) | GPL-3.0 per LICENSE file; package.json says AGPL-3.0-or-later (inconsistent) | bundled wasm | candidate, not chosen: needs separate NNUE downloads |
 | stockfish.js (npm `stockfish` 19.0.0, nmrugg / Chess.com; GPL-3.0 per Copying.txt in the package) | GPL-3.0 | the unmodified loader + wasm are copied into apps/web/public/engine and shipped with the site: distributing the site must offer source (upstream repo + version) | **adopted 2026-09-16** in packages/engine (Worker transport) and apps/web |
+| playwright (npm `playwright` 1.62.0, Apache-2.0; dev-only: drives headless Chromium for `scripts/screenshots.mjs`) | Apache-2.0 | none beyond notice; never shipped to users | **adopted 2026-09-17** at the workspace root (devDependency) |
 | scalachess | MIT | attribution | rejected 2026-09-15: stack is TypeScript, not JVM |
 | shakmaty (Rust crate, GPL-3.0+ per COPYING and Cargo.toml) and shakmaty-syzygy (GPL-3.0+ per Cargo.toml) | GPL-3.0+ | a Rust/wasm module linking it is GPL | candidate, only for a Rust compute module |
 | python-chess (pip `chess`) | GPL-3.0+ | any Python program importing it is GPL | candidate, data sidecar |
