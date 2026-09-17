@@ -36,7 +36,8 @@ import) and `opening-game` captures `opening-game-touchmove-*` after a move. Eve
 state, not just the first paint, goes through the same checks and owns the console errors
 raised since the previous capture.
 
-The script spawns the app's own Vite dev server on a dedicated port (5199, `--strictPort`) and
+The script spawns the app's own Vite dev server on a dedicated port (5199, or `SCREENSHOTS_PORT`
+when set, so parallel runs from several worktrees do not collide; `--strictPort`) and
 only proceeds once *that child* has announced the port and answered; if the port is already
 taken the child exits and the run fails right there instead of measuring a stranger's server.
 The server is killed in a `finally` and on SIGINT/SIGTERM, so it never leaves an orphaned

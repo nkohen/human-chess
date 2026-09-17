@@ -32,7 +32,8 @@ import path from 'node:path';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'screenshots');
-const PORT = 5199;
+// Dedicated port, overridable so parallel runs (one per worktree) do not collide on it.
+const PORT = Number(process.env.SCREENSHOTS_PORT ?? 5199);
 const BASE = `http://localhost:${PORT}`;
 const WEB_DIR = path.join(ROOT, 'apps', 'web');
 const VITE_BIN = path.join(WEB_DIR, 'node_modules', '.bin', 'vite');
