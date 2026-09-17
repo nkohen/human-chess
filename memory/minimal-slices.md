@@ -106,3 +106,11 @@ mining-progress reporting; the 'equal' vote is gone (a real edge is now guarante
 the 40-ply cap is gone, replaced by a player-driven "Stop and evaluate" button. A stricter,
 positional (not just material) notion of "imbalanced" is on hold until the user supplies
 pedagogical positions. Details in memory/subprojects/chessitout-variant.md.
+
+Feedback pass 6 (2026-09-17, game reviewer and memory trainer): a chess.com game review
+failed with "no answer to go depth 20 within 65000 ms" on the single-threaded wasm engine and
+was slow. Fix (63a6e0f): every position is searched with a per-position time cap alongside the
+depth (default 5 s, settable with the depth on the waiting/analysing/failed screens); provenance
+shows the depth really reached (A1); progress counts positions and shows a time-left estimate.
+Memory trainer: every screen fits the viewport (488ecf3); a game-identity line and a "That's the
+whole game" ending (ec9734d) — details in memory/subprojects/memory-trainer.md.

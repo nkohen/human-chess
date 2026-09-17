@@ -63,6 +63,21 @@ happening here" fact extraction. Decompose that into the shared layer before bot
   checked against attackers/defenders on that square. The LLM narrates; it does not judge on
   its own.
 
+## Feedback pass (2026-09-17)
+- Every screen fits the viewport height (488ecf3): board sized from the measured slot, move list
+  and divergence write-ups scroll in their own boxes.
+- The user reported a perfectly entered game judged wrong at move one. No fetch bug was found
+  (newest game by the sites' own ordering; colour detection case-insensitive; comparison by
+  chessops position key), so the fix was visibility (ec9734d): a game-identity line above the
+  board (site, players, your colour, date, "view game" link) from ImportedGame's new url/playedAt
+  fields (57edd60), result withheld until the attempt ends. Also fixed: the live move list paired
+  moves by array parity, mislabelling a Black-to-move PGN; it now uses rules' annotateLine.
+- "That's the whole game" ends an attempt with a length claim; classifyCompleteAttempt in
+  compare.ts judges it from compareReconstruction's segments only (perfect / matched but shorter /
+  longer than the game / diverged). Review text counts plies and says so.
+- Still unknown from the user: which site they imported from and whether they played Black when
+  the wrong-game judgement happened; if it recurs, the identity line now says what was fetched.
+
 ## Status
 Interview closed 2026-09-16; the user may add more later.
 
