@@ -11,8 +11,10 @@
     "./react": "./src/react.tsx"
   },
   "dependencies": {
+    "@human-chess/chesscom": "workspace:*",
     "@human-chess/lichess": "workspace:*",
     "@human-chess/rules": "workspace:*",
+    "@human-chess/site-client": "workspace:*",
     "react": "^19.0.0"
   }
 }

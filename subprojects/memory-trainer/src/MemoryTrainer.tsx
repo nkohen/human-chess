@@ -9,7 +9,7 @@ import {
   reconstructionDests, sideToMove, startReconstruction, type Reconstruction,
 } from './reconstruction';
 
-const STORAGE_KEY = 'human-chess.memory-trainer.lichess-username';
+const STORAGE_KEY = 'human-chess.memory-trainer.import-username';
 
 type Screen =
   | { kind: 'import' }

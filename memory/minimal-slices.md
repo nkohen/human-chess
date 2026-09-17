@@ -65,6 +65,31 @@ refresh). Verified in a headless browser with lichess's endpoints faked at the n
 the user confirmed the real login works (2026-09-16). Bugs found in that smoke and fixed: the restored
 hash after the redirect fired no hashchange (the app stayed on home), and a deduped GET whose
 leader was aborted pre-send under StrictMode's double mount rejected its joiner too.
+chess.com import (2026-09-17): the throttling/cooldown/cache mechanics in `packages/lichess`'s
+fetch.ts/cache.ts were extracted into a generic factory, `packages/site-client`
+(`createSiteClient({name, storagePrefix, authHosts?})`), with `packages/lichess` refactored to
+be its first instance (same public API, same storage keys, all existing tests unchanged and
+green) and `packages/chesscom` added as its second, for chess.com's Published-Data API. Facts
+verified 2026-09-17 from chess.com's docs and one live request: `api.chess.com/pub/...` is
+read-only, needs no login or key, and answers browser requests directly (CORS-open,
+`access-control-allow-origin: *`); chess.com asks API clients to identify themselves via
+User-Agent, which a browser cannot set, so a static app simply cannot follow that part of the
+policy — noted in code rather than worked around. Policy is one request at a time, and a 429
+with no documented cooldown length, so the client honours Retry-After when present, else 60 s,
+capped at 10 minutes (matching lichess's own policy). `chesscomArchives` (60 s cache, chess.com's
+own `max-age`, so a new month shows up promptly) lists a player's monthly archive URLs
+oldest-first; `chesscomMonthlyGames` (60 s for the newest archive, which the caller flags with
+`newest: true`; 7 days for older months, which never change; no clock-based month guess, since
+chess.com's bucketing timezone is unverified — reviewer, 2026-09-17) returns that month's
+games, shape-checked on the three fields used (pgn, rules, end_time). `fetchLatestChesscomGame`
+in `packages/import` walks archives newest-first, keeps `rules === 'chess'` games, picks the
+greatest `end_time` (first in array order on a tie), rejects a moveless game, and gives up after
+12 archive months. Smoke-tested 2026-09-17 in headless Chrome with api.chess.com faked at the
+network layer (scratchpad chesscom-smoke.mjs); the real API was hit exactly once, to confirm
+CORS. `ImportScreen` (`packages/import/src/react.tsx`) gained a lichess/chess.com site picker,
+remembered per `storageKey` alongside the username; the two subprojects' storage-key constants
+were renamed from `...lichess-username` to `...import-username` (losing the remembered name
+once, accepted).
 Feedback pass 4 (2026-09-16, openings builder, game reviewer, Chessitout, all boards): explorer
 bars show percentages on hover; "Tree at this position" first in the side column; moves can be
 removed from the tree (confirm when continuations go with them); review depth 20 by default;

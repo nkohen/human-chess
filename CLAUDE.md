@@ -46,8 +46,10 @@ first slice was smoke-tested by hand through the Chrome DevTools protocol (2026-
 - `packages/play` — opponents built on the engine: maximal resistance now, rating-calibrated later.
 - `packages/positions` — curated and mined position pools, each validated by tests.
 - `packages/facts` — plain-language board-state facts and questions, each answered by a chessops query; no evaluation.
+- `packages/site-client` — generic one-at-a-time HTTP client factory: a serial queue, same-URL dedupe, a persisted 429 cooldown, and a localStorage TTL cache; lichess and chess.com are instances.
 - `packages/lichess` — the one client for lichess.org HTTP APIs: one request in flight at a time, 429 cooldown honoured app-wide, response cache, and OAuth PKCE login whose token it attaches; every lichess call goes through it.
-- `packages/import` — games from lichess (public export API) or pasted PGN into one ImportedGame shape; parsing via rules.
+- `packages/chesscom` — the one client for chess.com's Published-Data API (api.chess.com): same one-at-a-time/429-cooldown/cache policy as lichess, no login needed.
+- `packages/import` — games from lichess (public export API), chess.com (Published-Data API), or pasted PGN into one ImportedGame shape; parsing via rules.
 - `packages/review` — per-move engine review of a game: evals, loss, classification, best move, all with provenance.
 - `subprojects/<name>` — one self-standing tool each; consumes packages, never duplicates them.
 - `apps/web` — the Vite app hosting every subproject behind a hash route.

@@ -1,13 +1,39 @@
-// React glue for importing a game (lichess username or pasted PGN), shared by every subproject
-// that starts from an imported game. Kept out of the package's main entry ("./react" subpath)
-// so non-React consumers of fetchLatestLichessGame/importPgn never pull in React.
+// React glue for importing a game (lichess username, chess.com username, or pasted PGN),
+// shared by every subproject that starts from an imported game. Kept out of the package's main
+// entry ("./react" subpath) so non-React consumers of fetchLatestLichessGame/importPgn never
+// pull in React.
 import { useEffect, useRef, useState } from 'react';
+import { fetchLatestChesscomGame } from './chesscom';
 import { fetchLatestLichessGame } from './lichess';
 import { toImportedGame } from './parse';
 import type { ImportedGame } from './types';
 
-/** Reads the last lichess username tried under `storageKey`, per browser. Guarded because
- * storage can be missing (SSR, private browsing) or throw. */
+/** The two sites ImportScreen can fetch a "latest game" from; 'pgn' import is always available
+ * alongside whichever of these is selected. */
+export type ImportSite = 'lichess' | 'chess.com';
+
+const SITE_STORAGE_SUFFIX = '.site';
+
+/** Reads the last site picked under `storageKey`, per browser. Defaults to lichess (the
+ * original, and still first-listed, option) when nothing is stored or storage is unavailable. */
+function loadLastSite(storageKey: string): ImportSite {
+  try {
+    return globalThis.localStorage?.getItem(`${storageKey}${SITE_STORAGE_SUFFIX}`) === 'chess.com' ? 'chess.com' : 'lichess';
+  } catch {
+    return 'lichess';
+  }
+}
+
+function saveLastSite(storageKey: string, site: ImportSite): void {
+  try {
+    globalThis.localStorage?.setItem(`${storageKey}${SITE_STORAGE_SUFFIX}`, site);
+  } catch {
+    // storage unavailable: the site just won't be remembered next time
+  }
+}
+
+/** Reads the last username tried under `storageKey`, per browser. Guarded because storage can
+ * be missing (SSR, private browsing) or throw. */
 function loadLastUsername(storageKey: string): string {
   try {
     return globalThis.localStorage?.getItem(storageKey) ?? '';
@@ -41,23 +67,38 @@ export function useLastUsername(storageKey: string): {
 
 export interface ImportScreenProps {
   onImported: (game: ImportedGame) => void;
-  /** Namespaces the remembered lichess username so subprojects don't clobber each other's. */
+  /** Namespaces the remembered username (and site choice) so subprojects don't clobber each
+   * other's. */
   storageKey: string;
   /** Defaults to a generic heading; pass the subproject's own name for its screen. */
   title?: string;
 }
 
+const SITE_LABELS: Record<ImportSite, string> = { lichess: 'lichess', 'chess.com': 'chess.com' };
+const SITE_DISPLAY_NAMES: Record<ImportSite, string> = { lichess: 'Lichess', 'chess.com': 'Chess.com' };
+const FETCHERS: Record<ImportSite, (username: string) => Promise<ImportedGame>> = {
+  lichess: fetchLatestLichessGame,
+  'chess.com': fetchLatestChesscomGame,
+};
+
 /**
- * Import a game by lichess username (fetches the player's latest game) or by pasting a PGN.
- * Guards against a stale fetch clobbering a screen the user already moved past: `requestIdRef`
- * makes an old resolve stale the moment a newer fetch starts, `settledRef` makes it stale the
- * moment any import (fetch or paste) already succeeded, or the component unmounted.
+ * Import a game by username from lichess or chess.com (fetches the player's latest game) or by
+ * pasting a PGN. Guards against a stale fetch clobbering a screen the user already moved past:
+ * `requestIdRef` makes an old resolve stale the moment a newer fetch starts, `settledRef` makes
+ * it stale the moment any import (fetch or paste) already succeeded, or the component unmounted.
  */
 export function ImportScreen({ onImported, storageKey, title = 'Import a game' }: ImportScreenProps): React.JSX.Element {
   const { username, setUsername, save } = useLastUsername(storageKey);
+  const [site, setSite] = useState<ImportSite>(() => loadLastSite(storageKey));
   const [pgnText, setPgnText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+
+  const chooseSite = (next: ImportSite): void => {
+    setSite(next);
+    saveLastSite(storageKey, next);
+    setError(undefined);
+  };
 
   const requestIdRef = useRef(0);
   const settledRef = useRef(false);
@@ -76,7 +117,7 @@ export function ImportScreen({ onImported, storageKey, title = 'Import a game' }
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(undefined);
-    fetchLatestLichessGame(username.trim())
+    FETCHERS[site](username.trim())
       .then(game => {
         if (settledRef.current || requestIdRef.current !== requestId) return;
         settledRef.current = true;
@@ -107,15 +148,31 @@ export function ImportScreen({ onImported, storageKey, title = 'Import a game' }
     <div className="hc-import">
       <h2>{title}</h2>
       <section>
-        <label htmlFor="hc-import-username">Lichess username</label>
+        <div className="hc-import-site" role="radiogroup" aria-label="Site">
+          {(Object.keys(SITE_LABELS) as ImportSite[]).map(value => (
+            <label key={value} className="hc-import-site-option">
+              <input
+                type="radio"
+                name={`${storageKey}-site`}
+                value={value}
+                checked={site === value}
+                onChange={() => chooseSite(value)}
+                disabled={loading}
+              />
+              {SITE_LABELS[value]}
+            </label>
+          ))}
+        </div>
+        <label htmlFor="hc-import-username">{SITE_DISPLAY_NAMES[site]} username</label>
         <input
           id="hc-import-username"
           value={username}
           onChange={e => setUsername(e.target.value)}
+          placeholder={`${SITE_DISPLAY_NAMES[site]} username`}
           disabled={loading}
         />
         <button onClick={fetchGame} disabled={loading || !username.trim()}>
-          {loading ? 'Fetching…' : 'Fetch my latest game'}
+          {loading ? 'Fetching…' : `Fetch my latest game from ${SITE_LABELS[site]}`}
         </button>
       </section>
       <section>

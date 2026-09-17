@@ -1,6 +1,8 @@
 .gr { max-width: 32rem; padding: 1rem; margin: 0 auto; }
 .hc-import section { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
 .hc-import textarea { font-family: monospace; }
+.hc-import-site { display: flex; gap: 1rem; }
+.hc-import-site-option { display: inline-flex; align-items: center; gap: 0.3rem; }
 .hc-import-error, .gr-status[role='alert'] { color: #b00020; }
 .gr-status { min-height: 1.5em; }
 .gr-players { opacity: 0.75; margin-top: -0.5rem; }

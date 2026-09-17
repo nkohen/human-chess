@@ -10,7 +10,7 @@ that is the next design step. Each item lists the subprojects that need it.
 | Engine service: Stockfish over UCI on the server, stockfish-web in the browser, MultiPV, PV lines, WDL, recorded depth/time on every eval | endgames intro, Chessitout, heuristic finder, openings builder, N-move game, group chess, guess the eval, reviewer, bot test, puzzles, visualization | A1: every shown number traces to a real call |
 | Rating-calibrated engine play (UCI_Elo / Skill Level / Maia) with played-out calibration | endgames intro (full strength, max resistance), Chessitout, N-move game, group chess (slightly above players), bot test | V2 played-out verification |
 | Tablebase access (lila-tablebase endpoint / Fathom) for max-resistance defence and won/drawn truth | endgames intro, position mining | AGPL service run unmodified, or MIT Fathom |
-| Game import, no copy-paste, most recent game first: lichess API, chess.com public API (unsurveyed), PGN fallback; openingtree's importer is the reuse candidate | memory trainer, openings builder, reviewer, bot test | GPL-3.0 openingtree, user-directed |
+| Game import, no copy-paste, most recent game first: lichess API, chess.com Published-Data API (both built 2026-09-17), PGN fallback; openingtree's importer is the reuse candidate | memory trainer, openings builder, reviewer, bot test | GPL-3.0 openingtree, user-directed |
 | Account layer: primary linked account, rating, user-configurable level, provenance tags on every stored game | reviewer, heuristic finder, bot test, puzzles, matchmaking | user, 2026-09-16 |
 | Position store and mining: the user's positions folder, pedagogical pool, criteria to find/generate more (WDL, material class, eval stability) | endgames intro (procedural ladder), Chessitout, guess the eval, visualization | user's folder; A1 |
 | "What was happening" fact extraction: board-state facts (attackers, defenders, hanging, structure) + engine comparison, LLM narrates only | memory trainer, Chessitout discussion, reviewer, puzzles, visualization dialogue | V3; chess-coach pattern (Apache-2.0) |
@@ -31,7 +31,8 @@ numbers; focus on concepts applied in practice rather than comparison to expert 
 ## Directory decomposition (2026-09-16, first slice built)
 
 One line per top-level directory, as CLAUDE.md requires. Built: rules, board, engine, play,
-positions, facts, import, seven subprojects, apps/web. Reserved (named, not created): the rest.
+positions, facts, import, lichess, site-client, chesscom, eleven subprojects, apps/web.
+Reserved (named, not created): the rest.
 
 | Directory | Responsibility | Interview pieces it will absorb |
 |---|---|---|
@@ -41,8 +42,10 @@ positions, facts, import, seven subprojects, apps/web. Reserved (named, not crea
 | `packages/play` | opponents: maximal resistance now; UCI_Elo / Skill Level / Maia calibration later | rating-calibrated engine play |
 | `packages/positions` | curated + mined position pools with validation tests | position store and mining |
 | `packages/tablebase` (reserved) | syzygy truth for won/drawn and max-resistance defence | tablebase access |
-| `packages/lichess` | the one client for lichess.org HTTP APIs (added 2026-09-16 after the user hit lichess limits and asked for OAuth): single in-flight request, app-wide 429 cooldown, localStorage response cache, OAuth PKCE login + token attach; `import`, `puzzles` and the openings builder's explorer calls go through it | lichess access |
-| `packages/import` | lichess fetch + pasted-PGN import into one ImportedGame shape; PGN parsing delegated to `packages/rules` (`parsePgnGame`); chess.com and provenance tags still to add | game import |
+| `packages/site-client` | generic one-at-a-time HTTP client factory (extracted 2026-09-17 from `packages/lichess`'s fetch.ts/cache.ts): serial queue, same-URL dedupe, persisted 429 cooldown, localStorage TTL cache; `createSiteClient({name, storagePrefix, authHosts?})` builds one independent instance per site | lichess access, chess.com access |
+| `packages/lichess` | the one client for lichess.org HTTP APIs (added 2026-09-16 after the user hit lichess limits and asked for OAuth; its queue/cooldown/cache mechanics moved into `packages/site-client` 2026-09-17, same public API and storage keys): single in-flight request, app-wide 429 cooldown, localStorage response cache, OAuth PKCE login + token attach; `import`, `puzzles` and the openings builder's explorer calls go through it | lichess access |
+| `packages/chesscom` (built 2026-09-17) | the one client for chess.com's Published-Data API (api.chess.com): another `packages/site-client` instance, no login; `chesscomArchives`/`chesscomMonthlyGames` typed endpoint helpers with shape validation | chess.com access |
+| `packages/import` | lichess fetch, chess.com fetch (walks monthly archives newest-first, added 2026-09-17), or pasted-PGN import into one ImportedGame shape; PGN parsing delegated to `packages/rules` (`parsePgnGame`); provenance tags still to add | game import |
 | `packages/store` (reserved) | persistence: accounts, linked ratings, games, repertoires | account layer |
 | `packages/facts` (built 2026-09-16) | plain-language board-state facts and questions, each answered by a chessops query (check, piece on square, material by the 1/3/3/5/9 convention); engine comparison still to come | fact extraction, reasoning check |
 | `packages/concepts` (reserved) | concept vocabulary with board-state tests | concept library |

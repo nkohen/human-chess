@@ -2,8 +2,9 @@
 // @human-chess/rules (the only package that imports chessops); this shape is what the rest
 // of the app consumes regardless of where the game came from.
 export interface ImportedGame {
-  source: 'lichess' | 'pgn';
-  /** The lichess username used to fetch it, when the source is 'lichess'. */
+  source: 'lichess' | 'chess.com' | 'pgn';
+  /** The lichess or chess.com username used to fetch it, when the source is 'lichess' or
+   * 'chess.com'. */
   username: string | undefined;
   pgn: string;
   headers: Record<string, string>;

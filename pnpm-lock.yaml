@@ -100,6 +100,12 @@ importers:
         specifier: ^19.0.0
         version: 19.3.0
 
+  packages/chesscom:
+    dependencies:
+      '@human-chess/site-client':
+        specifier: workspace:*
+        version: link:../site-client
+
   packages/engine:
     dependencies:
       stockfish:
@@ -114,18 +120,27 @@ importers:
 
   packages/import:
     dependencies:
+      '@human-chess/chesscom':
+        specifier: workspace:*
+        version: link:../chesscom
       '@human-chess/lichess':
         specifier: workspace:*
         version: link:../lichess
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../rules
+      '@human-chess/site-client':
+        specifier: workspace:*
+        version: link:../site-client
       react:
         specifier: ^19.0.0
         version: 19.3.0
 
   packages/lichess:
     dependencies:
+      '@human-chess/site-client':
+        specifier: workspace:*
+        version: link:../site-client
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -165,6 +180,8 @@ importers:
       chessops:
         specifier: ^0.15.1
         version: 0.15.1
+
+  packages/site-client: {}
 
   subprojects/bot-rating-test:
     dependencies:
