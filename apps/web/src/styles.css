@@ -16,4 +16,9 @@ body { margin: 0; }
 .endgames-dialog { border: 1px solid #8886; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0; }
 .endgames-dialog button, .endgames-actions button { margin-right: 0.5rem; }
 .endgames-newpiece { font-weight: bold; }
+.endgames-curated-list { list-style: none; padding: 0; margin-top: 0.25rem; }
+.endgames-curated-list button { display: block; width: 100%; text-align: left; padding: 0.4rem 0.6rem; margin-bottom: 0.25rem; font-size: 0.9em; }
+.endgames-provenance { color: #666; font-size: 0.9em; margin: 0.25rem 0; }
+.endgames-transcribed-hint { color: #666; font-style: italic; }
+.endgames-starting-eval { color: #666; font-size: 0.9em; }
 @media (max-width: 40rem) { .endgames { grid-template-columns: 1fr; } }

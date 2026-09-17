@@ -1,7 +1,11 @@
-// Curated position pools. Today: the hard-coded start of the endgames-introduction ladder.
-// Later: pools mined from the user's pedagogical-positions folder and generated positions,
-// each with the criteria that admitted it. Every position here is validated by tests: it
-// parses, White is to move, the game is not over, and the engine sees a forced win.
+// Curated position pools. Today: the hard-coded start of the endgames-introduction ladder
+// below, plus curated.ts's positions from the user's own chess.com games (endgames and
+// middlegames, screenshots supplied 2026-09-17 — see curated.ts and curatedEval.ts). Later:
+// pools mined from the user's pedagogical-positions folder and generated positions, each with
+// the criteria that admitted it. Every position here is validated by tests: it parses, White is
+// to move, the game is not over, and the engine sees a forced win (the hard-coded ladder below);
+// curated.ts's own positions are real game positions and are validated separately in
+// curated.test.ts (legal FEN, unique ids/FENs, chicachoo123 on the recorded playAs side).
 import type { Role } from '@human-chess/rules';
 
 export * from './selfPlay';
@@ -62,3 +66,5 @@ export const endgameLadder: EndgameLesson[] = [
 ];
 export * from './imbalanced';
 export * from './recipes';
+export * from './curated';
+export * from './curatedEval';

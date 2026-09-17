@@ -13,3 +13,7 @@
 .ci-view { margin: 0.5rem 0; }
 .ci-mining-note { color: #666; font-size: 0.9em; margin: 0.25rem 0 0; }
 .ci-stop { margin: 0.5rem 0; }
+.ci-source { display: flex; gap: 1rem; align-items: center; border: none; padding: 0; margin: 0 0 0.5rem; }
+.ci-source legend { font-weight: bold; padding: 0; }
+.ci-source label { display: inline-flex; align-items: center; gap: 0.3rem; font-weight: normal; }
+.ci-provenance-line { color: #666; font-size: 0.9em; margin: 0.25rem 0; }

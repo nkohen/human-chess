@@ -87,3 +87,20 @@ should have some pros and cons where it takes some thought to decide which balan
 — is deferred until the user supplies pedagogical positions to derive criteria from; the current
 material-imbalance pre-filter in `imbalanced.ts` stays as a cheap stand-in until then. Do not
 attempt this without those positions.
+
+## Curated positions from the user's games (2026-09-17)
+A persisted source choice (guarded localStorage, `subprojects/chessitout/src/positionSource.ts`,
+default `'mined'`, today's mining behaviour unchanged) lets the user pick "From your games"
+instead: a random pick from `curatedMidgames` (`packages/positions/src/curated.ts`, 7 real
+middlegame positions from the user's chess.com account chicachoo123) that has not yet been
+shown this session, restarting the rotation once exhausted (`curatedPick.ts`'s
+`pickUnshownCuratedMidgame`). The picked position is evaluated once by the app's own engine
+requesting depth 18 (`evaluateCuratedMidgame` in `packages/positions/src/curatedEval.ts`, reusing
+`imbalanced.ts`'s `EVAL_DEPTH` and White-perspective conversion; no band filter — a curated
+position is used as-is), then flows through the existing vote/judge/play/result screens
+unchanged. The voting and result screens show one provenance line, "From your game vs
+<opponent> on chess.com (<date>)" with a "view game" link when the game has a `url`; they never
+show `siteEvalShown` (chess.com's own displayed eval at capture time) — the eval the user is
+judged against, and sees, is always the app's own engine call, reached depth recorded (A1).
+Curated evals are not banded, so a near-zero score is possible in principle and is judged as
+strictly as a mined one (no 'equal' vote); revisit if a level curated position is ever added.

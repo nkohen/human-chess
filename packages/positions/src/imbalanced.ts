@@ -16,7 +16,10 @@ export const ENGINE_PLIES = 18;
 // Mined positions land around ply 26 (RANDOM_PLIES + ENGINE_PLIES), deeper into the middlegame
 // than the app's original ply-18 default (user, 2026-09-17).
 const MINE_DEPTH = 8;
-const EVAL_DEPTH = 18;
+// Exported so curatedEval.ts's evaluateCuratedMidgame can reuse the exact same confirming depth
+// for the user's own curated positions, rather than duplicating the number (Chessitout's two
+// position sources must be judged on eval strength the same way).
+export const EVAL_DEPTH = 18;
 
 // The user's band (user, 2026-09-17): a real edge for one side, not a coin-flip position and not
 // a rout — 1 to 3.5 pawns (100 to 350 centipawns), White's perspective, read at the depth-18
@@ -43,7 +46,10 @@ export interface ImbalancedPositionEval {
 
 export interface ImbalancedPosition {
   fen: string;
-  source: 'engine-self-play-imbalanced';
+  /** 'engine-self-play-imbalanced': mined by self-play (this file). 'curated-user-game': one of
+   * the user's own chess.com games, evaluated fresh by curatedEval.ts's evaluateCuratedMidgame —
+   * no band filter, since the user chose the position themselves. */
+  source: 'engine-self-play-imbalanced' | 'curated-user-game';
   moves: string[];
   eval: ImbalancedPositionEval;
 }

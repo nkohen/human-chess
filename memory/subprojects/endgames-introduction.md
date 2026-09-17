@@ -108,4 +108,29 @@ Q vs R/B/N, drawing positions), the user's positions folder, the nudge to the op
 and to puzzles, help-request tracking. Verified by vitest (rules, engine, positions, game
 state) and one hand-driven Chrome DevTools smoke run (handshake, move, engine reply).
 
+## Curated positions from the user's games (2026-09-17)
+"From your games" is a second aside section below the lesson ladder, one row per
+`curatedEndgames` entry (`packages/positions/src/curated.ts`: 50 endgame positions —
+22 matched exactly to the user's own chess.com game records as chicachoo123 (one of them a
+screenshot first adjudicated by the coordinator and then matched to the archive), 28 transcribed
+from screenshots of the user's lichess.org games as nkohen). Selecting a row plays the real,
+unmirrored FEN out against the same lesson opponent, with the user as `entry.playAs`; no
+mirroring, so the engine simply moves first whenever the FEN's side to move is the other side
+(`useEngineGame`'s auto-move effect already handles this — see `useCuratedGame.ts`, deliberately
+simpler than `useLessonGame.ts`'s mirror logic). On game end the result is stated from rules
+(`describeEnd`) without claiming which side "should" win, then the engine's own evaluation of
+the *starting* position is shown with provenance (engine name, reached depth), from one real
+`analyse` call requesting depth 18 made once per selection — a failure is reported, never
+silently dropped. The reached depth can be lower than 18: the engine queue is serial and a
+restart or entry switch during the search stops it, so the printed depth is the real one (A1). Each row shows the opponent (or "unknown opponent" when the screenshot had no visible
+names), the site (chess.com / lichess), the date, and, for the 28 screenshot-transcribed
+entries, a "(transcribed from a screenshot)" hint (their `note` field, shown as a title
+tooltip, records how the FEN was verified — two independent reads that agreed, or the
+coordinator's own adjudication from the image). `CuratedPosition.source` is
+`'game-record'` (FEN from a fetched game's move list; has a `url`) or
+`'screenshot-transcription'`. `siteEvalShown`, chess.com's own displayed eval at capture time,
+is provenance metadata only and is never shown as an evaluation (A1) — every number the user
+sees here comes from the app's own engine. progress.ts is untouched for curated positions (no
+"I'm Confident!" prompt applies to a one-off real game).
+
 ## Open questions (not yet asked)

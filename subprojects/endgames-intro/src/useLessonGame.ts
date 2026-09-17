@@ -8,14 +8,16 @@ import { fenFor, randomColor } from './lessonAdapt';
 
 // Module-level so the default stays a stable reference across renders (see @human-chess/play's
 // useEngineGame for why: a fresh object per render would re-run its engine-move effect).
-const DEFAULT_OPPONENT = maximalResistance();
+// Exported so useCuratedGame.ts's curated-position games play against the exact same opponent
+// as the hard-coded lessons, rather than constructing a second maximalResistance() instance.
+export const LESSON_OPPONENT = maximalResistance();
 
 /**
  * Drives one attempt at a lesson on top of the generic `useEngineGame`: picks the learner's
  * colour, mirrors the lesson FEN for Black, and restarts (with a freshly rolled colour)
  * whenever the lesson itself changes.
  */
-export function useLessonGame(lesson: EndgameLesson, engine: UciEngine | undefined, opponent: Opponent = DEFAULT_OPPONENT) {
+export function useLessonGame(lesson: EndgameLesson, engine: UciEngine | undefined, opponent: Opponent = LESSON_OPPONENT) {
   const startColor = useRef<Color | undefined>(undefined);
   if (startColor.current === undefined) startColor.current = randomColor();
   const lastLessonId = useRef(lesson.id);

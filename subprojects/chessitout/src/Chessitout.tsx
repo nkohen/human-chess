@@ -7,15 +7,46 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { formatScore, whitePerspective, type Analysis, type UciEngine } from '@human-chess/engine';
-import { generateImbalancedPosition, MAX_ABS_EVAL_CP, MIN_ABS_EVAL_CP, type ImbalancedPosition } from '@human-chess/positions';
+import {
+  curatedGameDate, curatedMidgames, curatedOpponent, evaluateCuratedMidgame, generateImbalancedPosition,
+  MAX_ABS_EVAL_CP, MIN_ABS_EVAL_CP, type CuratedPosition, type ImbalancedPosition,
+} from '@human-chess/positions';
 import {
   currentFen, describeEnd, isInCheck, isPlayersTurn, lastMove, limitedStrength, playerDests, sideToMove,
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
 import { inCheck, pieceCounts, positionFromFen, turn, uciSquares, START_FEN, type Color, type SquareName } from '@human-chess/rules';
+import { pickUnshownCuratedMidgame } from './curatedPick';
 import { describeMaterialDifference } from './material';
+import { loadPositionSource, savePositionSource, type PositionSource } from './positionSource';
 import { judgeVote, type Vote } from './vote';
 import './chessitout.css';
+
+/** "From your game vs <opponent> on <site> (<ended date>)." — the one provenance line shown
+ * for a curated position; never shows siteEvalShown (A1: only our own engine's number is ever
+ * shown as an evaluation). */
+function curatedProvenanceText(entry: CuratedPosition): string {
+  const opponent = curatedOpponent(entry.game) ?? 'unknown opponent';
+  const site = entry.game.site === 'chess.com' ? 'chess.com' : 'lichess';
+  const date = curatedGameDate(entry.game);
+  return date ? `From your game vs ${opponent} on ${site} (${date}).` : `From your game vs ${opponent} on ${site}.`;
+}
+
+function CuratedProvenance({ entry }: { entry: CuratedPosition }): React.JSX.Element {
+  return (
+    <p className="ci-provenance-line">
+      {curatedProvenanceText(entry)}
+      {entry.game.url && (
+        <>
+          {' '}
+          <a href={entry.game.url} target="_blank" rel="noreferrer">
+            view game
+          </a>
+        </>
+      )}
+    </p>
+  );
+}
 
 export interface ChessitoutProps {
   /** A ready (initialised) engine, or undefined while it loads; or an Error when it could not load. */
@@ -34,6 +65,15 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
   const [generation, setGeneration] = useState(0);
   const [phase, setPhase] = useState<Phase>('mining');
   const [position, setPosition] = useState<ImbalancedPosition | undefined>(undefined);
+  const [positionSource, setPositionSource] = useState<PositionSource>(() => loadPositionSource());
+  // The curated entry (opponent name, date, url) behind the current `position`, when its source
+  // is 'curated-user-game' — undefined for a mined position. Kept separately from `position`
+  // because ImbalancedPosition itself carries no game metadata, only the fen/eval/source A1
+  // shape shared with the mined path.
+  const [curatedEntry, setCuratedEntry] = useState<CuratedPosition | undefined>(undefined);
+  // Which curated midgame ids have already come up this session (see curatedPick.ts) — a ref,
+  // not state, since nothing renders it and updating it must not retrigger the mining effect.
+  const shownCuratedIds = useRef<Set<string>>(new Set());
   const [miningError, setMiningError] = useState<string | undefined>(undefined);
   const [miningProgress, setMiningProgress] = useState<{ attempt: number; maxAttempts: number } | undefined>(undefined);
   const [vote, setVote] = useState<Vote | undefined>(undefined);
@@ -59,6 +99,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     setGeneration(g => g + 1);
     setPhase('mining');
     setPosition(undefined);
+    setCuratedEntry(undefined);
     setViewFrom('white');
     setMiningError(undefined);
     setMiningProgress(undefined);
@@ -67,6 +108,15 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     setFinalAnalysis(undefined);
     setFinalAnalysisError(undefined);
   }, []);
+
+  const changeSource = useCallback(
+    (source: PositionSource) => {
+      setPositionSource(source);
+      savePositionSource(source);
+      next();
+    },
+    [next],
+  );
 
   // Mine a fresh imbalanced position whenever a new attempt starts. Mining now searches deeper
   // (up to depth 18, up to MAX_ATTEMPTS) and can take a while, so progress is reported via
@@ -78,22 +128,33 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     let cancelled = false;
     const controller = new AbortController();
     setMiningProgress(undefined);
-    generateImbalancedPosition(readyEngine, {
-      signal: controller.signal,
-      onProgress: (attempt, maxAttempts) => {
-        if (cancelled) return;
-        setMiningProgress({ attempt, maxAttempts });
-      },
-    })
-      .then(pos => {
+    (async () => {
+      if (positionSource === 'mined') {
+        const pos = await generateImbalancedPosition(readyEngine, {
+          signal: controller.signal,
+          onProgress: (attempt, maxAttempts) => {
+            if (!cancelled) setMiningProgress({ attempt, maxAttempts });
+          },
+        });
         if (cancelled) return;
         setPosition(pos);
+        setCuratedEntry(undefined);
         setPhase('voting');
-      })
-      .catch((err: unknown) => {
+      } else {
+        // Random, not-yet-shown-this-session pick (curatedPick.ts), then a real depth-18
+        // evaluate — never the chess.com-displayed siteEvalShown (A1).
+        const { position: picked, shownIds } = pickUnshownCuratedMidgame(curatedMidgames, shownCuratedIds.current);
+        const evaluated = await evaluateCuratedMidgame(readyEngine, picked, { signal: controller.signal });
         if (cancelled) return;
-        setMiningError(err instanceof Error ? err.message : String(err));
-      });
+        shownCuratedIds.current = shownIds;
+        setPosition(evaluated);
+        setCuratedEntry(picked);
+        setPhase('voting');
+      }
+    })().catch((err: unknown) => {
+      if (cancelled) return;
+      setMiningError(err instanceof Error ? err.message : String(err));
+    });
     return () => {
       cancelled = true;
       controller.abort();
@@ -102,7 +163,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
       // an abandoned depth-18 confirm (reviewer, 2026-09-17; same shape as GuessTheEval).
       readyEngine.stop();
     };
-  }, [readyEngine, phase, generation]);
+  }, [readyEngine, phase, generation, positionSource]);
 
   // Both handlers below call restart(...) synchronously, in the same event-handler batch as the
   // setPhase('playing')/setPlayerColor calls, rather than in a separate effect keyed on `phase`.
@@ -193,15 +254,36 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     );
   }
 
+  // Changing source restarts the attempt (`changeSource` -> `next`), so this control only needs
+  // showing before a position is committed to (mining/voting) — mirrors the Elo selector, which
+  // is likewise only editable before its choice takes effect (there it disables after the first
+  // move rather than hiding).
+  const sourceSelector = (
+    <fieldset className="ci-source">
+      <legend>Position source</legend>
+      <label>
+        <input type="radio" name="ci-source" checked={positionSource === 'mined'} onChange={() => changeSource('mined')} />
+        Mined by the engine
+      </label>
+      <label>
+        <input type="radio" name="ci-source" checked={positionSource === 'curated'} onChange={() => changeSource('curated')} />
+        From your games
+      </label>
+    </fieldset>
+  );
+
   if (phase === 'mining') {
     return (
       <div className="chessitout">
         <h2>Chessitout</h2>
+        {sourceSelector}
         {miningError ? (
           <>
-            <p className="ci-status">The engine failed while mining a position: {miningError}</p>
+            <p className="ci-status">The engine failed to load a position: {miningError}</p>
             <button onClick={next}>Try again</button>
           </>
+        ) : positionSource === 'curated' ? (
+          <p className="ci-status">Loading one of your games…</p>
         ) : (
           <>
             <p className="ci-status">
@@ -237,6 +319,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     return (
       <div className="chessitout">
         <h2>Chessitout</h2>
+        {sourceSelector}
         <Board
           fen={position.fen}
           orientation={viewFrom}
@@ -252,6 +335,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
             Flip board (seen from {viewFrom === 'white' ? "White's" : "Black's"} side)
           </button>
         </div>
+        {curatedEntry && <CuratedProvenance entry={curatedEntry} />}
         <p className="ci-turn">{turn(pos) === 'white' ? 'White to move' : 'Black to move'}</p>
         <p className="ci-material">{describeMaterialDifference(pieceCounts(pos))}</p>
         <p className="ci-prompt">Who stands better?</p>
@@ -344,11 +428,12 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
 
       {phase === 'result' && (
         <div className="ci-result">
+          {curatedEntry && <CuratedProvenance entry={curatedEntry} />}
           <p>{headline}</p>
           <p>
             Your vote: {voteLabel} — {voteOutcome === 'right' ? 'right.' : 'wrong.'}
             <br />
-            Engine at mining time: {formatScore(position.eval.score)}{' '}
+            {curatedEntry ? 'Engine' : 'Engine at mining time'}: {formatScore(position.eval.score)}{' '}
             <span className="ci-provenance">({position.eval.engine}, depth {position.eval.depth})</span>.
             <br />
             Engine now: {nowText}
