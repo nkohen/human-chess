@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { endPosition, PIECE_ON_OPTIONS, questionsFor, type Position, type Question } from '@human-chess/facts';
-import { fenOf, inCheck, positionFromFen, turn, type SquareName } from '@human-chess/rules';
+import { fenOf, inCheck, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
 import { LINE_PLIES, ROUNDS, randomStartPosition } from './exercise';
 import './visualization-trainer.css';
 
@@ -82,7 +82,7 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
   // last entry is the move that reached this position, never invented (A1/V3).
   const startLastMove: [SquareName, SquareName] | undefined = useMemo(() => {
     const lastUci = startMoves[startMoves.length - 1];
-    return lastUci ? [lastUci.slice(0, 2) as SquareName, lastUci.slice(2, 4) as SquareName] : undefined;
+    return lastUci ? uciSquares(lastUci) : undefined;
   }, [startMoves]);
   const end: Position | undefined = useMemo(
     () => (exercise.kind === 'ready' ? endPosition(exercise.startFen, exercise.ucis) : undefined),
@@ -93,7 +93,7 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
   const endLastMove: [SquareName, SquareName] | undefined = useMemo(() => {
     if (exercise.kind !== 'ready') return undefined;
     const lastUci = exercise.ucis[exercise.ucis.length - 1];
-    return lastUci ? [lastUci.slice(0, 2) as SquareName, lastUci.slice(2, 4) as SquareName] : undefined;
+    return lastUci ? uciSquares(lastUci) : undefined;
   }, [exercise]);
   const questions: Question[] | undefined = useMemo(
     () => (exercise.kind === 'ready' ? questionsFor(exercise.startFen, exercise.ucis) : undefined),

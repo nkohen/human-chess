@@ -5,7 +5,7 @@
 // (start FEN + UCIs), not just the end position, so the piece-on question can be restricted to
 // squares the line actually touched and the material question can carry the pre-line balance.
 import {
-  inCheck, occupiedSquares, pieceAt, pieceCounts, playUci, positionFromFen, turn,
+  inCheck, occupiedSquares, pieceAt, pieceCounts, playUci, positionFromFen, turn, uciSquares,
   type Color, type Position, type Role, type SquareName,
 } from '@human-chess/rules';
 
@@ -81,8 +81,9 @@ export function touchedSquares(startFen: string, ucis: string[]): SquareName[] {
   const end = endPosition(startFen, ucis);
   const squares = new Set<SquareName>();
   for (const uci of ucis) {
-    squares.add(uci.slice(0, 2) as SquareName);
-    squares.add(uci.slice(2, 4) as SquareName);
+    const [from, to] = uciSquares(uci);
+    squares.add(from);
+    squares.add(to);
   }
   const candidates = new Set([...occupiedSquares(start), ...occupiedSquares(end)]);
   for (const square of candidates) {

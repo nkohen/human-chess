@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Board } from '@human-chess/board';
 import { ImportScreen } from '@human-chess/import/react';
 import type { ImportedGame } from '@human-chess/import';
-import { fullmove, inCheck, opposite, positionFromFen, turn, type Color, type SquareName } from '@human-chess/rules';
+import { fullmove, inCheck, opposite, positionFromFen, turn, uciSquares, type Color, type SquareName } from '@human-chess/rules';
 import { compareReconstruction, fenSequence } from './compare';
 import {
   currentFen, lastReconstructedMove, playReconstructionMove, reconstructedSans, reconstructedUcis,
@@ -179,9 +179,7 @@ function ReplayBoard({ fens, ucis, orientation }: { fens: string[]; ucis: string
   // fens[0] is the start position (no previous move); fens[i] for i > 0 is the position after
   // ucis[i - 1], so that is the real move that produced the position now shown.
   const uci = clampedIndex > 0 ? ucis[clampedIndex - 1] : undefined;
-  const lastMove: [SquareName, SquareName] | undefined = uci
-    ? [uci.slice(0, 2) as SquareName, uci.slice(2, 4) as SquareName]
-    : undefined;
+  const lastMove: [SquareName, SquareName] | undefined = uci ? uciSquares(uci) : undefined;
   return (
     <div className="memory-trainer-replay">
       <Board

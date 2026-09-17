@@ -11,7 +11,7 @@ import type { ImportedGame } from '@human-chess/import';
 import {
   ReviewCancelled, reviewGame, type Classification, type EvalOrEnd, type GameReview, type ReviewedMove, type ReviewProgress,
 } from '@human-chess/review';
-import { inCheck, positionFromFen, type SquareName } from '@human-chess/rules';
+import { inCheck, positionFromFen, uciSquares, type SquareName } from '@human-chess/rules';
 import './game-reviewer.css';
 
 export interface GameReviewerProps {
@@ -141,7 +141,7 @@ function ReviewScreen({
 
   const move = selectedPly > 0 ? review.moves[selectedPly - 1] : undefined;
   const fen = move ? move.fenAfter : game.startFen;
-  const lastMove: [SquareName, SquareName] | undefined = move ? [move.uci.slice(0, 2) as SquareName, move.uci.slice(2, 4) as SquareName] : undefined;
+  const lastMove: [SquareName, SquareName] | undefined = move ? uciSquares(move.uci) : undefined;
   // Ply 0 (the starting position) is a valid stop, not a floor to avoid — "prev" can reach it.
   const canPrev = selectedPly > 0;
   const canNext = selectedPly < review.moves.length;

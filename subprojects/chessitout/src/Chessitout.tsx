@@ -12,7 +12,7 @@ import {
   currentFen, describeEnd, isInCheck, isPlayersTurn, lastMove, limitedStrength, playerDests, sideToMove,
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
-import { inCheck, pieceCounts, positionFromFen, turn, START_FEN, type Color, type SquareName } from '@human-chess/rules';
+import { inCheck, pieceCounts, positionFromFen, turn, uciSquares, START_FEN, type Color, type SquareName } from '@human-chess/rules';
 import { describeMaterialDifference } from './material';
 import { judgeVote, type Vote } from './vote';
 import './chessitout.css';
@@ -209,9 +209,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     // last entry is the move that produced position.fen, so this is a real previous move, not
     // an invented one.
     const lastMined = position.moves[position.moves.length - 1];
-    const miningLastMove: [SquareName, SquareName] | undefined = lastMined
-      ? [lastMined.slice(0, 2) as SquareName, lastMined.slice(2, 4) as SquareName]
-      : undefined;
+    const miningLastMove: [SquareName, SquareName] | undefined = lastMined ? uciSquares(lastMined) : undefined;
     return (
       <div className="chessitout">
         <h2>Chessitout</h2>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   fenOf, isPromotionMove, legalDests, mirrorColors, playMove, playUci, positionEnd,
-  positionFromFen, randomLegalMove, repetitionKey, RulesError, sanLine, turn,
+  positionFromFen, randomLegalMove, repetitionKey, RulesError, sanLine, turn, uciSquares,
 kingSquare, occupiedSquares, pieceAt, pieceCounts,
 } from './index';
 
@@ -110,5 +110,17 @@ describe('rules', () => {
     expect(squares).toHaveLength(32);
     expect(squares).toEqual(expect.arrayContaining(['e1', 'e8', 'a2', 'h7']));
     expect(squares).not.toEqual(expect.arrayContaining(['e4']));
+  });
+
+  it('reads a UCI move\'s from/to squares', () => {
+    expect(uciSquares('e2e4')).toEqual(['e2', 'e4']);
+  });
+
+  it('ignores a promotion letter when reading a UCI move\'s squares', () => {
+    expect(uciSquares('e7e8q')).toEqual(['e7', 'e8']);
+  });
+
+  it('rejects an unparseable UCI string', () => {
+    expect(() => uciSquares('not-a-move')).toThrow(RulesError);
   });
 });

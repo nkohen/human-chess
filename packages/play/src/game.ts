@@ -2,7 +2,7 @@
 // Generic over any start position and player colour; a subproject decides the FEN (e.g.
 // mirrored for a lesson written from White's point of view) and never duplicates this.
 import {
-  fenOf, inCheck, legalDests, playMove, playUci, positionEnd, positionFromFen, repetitionKey, turn,
+  fenOf, inCheck, legalDests, playMove, playUci, positionEnd, positionFromFen, repetitionKey, turn, uciSquares,
   type Color, type GameEnd, type Played, type Position, type Role, type SquareName,
 } from '@human-chess/rules';
 
@@ -52,7 +52,7 @@ export const playerDests = (game: Game): Map<SquareName, SquareName[]> => (isPla
 export const isInCheck = (game: Game): boolean => inCheck(game.pos);
 export const lastMove = (game: Game): [SquareName, SquareName] | undefined => {
   const m = game.moves[game.moves.length - 1];
-  return m ? [m.uci.slice(0, 2) as SquareName, m.uci.slice(2, 4) as SquareName] : undefined;
+  return m ? uciSquares(m.uci) : undefined;
 };
 export const uciMoves = (game: Game): string[] => game.moves.map(m => m.uci);
 

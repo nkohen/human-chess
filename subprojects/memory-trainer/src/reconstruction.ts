@@ -3,7 +3,7 @@
 // @human-chess/rules — this module never judges a move against the real game (that is
 // compare.ts, after the fact).
 import {
-  fenOf, isPromotionMove, legalDests, playMove, positionFromFen, turn,
+  fenOf, isPromotionMove, legalDests, playMove, positionFromFen, turn, uciSquares,
   type Color, type Position, type Role, type SquareName,
 } from '@human-chess/rules';
 
@@ -41,5 +41,5 @@ export const reconstructedSans = (r: Reconstruction): string[] => r.moves.map(m 
 
 export const lastReconstructedMove = (r: Reconstruction): [SquareName, SquareName] | undefined => {
   const m = r.moves[r.moves.length - 1];
-  return m ? [m.uci.slice(0, 2) as SquareName, m.uci.slice(2, 4) as SquareName] : undefined;
+  return m ? uciSquares(m.uci) : undefined;
 };

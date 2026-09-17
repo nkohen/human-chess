@@ -8,7 +8,7 @@
 // claims; this is neither, it's a lookup).
 import { useEffect, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
-import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, type SquareName } from '@human-chess/rules';
+import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
 import { childrenOf, fenAt, repertoireMoves, type Opening } from './repertoire';
 
 export interface DrillViewProps {
@@ -78,9 +78,7 @@ export function DrillView({ opening }: DrillViewProps): React.JSX.Element {
 
   const dests = usersTurn && status === 'playing' ? legalDests(pos) : new Map<SquareName, SquareName[]>();
   const lastTrailUci = trail[trail.length - 1];
-  const lastMove: [SquareName, SquareName] | undefined = lastTrailUci
-    ? [lastTrailUci.slice(0, 2) as SquareName, lastTrailUci.slice(2, 4) as SquareName]
-    : undefined;
+  const lastMove: [SquareName, SquareName] | undefined = lastTrailUci ? uciSquares(lastTrailUci) : undefined;
 
   return (
     <div className="ob-drill">

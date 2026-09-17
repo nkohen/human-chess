@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
-import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, type SquareName } from '@human-chess/rules';
+import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
 import { ExplorerPanel } from './ExplorerPanel';
 import { MultiPvPanel } from './MultiPvPanel';
 import { addMove, childrenOf, fenAt, movesBeyond, removeMove, type Opening, type OpeningMove } from './repertoire';
@@ -31,9 +31,7 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
   const pos = useMemo(() => positionFromFen(fen), [fen]);
   const dests = useMemo(() => legalDests(pos), [pos]);
   const lastPathMove = path.length ? path[path.length - 1] : undefined;
-  const lastMove: [SquareName, SquareName] | undefined = lastPathMove
-    ? [lastPathMove.uci.slice(0, 2) as SquareName, lastPathMove.uci.slice(2, 4) as SquareName]
-    : undefined;
+  const lastMove: [SquareName, SquareName] | undefined = lastPathMove ? uciSquares(lastPathMove.uci) : undefined;
 
   const playAndAdd = (uci: string): void => {
     const updated = addMove(opening, currentEpd, uci);

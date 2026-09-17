@@ -9,7 +9,7 @@
 // whose correct move is an underpromotion (rare) can never be matched from the UI; this module
 // still compares the full UCI string (including the promotion letter) so such a puzzle simply
 // reports 'wrong' for every queen attempt rather than silently accepting the wrong piece.
-import { fenOf, playUci, positionFromFen, type Position, type SquareName } from '@human-chess/rules';
+import { fenOf, playUci, positionFromFen, uciSquares, type Position, type SquareName } from '@human-chess/rules';
 
 export type SolveStatus = 'thinking' | 'correct' | 'wrong' | 'solved' | 'failed-solved';
 
@@ -38,8 +38,6 @@ export function startSolve(startFen: string, solution: string[]): SolveState {
   };
 }
 
-const squares = (uci: string): [SquareName, SquareName] => [uci.slice(0, 2) as SquareName, uci.slice(2, 4) as SquareName];
-
 /**
  * The solver attempts `uci` (already auto-queened by the caller if it was a promotion) against
  * `solution[state.index]`. Wrong: status becomes 'wrong', the position does not change, and the
@@ -60,13 +58,13 @@ export function attemptMove(state: SolveState, uci: string): SolveState {
   const played = playUci(state.pos, uci);
   let pos = played.pos;
   let index = state.index + 1;
-  let lastMove = squares(uci);
+  let lastMove = uciSquares(uci);
 
   const reply = state.solution[index];
   if (reply !== undefined) {
     const replayed = playUci(pos, reply);
     pos = replayed.pos;
-    lastMove = squares(reply);
+    lastMove = uciSquares(reply);
     index += 1;
   }
 

@@ -8,7 +8,7 @@ import { makeSan, makeSanAndPlay } from 'chessops/san';
 import { makeSquare, makeUci, opposite as opp, parseSquare, parseUci, squareRank } from 'chessops/util';
 import { Board } from 'chessops/board';
 import { SquareSet } from 'chessops/squareSet';
-import type { Color, Move, Role, SquareName } from 'chessops/types';
+import { isNormal, type Color, type Move, type Role, type SquareName } from 'chessops/types';
 
 export type { Color, Role, SquareName };
 
@@ -63,6 +63,18 @@ export function playUci(pos: Position, uci: string): Played {
   const move = parseUci(uci);
   if (!move) throw new RulesError(`unparseable UCI move "${uci}"`);
   return play(pos, move);
+}
+
+/**
+ * The from/to square names of a UCI move, e.g. "e2e4" -> ["e2", "e4"]; a promotion suffix like
+ * "e7e8q" does not change the squares. Throws RulesError for a string chessops cannot parse, or
+ * for a drop move (crazyhouse only; this app never generates one, and a drop has no from square).
+ */
+export function uciSquares(uci: string): [SquareName, SquareName] {
+  const move = parseUci(uci);
+  if (!move) throw new RulesError(`unparseable UCI move "${uci}"`);
+  if (!isNormal(move)) throw new RulesError(`UCI move "${uci}" is a drop, which has no from square`);
+  return [makeSquare(move.from), makeSquare(move.to)];
 }
 
 export function playMove(pos: Position, from: SquareName, to: SquareName, promotion?: Role): Played {

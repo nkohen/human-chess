@@ -5,7 +5,7 @@
 // from chessops through @human-chess/rules; nothing here generates or judges moves itself.
 import {
   fenOf, inCheck, isPromotionMove, legalDestsByRole, playMove, positionEnd, positionFromFen,
-  repetitionKey, roleAt, START_FEN, turn,
+  repetitionKey, roleAt, START_FEN, turn, uciSquares,
   type Color, type GameEnd, type Position, type Role, type SquareName,
 } from '@human-chess/rules';
 
@@ -81,7 +81,7 @@ export const isInCheck = (game: HandAndBrainGame): boolean => inCheck(game.pos);
 export const currentFen = (game: HandAndBrainGame): string => fenOf(game.pos);
 export const lastMove = (game: HandAndBrainGame): [SquareName, SquareName] | undefined => {
   const m = game.moves[game.moves.length - 1];
-  return m ? [m.uci.slice(0, 2) as SquareName, m.uci.slice(2, 4) as SquareName] : undefined;
+  return m ? uciSquares(m.uci) : undefined;
 };
 
 const ROLE_LETTER: Record<Role, string> = { pawn: 'P', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', king: 'K' };

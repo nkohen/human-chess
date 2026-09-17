@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import { EngineError, formatPawns, formatScore, whitePerspective, type Analysis, type Score, type UciEngine } from '@human-chess/engine';
 import { generateRecipePosition, pickRecipe, type RecipePosition } from '@human-chess/positions';
-import { inCheck, positionFromFen, turn, type SquareName } from '@human-chess/rules';
+import { inCheck, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
 import { EvalScale } from './EvalScale';
 import { band, describeBand, grade, MAX_POINTS, points, SLIDER_MAX_CP, SLIDER_MIN_CP } from './scoring';
 import './guess-the-eval.css';
@@ -228,9 +228,7 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
   // entry is the move that produced this position, so this is a real previous move, not one
   // invented for display.
   const lastMinedMove = position.moves[position.moves.length - 1];
-  const lastMove: [SquareName, SquareName] | undefined = lastMinedMove
-    ? [lastMinedMove.slice(0, 2) as SquareName, lastMinedMove.slice(2, 4) as SquareName]
-    : undefined;
+  const lastMove: [SquareName, SquareName] | undefined = lastMinedMove ? uciSquares(lastMinedMove) : undefined;
 
   return (
     <div className="gte">
