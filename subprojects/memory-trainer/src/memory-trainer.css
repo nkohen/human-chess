@@ -10,12 +10,26 @@
   overflow: hidden;
 }
 
+.memory-trainer-identity {
+  margin: 0;
+  flex: 0 0 auto;
+  opacity: 0.75;
+  font-size: 0.85em;
+}
+
 .memory-trainer-note {
   margin: 0;
   flex: 0 0 auto;
 }
 
-.memory-trainer-done {
+.mt-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.memory-trainer-done,
+.memory-trainer-claim-complete {
   flex: 0 0 auto;
   align-self: flex-start;
 }
@@ -93,6 +107,13 @@
   flex-direction: column;
   height: 100%;
   gap: 0.5rem;
+}
+
+/* The board slot takes all of the replay column the controls don't, so its measured box follows
+   the window in both directions: without `flex: 1`, it would be sized by its own content (the
+   board, sized from the previous measurement) and could shrink but never grow back. */
+.memory-trainer-replay > .mt-board-area {
+  flex: 1 1 auto;
 }
 
 .memory-trainer-replay-controls {

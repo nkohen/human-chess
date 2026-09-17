@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { ImportScreen } from '@human-chess/import/react';
 import type { ImportedGame } from '@human-chess/import';
-import { fullmove, inCheck, opposite, positionFromFen, turn, uciSquares, type Color, type SquareName } from '@human-chess/rules';
-import { compareReconstruction, fenSequence } from './compare';
+import {
+  annotateLine, fullmove, inCheck, opposite, positionFromFen, turn, uciSquares, type Color, type SquareName,
+} from '@human-chess/rules';
+import { classifyCompleteAttempt, compareReconstruction, fenSequence, type ReconstructionOutcome } from './compare';
 import {
   currentFen, lastReconstructedMove, playReconstructionMove, reconstructedSans, reconstructedUcis,
   reconstructionDests, sideToMove, startReconstruction, type Reconstruction,
@@ -15,7 +17,7 @@ const STORAGE_KEY = 'human-chess.memory-trainer.import-username';
 type Screen =
   | { kind: 'import' }
   | { kind: 'reconstruct'; game: ImportedGame; reconstruction: Reconstruction }
-  | { kind: 'review'; game: ImportedGame; reconstruction: Reconstruction };
+  | { kind: 'review'; game: ImportedGame; reconstruction: Reconstruction; claimedComplete: boolean };
 
 /** `style` plus the one CSS custom property this file uses, so `--mt-height` can be set without
  * an `as` cast at every call site. */
@@ -130,9 +132,12 @@ export function MemoryTrainer(): React.JSX.Element {
     const onMove = (from: SquareName, to: SquareName): void => {
       setScreen({ kind: 'reconstruct', game, reconstruction: playReconstructionMove(reconstruction, from, to) });
     };
-    const onDone = (): void => setScreen({ kind: 'review', game, reconstruction });
+    // `claimedComplete` only records which button ended the attempt — it never reveals the real
+    // game's length itself; ReviewScreen is the only place that compares against it.
+    const onDone = (claimedComplete: boolean): void => setScreen({ kind: 'review', game, reconstruction, claimedComplete });
     return (
       <div className="memory-trainer" style={shellStyle}>
+        <GameIdentity game={game} withResult={false} />
         <div className="mt-reconstruct">
           <div className="mt-board-area" ref={reconstructBoardRef}>
             <Board
@@ -153,21 +158,27 @@ export function MemoryTrainer(): React.JSX.Element {
               the board just keeps going from your version of the position. Promotions always become
               a queen.
             </p>
-            <MoveList sans={reconstructedSans(reconstruction)} />
-            <button className="memory-trainer-done" onClick={onDone}>
-              I have no idea
-            </button>
+            <MoveList startFen={reconstruction.startFen} ucis={reconstructedUcis(reconstruction)} />
+            <div className="mt-buttons">
+              <button className="memory-trainer-done" onClick={() => onDone(false)}>
+                I have no idea
+              </button>
+              <button className="memory-trainer-claim-complete" onClick={() => onDone(true)}>
+                That's the whole game
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  const { game, reconstruction } = screen;
+  const { game, reconstruction, claimedComplete } = screen;
   return (
     <ReviewScreen
       game={game}
       reconstruction={reconstruction}
+      claimedComplete={claimedComplete}
       onAnotherGame={startOver}
       shellStyle={shellStyle}
       boardAreaRef={reviewBoardRef}
@@ -176,16 +187,64 @@ export function MemoryTrainer(): React.JSX.Element {
   );
 }
 
-function MoveList({ sans }: { sans: string[] }): React.JSX.Element {
-  const pairs: { moveNumber: number; white: string | undefined; black: string | undefined }[] = [];
-  for (let i = 0; i < sans.length; i += 2) {
-    pairs.push({ moveNumber: i / 2 + 1, white: sans[i], black: sans[i + 1] });
+/** One line identifying the fetched game — site, players, which colour the learner played, when
+ * it was played, and a link when the source gives one — so the learner can tell it apart from
+ * whatever they think they last played (user report 2026-09-17: "perhaps it isn't pulling the
+ * most recent game correctly", with no way on screen to check). All fields come straight off
+ * `ImportedGame`; nothing here is guessed. */
+const SOURCE_LABELS: Record<ImportedGame['source'], string> = { lichess: 'Lichess', 'chess.com': 'Chess.com', pgn: 'Pasted PGN' };
+
+/** Counts in the review text are plies (half-moves), the unit compareReconstruction works in;
+ * saying "moves" for them would overstate a game's length by half. */
+function plies(n: number): string {
+  return `${n} ${n === 1 ? 'ply' : 'plies'}`;
+}
+
+/** One line saying which game was fetched, from ImportedGame's own fields only. `withResult`
+ * is off on the reconstruction screen so the learner is not told who won before they try. */
+function GameIdentity({ game, withResult }: { game: ImportedGame; withResult: boolean }): React.JSX.Element | null {
+  if (!game.white || !game.black) return null;
+  const result = withResult && game.result && game.result !== '*' ? ` (${game.result})` : '';
+  const played = game.playedAs ? `, you played ${game.playedAs === 'white' ? 'White' : 'Black'}` : '';
+  const when = game.playedAt ? `, ${new Date(game.playedAt).toLocaleString()}` : '';
+  return (
+    <p className="memory-trainer-identity">
+      {SOURCE_LABELS[game.source]}: {game.white} vs {game.black}
+      {result}
+      {played}
+      {when}
+      {game.url && (
+        <>
+          {' '}
+          <a href={game.url} target="_blank" rel="noreferrer">
+            view game
+          </a>
+        </>
+      )}
+    </p>
+  );
+}
+
+/** Reuses `@human-chess/rules`'s `annotateLine` for the colour/move-number of each ply, rather
+ * than assuming ply 0 is always White's — a "From Position" pasted PGN can start with Black to
+ * move at any fullmove number (the same thing ReviewScreen's `ordinalMove` already accounts for;
+ * this component previously didn't, and mislabelled such a game's move list). */
+function MoveList({ startFen, ucis }: { startFen: string; ucis: string[] }): React.JSX.Element {
+  const plies = annotateLine(startFen, ucis);
+  const rows: { moveNumber: number; white?: string; black?: string }[] = [];
+  for (const ply of plies) {
+    const last = rows[rows.length - 1];
+    if (last && last.moveNumber === ply.moveNumber && last[ply.color] === undefined) {
+      last[ply.color] = ply.san;
+    } else {
+      rows.push({ moveNumber: ply.moveNumber, [ply.color]: ply.san });
+    }
   }
   return (
     <ol className="memory-trainer-moves">
-      {pairs.map(p => (
-        <li key={p.moveNumber}>
-          {p.moveNumber}. {p.white ?? ''} {p.black ?? ''}
+      {rows.map(r => (
+        <li key={r.moveNumber}>
+          {r.moveNumber}. {r.white ?? ''} {r.black ?? ''}
         </li>
       ))}
     </ol>
@@ -195,6 +254,7 @@ function MoveList({ sans }: { sans: string[] }): React.JSX.Element {
 function ReviewScreen({
   game,
   reconstruction,
+  claimedComplete,
   onAnotherGame,
   shellStyle,
   boardAreaRef,
@@ -202,6 +262,7 @@ function ReviewScreen({
 }: {
   game: ImportedGame;
   reconstruction: Reconstruction;
+  claimedComplete: boolean;
   onAnotherGame: () => void;
   shellStyle: ShellStyle | undefined;
   boardAreaRef: (node: HTMLDivElement | null) => void;
@@ -225,15 +286,29 @@ function ReviewScreen({
   const diverged = segments.filter(s => s.kind === 'diverged');
   const lastMatchPly = firstSegment?.kind === 'match' ? firstSegment.toPly : 0;
 
+  // Only meaningful when the learner claimed the attempt was the whole game — "I have no idea"
+  // makes no claim about length, so it keeps the plain first-divergence text below. Built only
+  // from compareReconstruction's own segments and the two move counts (never free-form).
+  const outcome: ReconstructionOutcome | undefined = claimedComplete
+    ? classifyCompleteAttempt(segments, game.ucis.length, userUcis.length)
+    : undefined;
+
   return (
     <div className="memory-trainer memory-trainer-review" style={shellStyle}>
       <h2>How you did</h2>
+      <GameIdentity game={game} withResult={true} />
       <p>
         {userUcis.length === 0
           ? 'You entered no moves.'
-          : correctBeforeFirstDivergence > 0
-            ? `You reconstructed the first ${correctBeforeFirstDivergence} ${correctBeforeFirstDivergence === 1 ? 'ply' : 'plies'} correctly.`
-            : 'The very first move you entered did not match the real game.'}
+          : outcome?.kind === 'perfect'
+            ? `Perfect: the whole game, ${plies(outcome.moves)}.`
+            : outcome?.kind === 'matched-shorter'
+              ? `You matched all ${plies(outcome.matched)} you entered, but the game went on for ${plies(outcome.remaining)} more.`
+              : outcome?.kind === 'matched-longer'
+                ? `You entered ${plies(outcome.extra)} more than the game had.`
+                : correctBeforeFirstDivergence > 0
+                  ? `You reconstructed the first ${correctBeforeFirstDivergence} ${correctBeforeFirstDivergence === 1 ? 'ply' : 'plies'} correctly.`
+                  : 'The very first move you entered did not match the real game.'}
       </p>
 
       {realFens.length > 1 && (

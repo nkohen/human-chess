@@ -55,3 +55,30 @@ function epdsAfterEachPly(startFen: string, ucis: string[]): string[] {
   }
   return epds;
 }
+
+/**
+ * How a reconstruction the learner has declared *complete* ("that's the whole game", as opposed
+ * to "I have no idea") measures up, derived only from `segments` (as `compareReconstruction`
+ * produced them) and the two move counts — never free-form text. `diverged` takes priority over
+ * a length mismatch: a wrong move ply within the shared prefix is reported before anything is
+ * said about how the lengths compare.
+ */
+export type ReconstructionOutcome =
+  | { kind: 'perfect'; moves: number }
+  | { kind: 'matched-shorter'; matched: number; remaining: number }
+  | { kind: 'matched-longer'; extra: number }
+  | { kind: 'diverged'; atPly: number };
+
+/**
+ * Classifies a claimed-complete attempt. `segments` must be `compareReconstruction(startFen,
+ * realUcis, userUcis)` for the same `realLength`/`userLength` (`realUcis.length`/
+ * `userUcis.length`) passed here — this function only reads the segments and the two lengths, so
+ * it never has to re-walk the game itself.
+ */
+export function classifyCompleteAttempt(segments: Segment[], realLength: number, userLength: number): ReconstructionOutcome {
+  const firstDiverged = segments.find(s => s.kind === 'diverged');
+  if (firstDiverged) return { kind: 'diverged', atPly: firstDiverged.fromPly };
+  if (realLength === userLength) return { kind: 'perfect', moves: realLength };
+  if (userLength < realLength) return { kind: 'matched-shorter', matched: userLength, remaining: realLength - userLength };
+  return { kind: 'matched-longer', extra: userLength - realLength };
+}

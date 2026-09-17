@@ -9,8 +9,8 @@ import type { ImportedGame } from './types';
  * used as-is for lichess (whose PGN headers are the only source) and for the pasted-PGN path
  * (which has no API response to draw from at all). */
 export interface ImportedGameOverrides {
-  url?: string;
-  playedAt?: string;
+  url?: string | undefined;
+  playedAt?: string | undefined;
 }
 
 export function toImportedGame(
