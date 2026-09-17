@@ -6,6 +6,8 @@ const CANNED_PGN = `[Event "Rated Blitz game"]
 [White "nadavk"]
 [Black "opponent"]
 [Result "1-0"]
+[UTCDate "2026.03.10"]
+[UTCTime "18:00:00"]
 
 1. e4 e5 2. Nf3 Nc6 3. Bb5 1-0
 `;
@@ -32,6 +34,8 @@ describe('fetchLatestLichessGame', () => {
     expect(game.ucis).toEqual(['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5']);
     expect(game.sans).toEqual(['e4', 'e5', 'Nf3', 'Nc6', 'Bb5']);
     expect(game.startFen).toBe('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+    expect(game.url).toBe('https://lichess.org/abcd1234');
+    expect(game.playedAt).toBe('2026-03-10T18:00:00Z');
   });
 
   it('rejects with a clear message on a 404 (no such user)', async () => {

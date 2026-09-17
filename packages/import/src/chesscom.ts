@@ -69,7 +69,13 @@ export async function fetchLatestChesscomGame(
     );
     const latest = latestStandardGame(games);
     if (!latest) continue;
-    const game = toImportedGame('chess.com', latest.pgn, username);
+    // The Published-Data API's own url/end_time are structured and always present (end_time is
+    // a required field per ChesscomGame), so they're preferred over parsing them back out of the
+    // PGN's Link/UTCDate/UTCTime headers, which not every chess.com game type carries.
+    const game = toImportedGame('chess.com', latest.pgn, username, {
+      url: latest.url,
+      playedAt: new Date(latest.end_time * 1000).toISOString(),
+    });
     if (game.ucis.length === 0) {
       throw new Error(`${username}'s latest game on chess.com has no moves`);
     }

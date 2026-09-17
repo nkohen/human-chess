@@ -77,6 +77,28 @@ describe('fetchLatestChesscomGame', () => {
     expect(result.pgn).toContain('newer');
   });
 
+  it('takes url and playedAt from the JSON game (not the PGN headers), since the JSON is structured and always present', async () => {
+    const fetchImpl = fakeFetch({
+      [ARCHIVES_URL]: { status: 200, body: { archives: [month(2026, 3)] } },
+      [month(2026, 3)]: {
+        status: 200,
+        body: {
+          games: [
+            game({
+              end_time: 1_741_629_600, // 2025-03-10T18:00:00Z
+              url: 'https://www.chess.com/game/live/999',
+              pgn: taggedPgn('with-url'),
+            }),
+          ],
+        },
+      },
+    });
+
+    const result = await fetchLatestChesscomGame('nadavk', fetchImpl);
+    expect(result.url).toBe('https://www.chess.com/game/live/999');
+    expect(result.playedAt).toBe('2025-03-10T18:00:00.000Z');
+  });
+
   it('skips a non-standard game (chess960) even when it has a later end_time, picking an older standard game', async () => {
     const fetchImpl = fakeFetch({
       [ARCHIVES_URL]: { status: 200, body: { archives: [month(2026, 3)] } },
@@ -190,6 +212,9 @@ describe('fetchLatestChesscomGame', () => {
     expect(result.playedAs).toBe('white');
     expect(result.ucis).toEqual(['e2e4', 'e7e5', 'f1c4', 'b8c6', 'd1h5', 'g8f6', 'h5f7']);
     expect(result.username).toBe('nadavk');
+    // playedAt comes from the JSON game's end_time (500), not the PGN's own UTCDate/UTCTime
+    // headers ("2026.03.10"/"18:00:00") — proves the JSON override wins.
+    expect(result.playedAt).toBe('1970-01-01T00:08:20.000Z');
     expect(result.source).toBe('chess.com');
   });
 
