@@ -61,8 +61,8 @@ call now goes through `packages/lichess` (one request in flight, a 60 s app-wide
 429 persisted across reloads, same-URL dedupe, localStorage cache; puzzle-by-id and explorer
 responses cached, "next puzzle" never). OAuth PKCE login lives in the app header (client_id
 `human-chess`, no registration, redirect to the app root, token in localStorage ~1 year, no
-refresh). Verified only in a headless browser with lichess's endpoints faked at the network layer;
-the user must try the real login themselves. Bugs found in that smoke and fixed: the restored
+refresh). Verified in a headless browser with lichess's endpoints faked at the network layer, and
+the user confirmed the real login works (2026-09-16). Bugs found in that smoke and fixed: the restored
 hash after the redirect fired no hashchange (the app stayed on home), and a deduped GET whose
 leader was aborted pre-send under StrictMode's double mount rejected its joiner too.
 Feedback pass 4 (2026-09-16, openings builder, game reviewer, Chessitout, all boards): explorer
