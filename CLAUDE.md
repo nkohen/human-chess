@@ -32,11 +32,15 @@ npx pnpm@10 install      # once, and after any package.json change
 npx pnpm@10 check        # tsc --noEmit over the workspace, then vitest
 npx pnpm@10 dev          # web app on http://localhost:5173 (copies the wasm engine first)
 npx pnpm@10 build        # production build into apps/web/dist
+npx pnpm@10 screenshots  # every route at desktop, short-desktop and iPhone 13 sizes, with layout checks (docs/visual-testing.md)
 ```
 
 Engine tests use the wasm Stockfish from node_modules and also a native binary when
-`STOCKFISH_PATH` or /opt/homebrew/bin/stockfish exists. There is no browser test yet; the
-first slice was smoke-tested by hand through the Chrome DevTools protocol (2026-09-16).
+`STOCKFISH_PATH` or /opt/homebrew/bin/stockfish exists. The browser check is
+`scripts/screenshots.mjs` (Playwright, 2026-09-17): it starts its own Vite, blocks lichess.org
+and chess.com at the network layer, screenshots every route at three viewports including a
+phone, and fails on overflow, a primary control below the fold, sub-40px tap targets, or console
+errors. Run it after any layout change; a real phone on the LAN is still the final word for iOS.
 
 ## Layout: the shared layer (A2/R1; responsibilities and mapping in memory/shared-layer.md)
 

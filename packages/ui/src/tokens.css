@@ -44,6 +44,10 @@
   --hc-radius: 6px;
   --hc-aside: 24rem;
   --hc-header: 3rem;
+  /* Minimum touch target (WCAG 2.5.5-ish, and the harness's tap-target check in
+   * scripts/screenshots.mjs): every native control grows to this height at and below the
+   * `.hc-workbench`/60rem stacking breakpoint, where a pointer is more likely a finger. */
+  --hc-tap-min: 40px;
 }
 
 @media (prefers-color-scheme: light) {

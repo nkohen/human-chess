@@ -36,6 +36,7 @@ import type { Color, Role } from '@human-chess/rules';
 import 'chessground/assets/chessground.base.css';
 import 'chessground/assets/chessground.brown.css';
 import 'chessground/assets/chessground.cburnett.css';
+import './coords.css';
 import './board.css';
 
 // chessground renders each piece as a bare custom `<piece>` element (dist/render.js), styled by

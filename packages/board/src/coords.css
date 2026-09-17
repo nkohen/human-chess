@@ -1,0 +1,15 @@
+/* chessground's base stylesheet positions the file letters row at `left: 24px; width: 100%`,
+   which is meant for lichess's board-with-outer-margin layout; on a bare board it makes the row
+   24px wider than the board itself, and on a phone, where the board is the full viewport width,
+   that 24px is a horizontal page overflow. Keep the row inside the board and put each letter at
+   the right edge of its square (chessground's offset had them 24px in from the left edge). */
+.cg-wrap coords.files {
+  left: 0;
+  width: 100%;
+}
+
+.cg-wrap coords.files coord {
+  text-align: right;
+  padding-right: 3px;
+  box-sizing: border-box;
+}

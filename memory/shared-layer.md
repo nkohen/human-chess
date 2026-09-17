@@ -63,3 +63,10 @@ pnpm cache was broken), React 19 rather than lichess's snabbdom, Vite, vitest, n
 `stockfish` npm package (lite single-threaded build, no cross-origin isolation needed) rather
 than lila-stockfish-web (needs separate NNUE downloads; its npm metadata says AGPL while its
 LICENSE file says GPL).
+
+Browser check (user, 2026-09-17, adopted from ~/dev/NumberGoUp): `scripts/screenshots.mjs` on
+Playwright 1.62.0 (Apache-2.0, dev-only). It starts its own Vite, blocks lichess.org and
+chess.com at the route layer, screenshots every route at 1280x800, 1280x650 and the iPhone 13
+descriptor, and fails on overflow, a primary control below the fold, tap targets under 40px or
+console errors; docs/visual-testing.md has the human-eye checklist. Session-scratchpad CDP
+scripts are no longer the way to smoke a layout change.

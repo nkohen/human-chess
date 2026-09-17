@@ -134,6 +134,13 @@ button.hc-quiet:hover:not(:disabled) {
 
 .hc-segmented {
   display: inline-flex;
+  /* Caps the control at its column's width instead of overflowing it (chessitout's "Mined by
+   * the engine" / "From your games" pair on a narrow viewport, screenshots.mjs's horizontal-
+   * overflow check) — a no-op wherever the options already fit, since inline-flex still shrinks
+   * to content below this cap. `min-width: 0` on the options below is what actually lets them
+   * shrink (wrap their label) instead of overflowing once this cap bites; they keep the flex
+   * default (no grow), so at desktop widths the control stays as wide as its labels. */
+  max-width: 100%;
   border: 1px solid var(--hc-border);
   border-radius: var(--hc-radius);
   overflow: hidden;
@@ -148,6 +155,7 @@ button.hc-quiet:hover:not(:disabled) {
   border-right: 1px solid var(--hc-border);
   padding: var(--hc-space-2) var(--hc-space-3);
   cursor: pointer;
+  min-width: 0;
 }
 
 .hc-segmented__option:last-child {
@@ -413,6 +421,28 @@ button.hc-quiet:hover:not(:disabled) {
 }
 
 @media (max-width: 60rem) {
+  /* Tap targets: every native control (and every Button/SegmentedControl, which are native
+   * elements under the hood) grows to at least --hc-tap-min tall at this breakpoint, where a
+   * pointer is more likely a finger than a mouse (screenshots.mjs's mobile tap-target check).
+   * `box-sizing: border-box` keeps the existing padding from pushing the box past that height;
+   * native controls already default to content-box, so it must be set explicitly here. */
+  button,
+  select,
+  input:not([type='checkbox']):not([type='radio']),
+  textarea {
+    box-sizing: border-box;
+    min-height: var(--hc-tap-min);
+  }
+
+  /* A checkbox or radio stays its native size (a 40px-tall 13px-wide box is not a target);
+   * the label that wraps it is the tap target instead. */
+  label:has(> input[type='checkbox']),
+  label:has(> input[type='radio']) {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--hc-tap-min);
+  }
+
   /* Stacked: the board is a square of the full width (capped so the primary block stays in
    * reach), and the page scrolls normally — the never-scrolls rule is for the two-column
    * layout, where the side column scrolls internally instead. */
@@ -429,6 +459,25 @@ button.hc-quiet:hover:not(:disabled) {
       'extra'
       'children'
       'footer';
+  }
+
+  /* A dialog in the primary slot (a lesson intro, a "you won, again?" prompt, a quiz result)
+   * is what to read right now and needs no board to act on, so on a phone it comes before the
+   * board instead of below a full-width square of it, where a few lines of text push its button
+   * past the fold (endgames-intro's rook lesson, found by screenshots.mjs's mobile check). */
+  .hc-workbench:has(.hc-workbench__primary [role='dialog']) {
+    grid-template-areas:
+      'primary'
+      'board'
+      'title'
+      'status'
+      'extra'
+      'children'
+      'footer';
+  }
+
+  .hc-workbench:has(.hc-workbench__primary [role='dialog']) .hc-workbench__primary {
+    margin-bottom: var(--hc-space-3);
   }
 
   .hc-workbench__board {
