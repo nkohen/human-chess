@@ -88,6 +88,28 @@ should have some pros and cons where it takes some thought to decide which balan
 material-imbalance pre-filter in `imbalanced.ts` stays as a cheap stand-in until then. Do not
 attempt this without those positions.
 
+**The positions arrived (2026-09-17, "Ed Chess Midgames" screenshots, now `curatedMidgames`).**
+What they show, chess.com's displayed eval at capture time against the material count on the
+board (White minus Black, in pawns, from the FEN):
+
+| entry (opponent) | site eval | material W-B |
+|---|---|---|
+| jeanmarc33 | +3.5 | +1 (bishop for knight, plus a pawn) |
+| abdallaelsisy | -3.8 | -1 |
+| snarecs | +2.1 | +1 |
+| vkkapatid | -3.0 | 0 |
+| aditi607 | +4.2 | 0 |
+| Thiagobbad | +3.1 | -1 |
+| wiam2000 | +2.3 | +1 |
+
+Every one has a clear engine edge (|eval| 2.1 to 4.2) with material within one pawn of level,
+and in two of them the side with the edge is the side *down* material. So the criterion the user
+described can be stated mechanically: keep a mined position when |eval| is well above the value
+of the material difference — e.g. |eval| >= 2.0 and |eval| - |material difference| >= 1.5, with
+material from a rules query (V3) and the eval from the same depth-18 call as today — and drop
+the current "material must be unequal" pre-filter, which selects for exactly the opposite. Not
+built yet: proposed to the user with this table; waiting for their go-ahead.
+
 ## Curated positions from the user's games (2026-09-17)
 A persisted source choice (guarded localStorage, `subprojects/chessitout/src/positionSource.ts`,
 default `'mined'`, today's mining behaviour unchanged) lets the user pick "From your games"

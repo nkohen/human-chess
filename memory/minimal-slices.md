@@ -59,9 +59,11 @@ explorer now needs a login); bot-rating has a board editor for the start positio
 Lichess access (2026-09-16, user: "yes add oauth, and avoid hitting lichess limits"): every lichess
 call now goes through `packages/lichess` (one request in flight, a 60 s app-wide cooldown after a
 429 persisted across reloads, same-URL dedupe, localStorage cache; puzzle-by-id and explorer
-responses cached, "next puzzle" never). OAuth PKCE login lives in the app header (client_id
-`human-chess`, no registration, redirect to the app root, token in localStorage ~1 year, no
-refresh). Verified in a headless browser with lichess's endpoints faked at the network layer, and
+responses cached, "next puzzle" never). OAuth PKCE login (client_id `human-chess`, no
+registration, redirect to the app root, token in localStorage ~1 year, no refresh) lived in the
+app header until 2026-09-17, when the user asked for the header button to go: the only login
+button is now the opening explorer's own (`ExplorerPanel.tsx`), the one place that needs a
+session; `App.tsx` still completes the OAuth redirect silently. Verified in a headless browser with lichess's endpoints faked at the network layer, and
 the user confirmed the real login works (2026-09-16). Bugs found in that smoke and fixed: the restored
 hash after the redirect fired no hashchange (the app stayed on home), and a deduped GET whose
 leader was aborted pre-send under StrictMode's double mount rejected its joiner too.
@@ -114,3 +116,13 @@ depth (default 5 s, settable with the depth on the waiting/analysing/failed scre
 shows the depth really reached (A1); progress counts positions and shows a time-left estimate.
 Memory trainer: every screen fits the viewport (488ecf3); a game-identity line and a "That's the
 whole game" ending (ec9734d) — details in memory/subprojects/memory-trainer.md.
+
+Feedback pass 7 (2026-09-17, positions from the user's games and the header login): the user
+sent two zips of screenshots of their own games (chess.com chicachoo123, lichess nkohen). They
+became `packages/positions/src/curated.ts` (42f4e96): 50 endgames for endgames-intro's "From your
+games" section and 7 middlegames for Chessitout's "From your games" source, each with provenance
+(22 + 7 exact from fetched chess.com game records, 28 lichess endgames transcribed and
+cross-checked; the site's own displayed eval is never shown as an eval, A1). The middlegames
+give the evidence for the on-hold stricter-imbalance criterion — table and proposed rule in
+memory/subprojects/chessitout-variant.md, not built until the user agrees. The lichess login
+button was removed from the app header on the user's request; the explorer panel keeps its own.

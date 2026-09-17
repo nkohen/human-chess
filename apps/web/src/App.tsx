@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
 import { completeLichessLogin, installLichessAuth } from '@human-chess/lichess';
-import { LichessLogin } from '@human-chess/lichess/react';
 import { EndgamesIntro } from '@human-chess/endgames-intro';
 import { GuessTheEval } from '@human-chess/guess-the-eval';
 import { VisualizationTrainer } from '@human-chess/visualization-trainer';
@@ -79,7 +78,7 @@ export function App(): React.JSX.Element {
     installLichessAuth();
     lichessLoginCompletion ??= completeLichessLogin().catch((err: unknown) => {
       // A failed login (bad state, lichess-reported error, ...) shouldn't break the rest of the
-      // app; the user can just try logging in again from LichessLogin.
+      // app; the user can just try logging in again from the opening explorer's LichessLogin.
       console.error('lichess login did not complete:', err);
     });
   }, []);
@@ -88,7 +87,6 @@ export function App(): React.JSX.Element {
     <div className="app">
       <header className="app-header">
         <a href="#/">human-chess</a>
-        <LichessLogin />
         <span className="app-engine">{engineLine}</span>
       </header>
       {hash === '#/endgames' ? (
