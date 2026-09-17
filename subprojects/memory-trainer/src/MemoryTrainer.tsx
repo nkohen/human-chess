@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Board } from '@human-chess/board';
-import { ImportScreen } from '@human-chess/import/react';
+import { fetchLatestGameFrom, ImportScreen } from '@human-chess/import/react';
 import type { ImportedGame } from '@human-chess/import';
 import {
   annotateLine, fullmove, inCheck, opposite, positionFromFen, turn, uciSquares, type Color, type SquareName,
 } from '@human-chess/rules';
 import { classifyCompleteAttempt, compareReconstruction, fenSequence, type ReconstructionOutcome } from './compare';
+import { relativeTime } from './relativeTime';
 import {
   currentFen, lastReconstructedMove, playReconstructionMove, reconstructedSans, reconstructedUcis,
   reconstructionDests, sideToMove, startReconstruction, type Reconstruction,
@@ -115,8 +116,37 @@ export function MemoryTrainer(): React.JSX.Element {
 
   const startOver = (): void => setScreen({ kind: 'import' });
 
+  const [refetching, setRefetching] = useState(false);
+  const [refetchError, setRefetchError] = useState<string | undefined>(undefined);
+
   const beginReconstruction = (game: ImportedGame): void => {
+    setRefetchError(undefined);
     setScreen({ kind: 'reconstruct', game, reconstruction: startReconstruction(game.startFen) });
+  };
+
+  // "Fetch again" on the reconstruct screen (site lag / our own 60 s cache can hand back the
+  // game before the last one — see memory/subprojects/memory-trainer.md) reuses this exact same
+  // path: it discards the in-progress reconstruction and re-runs fetchLatestGameFrom for the
+  // game's own site+username, landing on a fresh reconstruct screen via beginReconstruction.
+  const fetchAgain = (game: ImportedGame): void => {
+    const site = game.source;
+    const username = game.username;
+    if ((site !== 'lichess' && site !== 'chess.com') || !username) return;
+    setRefetching(true);
+    setRefetchError(undefined);
+    fetchLatestGameFrom(site, username)
+      .then(fetched => {
+        // Stale-result guard (reviewer): if the learner has meanwhile finished the attempt or
+        // gone elsewhere, the late answer must not yank them back to a fresh reconstruct screen.
+        setScreen(prev =>
+          prev.kind === 'reconstruct' && prev.game === game
+            ? { kind: 'reconstruct', game: fetched, reconstruction: startReconstruction(fetched.startFen) }
+            : prev,
+        );
+        setRefetchError(undefined);
+      })
+      .catch((err: unknown) => setRefetchError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setRefetching(false));
   };
 
   if (screen.kind === 'import') {
@@ -138,6 +168,7 @@ export function MemoryTrainer(): React.JSX.Element {
     return (
       <div className="memory-trainer" style={shellStyle}>
         <GameIdentity game={game} withResult={false} />
+        <RecencyNote game={game} refetching={refetching} error={refetchError} onFetchAgain={() => fetchAgain(game)} />
         <div className="mt-reconstruct">
           <div className="mt-board-area" ref={reconstructBoardRef}>
             <Board
@@ -200,13 +231,46 @@ function plies(n: number): string {
   return `${n} ${n === 1 ? 'ply' : 'plies'}`;
 }
 
+/** Refreshed once a minute while a component using it stays mounted, so a relative "3 minutes
+ * ago" doesn't sit stale on screen (the reconstruct screen can stay open a long time). */
+function useNow(intervalMs: number): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+/** The clock-time part of the identity line: just the time when `iso` falls on today (relative
+ * to `now`), the full locale date-time otherwise — anchors a vague "3 minutes ago" to an actual
+ * time the learner can cross-check against memory. Kept separate from relativeTime, which answers
+ * a different question ("how long ago", coarse and never negative). */
+function absoluteTimeLabel(iso: string, now: Date): string | undefined {
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return undefined;
+  const isToday = then.toDateString() === now.toDateString();
+  return isToday
+    ? then.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    : then.toLocaleString();
+}
+
 /** One line saying which game was fetched, from ImportedGame's own fields only. `withResult`
- * is off on the reconstruction screen so the learner is not told who won before they try. */
+ * is off on the reconstruction screen so the learner is not told who won before they try.
+ * `playedAt` is chess.com's own game-END time but lichess/PGN's game-START time (from the PGN's
+ * UTCDate/UTCTime headers) — worded accordingly ("ended"/"started") rather than blurring the
+ * two into one ambiguous timestamp. */
 function GameIdentity({ game, withResult }: { game: ImportedGame; withResult: boolean }): React.JSX.Element | null {
+  const now = useNow(60_000);
   if (!game.white || !game.black) return null;
   const result = withResult && game.result && game.result !== '*' ? ` (${game.result})` : '';
   const played = game.playedAs ? `, you played ${game.playedAs === 'white' ? 'White' : 'Black'}` : '';
-  const when = game.playedAt ? `, ${new Date(game.playedAt).toLocaleString()}` : '';
+  const verb = game.source === 'chess.com' ? 'ended' : 'started';
+  const ago = game.playedAt ? relativeTime(game.playedAt, now) : undefined;
+  const clock = game.playedAt ? absoluteTimeLabel(game.playedAt, now) : undefined;
+  // "ended 3 minutes ago (14:39)" while a relative phrase applies; just the date-time otherwise;
+  // nothing at all for an unparseable timestamp (never "Invalid Date").
+  const when = clock ? `, ${verb} ${ago ? `${ago} (${clock})` : clock}` : '';
   return (
     <p className="memory-trainer-identity">
       {SOURCE_LABELS[game.source]}: {game.white} vs {game.black}
@@ -220,6 +284,42 @@ function GameIdentity({ game, withResult }: { game: ImportedGame; withResult: bo
             view game
           </a>
         </>
+      )}
+    </p>
+  );
+}
+
+/** Shown only on the reconstruct screen, and only for a game fetched from a site (a pasted PGN
+ * has no fetch to redo). Explains why the game just fetched can lag the one the learner just
+ * finished — the site's own publishing lag plus, for chess.com only, our client's 60 s cache on
+ * the archives list and newest archive (packages/chesscom/src/endpoints.ts's SHORT_TTL_MS; the
+ * lichess import goes through lichessFetch with no TTL cache, so that clause is not shown for
+ * lichess) — and offers to redo the exact fetch that landed on this screen, via the same
+ * fetchLatestGameFrom path ImportScreen itself uses. */
+function RecencyNote({
+  game,
+  refetching,
+  error,
+  onFetchAgain,
+}: {
+  game: ImportedGame;
+  refetching: boolean;
+  error: string | undefined;
+  onFetchAgain: () => void;
+}): React.JSX.Element | null {
+  if (game.source !== 'chess.com' && game.source !== 'lichess') return null;
+  return (
+    <p className="memory-trainer-recency-note">
+      Not the game you just played? A finished game can take a minute or two to appear on {game.source}
+      {game.source === 'chess.com' ? ', and this app reuses its last chess.com fetch for 60 s' : ''}.{' '}
+      <button onClick={onFetchAgain} disabled={refetching}>
+        {refetching ? 'Fetching…' : 'Fetch again'}
+      </button>
+      {error && (
+        <span role="alert" className="memory-trainer-recency-error">
+          {' '}
+          {error}
+        </span>
       )}
     </p>
   );

@@ -98,3 +98,17 @@ first. Both depth and the time cap are persisted settings on the review screen (
 builder's depth pattern), default 20 / 5s. The reached depth was always read from the engine's
 own report (never the requested depth), so with the cap in place the "depth X → Y" provenance
 display is now honestly a real, possibly-below-20 reached depth rather than an assumed 20.
+
+## Is the chess.com fetch itself slow? (measured 2026-09-17)
+The user asked whether the slow chess.com game review was the fetch. It was not measured at the
+time (the slowness was attributed to the engine search and capped, above). One deliberate timed
+probe from this machine (curl, identifying User-Agent, two requests) on 2026-09-17: the archives
+list answered in 0.25 s (3 KB) and the newest monthly archive in 0.37 s (26 KB, 7 games). That
+is the whole import path (`fetchLatestChesscomGame`: archives list, then the newest month), so
+under a second today. The monthly archive carries every game's full PGN, so a heavy month is
+much bigger — the user's Nov 2024 archive was 1.1 MB for 331 games — and that download would be
+the one visible fetch cost, still seconds, not the tens of seconds the engine took. Two facts
+worth keeping: chess.com's monthly endpoint sends `cache-control: max-age=5` (our 60 s TTL is
+ours, not theirs) and a weak `ETag`, so a conditional `If-None-Match` request would make a
+"fetch again" or a poll for a just-finished game cost a 304 instead of the whole month.
+Not built; noted as the next step if fetch cost ever matters.

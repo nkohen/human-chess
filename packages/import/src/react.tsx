@@ -81,6 +81,13 @@ const FETCHERS: Record<ImportSite, (username: string) => Promise<ImportedGame>> 
   'chess.com': fetchLatestChesscomGame,
 };
 
+/** The one place that turns (site, username) into a fetch — used by ImportScreen's own button
+ * and by any other screen (e.g. the memory trainer's "Fetch again") that needs to re-run the
+ * exact same fetch later, so there is only one path to duplicate a bug in. */
+export function fetchLatestGameFrom(site: ImportSite, username: string): Promise<ImportedGame> {
+  return FETCHERS[site](username);
+}
+
 /**
  * Import a game by username from lichess or chess.com (fetches the player's latest game) or by
  * pasting a PGN. Guards against a stale fetch clobbering a screen the user already moved past:
@@ -117,7 +124,7 @@ export function ImportScreen({ onImported, storageKey, title = 'Import a game' }
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(undefined);
-    FETCHERS[site](username.trim())
+    fetchLatestGameFrom(site, username.trim())
       .then(game => {
         if (settledRef.current || requestIdRef.current !== requestId) return;
         settledRef.current = true;

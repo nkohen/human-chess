@@ -77,6 +77,19 @@ happening here" fact extraction. Decompose that into the shared layer before bot
   longer than the game / diverged). Review text counts plies and says so.
 - Still unknown from the user: which site they imported from and whether they played Black when
   the wrong-game judgement happened; if it recurs, the identity line now says what was fetched.
+- User report 2026-09-17: fetched right after finishing a game, got the *previous* one — a real
+  site (a finished game can take a minute or two to be published) and our own client (chess.com's
+  archives list and current-month archive are cached 60 s, `SHORT_TTL_MS` in
+  `packages/chesscom/src/endpoints.ts`) both lag. Fix: the identity line now says how recent the
+  game is — `relativeTime` (new `subprojects/memory-trainer/src/relativeTime.ts`, unit-tested)
+  gives "ended 3 minutes ago" (chess.com, whose `playedAt` is the game's END) or "started 3
+  minutes ago" (lichess/PGN, whose `playedAt` is the game's START, from PGN UTCDate/UTCTime),
+  plus the clock time in parentheses; refreshed once a minute while mounted. The reconstruct
+  screen also gets a one-line note (site-fetched games only) explaining the lag (the 60 s cache
+  clause is shown for chess.com only — the lichess import has no TTL cache) and a
+  "Fetch again" button that discards the reconstruction and re-runs the exact same fetch —
+  `fetchLatestGameFrom` was pulled out of `packages/import/src/react.tsx` so ImportScreen's own
+  button and this one share the one fetch path rather than duplicating it.
 
 ## Status
 Interview closed 2026-09-16; the user may add more later.
