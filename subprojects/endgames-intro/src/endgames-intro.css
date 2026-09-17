@@ -1,0 +1,51 @@
+/* Genuinely endgames-intro's own (docs/design/2026-09-17-ui.md, adoption rule 5): the two
+   scrolling lists (the lesson ladder and the curated "from your games" positions) and a few
+   inline text touches (the new-piece callout, the transcribed-from-a-screenshot hint, the game
+   provenance/starting-eval lines) that packages/ui has no primitive for. Everything reads its
+   colour and spacing from --hc-* tokens; nothing here redefines the button, panel or layout
+   styling packages/ui already provides. */
+
+.endgames-section-title {
+  margin: var(--hc-space-4) 0 var(--hc-space-2);
+  font-size: var(--hc-text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hc-text-muted);
+}
+
+.endgames-section-title:first-child {
+  margin-top: 0;
+}
+
+.endgames-lesson-list,
+.endgames-curated-list {
+  list-style: none;
+  margin: 0 0 var(--hc-space-2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-1);
+}
+
+.endgames-lesson-list .hc-button,
+.endgames-curated-list .hc-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.endgames-current {
+  font-weight: 600;
+  color: var(--hc-accent);
+}
+
+.endgames-newpiece {
+  font-weight: 600;
+}
+
+.endgames-transcribed-hint,
+.endgames-provenance,
+.endgames-starting-eval {
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+}

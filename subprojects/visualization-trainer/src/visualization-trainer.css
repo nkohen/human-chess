@@ -1,18 +1,63 @@
-.viz { max-width: 32rem; padding: 1rem; margin: 0 auto; }
-.viz-round { font-weight: bold; margin: 0 0 0.25rem; }
-.viz-tally { font-weight: bold; }
-.viz-board { max-width: 24rem; margin: 0 auto 1rem; }
-.viz-summary { text-align: center; padding: 2rem 0; }
-.viz-summary-score { font-weight: bold; font-size: 1.1rem; }
-.viz-material-before { margin: 0 0 0.25rem; font-style: italic; min-width: 100%; }
-.viz-status { min-height: 1.5em; }
-.viz-dialog { border: 1px solid #8886; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0; }
-.viz-line { font-size: 1.1rem; margin: 1rem 0; }
-.viz-question { display: flex; align-items: center; gap: 0.5rem; margin: 0.75rem 0; flex-wrap: wrap; }
-.viz-question p { margin: 0; min-width: 100%; }
-.viz-question button.selected { font-weight: bold; outline: 2px solid currentColor; }
-.viz-correct { color: #1a7f37; font-weight: bold; }
-.viz-wrong { color: #b3261e; font-weight: bold; }
-.viz-check { margin-top: 0.5rem; }
-.viz-end { margin-top: 1.5rem; border-top: 1px solid #8884; padding-top: 1rem; }
-.viz-end .viz-board { max-width: 24rem; }
+/* Only what's genuinely this subproject's: the question rows, the correct/wrong markers, and
+ * the small end-position board shown after a reveal. Spacing, colour, buttons, fields and the
+ * board-left/actions-right layout all come from @human-chess/ui (docs/design/2026-09-17-ui.md). */
+
+.viz-summary {
+  text-align: center;
+}
+
+.viz-summary-score {
+  font-weight: bold;
+  font-size: var(--hc-text-lg);
+  margin: 0 0 var(--hc-space-3);
+}
+
+.viz-material-before {
+  margin: 0 0 var(--hc-space-1);
+  font-style: italic;
+  color: var(--hc-text-muted);
+}
+
+.viz-dialog {
+  background: var(--hc-surface);
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+  padding: var(--hc-space-4);
+}
+
+.viz-line {
+  font-size: var(--hc-text-lg);
+  margin: 0 0 var(--hc-space-4);
+}
+
+.viz-question {
+  margin: 0 0 var(--hc-space-3);
+}
+
+/* The SegmentedControl has no disabled state of its own; once the reveal locks the check
+ * question's answer, this dims it and blocks pointer events to match. */
+.viz-question-locked .hc-segmented {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.viz-correct {
+  color: var(--hc-success);
+  font-weight: bold;
+}
+
+.viz-wrong {
+  color: var(--hc-danger);
+  font-weight: bold;
+}
+
+.viz-end {
+  margin-top: var(--hc-space-4);
+  border-top: 1px solid var(--hc-border);
+  padding-top: var(--hc-space-3);
+}
+
+.viz-board-end {
+  max-width: 14rem;
+  margin: var(--hc-space-2) 0;
+}

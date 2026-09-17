@@ -126,3 +126,19 @@ cross-checked; the site's own displayed eval is never shown as an eval, A1). The
 give the evidence for the on-hold stricter-imbalance criterion — table and proposed rule in
 memory/subprojects/chessitout-variant.md, not built until the user agrees. The lichess login
 button was removed from the app header on the user's request; the explorer panel keeps its own.
+
+Feedback pass 8 (2026-09-17, design): the user found the app ugly, with primary buttons at the
+bottom of the screen. Decided with the user: board left, actions panel right on every board
+screen, one pass over every screen. Spec in docs/design/2026-09-17-ui.md; `packages/ui` built
+first (0f17c6f), then six Sonnet workers migrated all eleven subprojects plus ImportScreen and
+LichessLogin in parallel worktrees; merged, reviewed, and smoke-tested at 1280x800 and 1280x650
+(no page or main-region overflow on any route, no console errors, primary controls in the top
+third). apps/web/src/styles.css is gone; the app's CSS is `packages/ui` plus a small file per
+subproject. Reviewer catches fixed before commit: the new game-reviewer move table numbered moves
+by 1-based ply ("2. e5") and its rows were not keyboard-reachable; Field wrapping a
+SegmentedControl in a `<label>`; the stacked (<60rem) Workbench could not size its board.
+Accepted drifts: "Root" is now "Back to start" in the openings builder; hand-and-brain's duplicate
+end-of-game dialog is gone (its text is the status line); placeholder start-position boards show
+while a position is being mined. Not built, awaiting the user: a setup screen for hand-and-brain
+(no engine opponent or role assignment exists yet).
+

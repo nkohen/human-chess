@@ -1,0 +1,15 @@
+/* The only bit of `LichessLogin` that is genuinely its own: a small inline row (buttons and
+ * status come from @human-chess/ui's Button/Status). Everything else — colours, spacing, the
+ * button look — comes from the shared package's tokens/base.css by way of Button/Status.
+ * Previously lived as `.lichess-login*` in apps/web/src/styles.css (2026-09-17 UI pass moved it
+ * here, next to the component that owns it; the old rules there are now dead). */
+.lichess-login {
+  display: flex;
+  align-items: center;
+  gap: var(--hc-space-2);
+  font-size: var(--hc-text-sm);
+}
+
+.lichess-login-user {
+  color: var(--hc-text-muted);
+}

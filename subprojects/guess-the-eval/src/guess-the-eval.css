@@ -1,38 +1,21 @@
-.gte { max-width: 32rem; padding: 1rem; margin: 0 auto; }
-.gte-status { min-height: 1.5em; }
-.gte-round { font-size: 0.85rem; opacity: 0.7; margin: 0 0 0.25rem; }
-.gte-turn { font-weight: bold; font-size: 1.05rem; margin: 0.25rem 0; }
-.gte-source { font-size: 0.85rem; opacity: 0.7; }
-.gte-guess { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem; }
-.gte-guess input[type='range'] { width: 100%; }
-.gte-reveal { margin-top: 0.75rem; }
-.gte-reveal p { margin: 0.35rem 0; }
-.gte-score { font-weight: bold; }
-.gte-provenance { color: #666; font-size: 0.9em; }
+/* Everything generic (layout, spacing, buttons, colours, the "primary" look) now comes from
+   @human-chess/ui's Workbench/Page/Field/Button/Status and its tokens; this file keeps only what
+   is genuinely Guess the eval's own: the round/turn/source call-outs, the eval scale's geometry
+   (an explicit keep — it is not a primitive the shared package covers), and the summary screen's
+   bar-chart rows. */
 
-/* Primary button (item 3/5, user feedback 2026-09-16): the main next-step action, full-width
-   up to the board's width and centred, larger than the plain buttons around it. */
-.gte-primary {
-  display: block;
-  width: 100%;
-  min-width: 12rem;
-  margin: 0 auto 1rem;
-  padding: 0.75rem 1.5rem;
-  font-size: 1.05rem;
-  font-weight: bold;
-  text-align: center;
-  color: #fff;
-  background: #1a56db;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.gte-primary:hover { background: #1747b8; }
-.gte-primary:disabled { opacity: 0.6; cursor: default; }
+.gte-round { font-size: var(--hc-text-sm); color: var(--hc-text-muted); margin: 0 0 var(--hc-space-1); }
+.gte-turn { font-weight: 600; font-size: var(--hc-text-base); margin: 0 0 var(--hc-space-1); }
+.gte-source { font-size: var(--hc-text-sm); color: var(--hc-text-muted); }
+.gte-score { font-weight: 600; }
+.gte-provenance { color: var(--hc-text-muted); font-size: 0.9em; }
+.gte-topline { margin: var(--hc-space-2) 0; }
 
-/* Eval scale: replaces the slider, same width, after a reveal. Nine bands (item 1, user
-   feedback 2026-09-16): "winning" split into "winning" and a darker-shaded "dominating". */
-.gte-scale { width: 100%; margin-top: 1.5rem; }
+/* Eval scale: replaces the slider (same width) after a reveal, and shows compact on the summary
+   rows. Nine bands (item 1, user feedback 2026-09-16): "winning" split into "winning" and a
+   darker-shaded "dominating". The band hues are a bespoke gradient with no equivalent in the
+   shared token set, so they stay literal; spacing and the two marker colours read from tokens. */
+.gte-scale { width: 100%; margin-top: var(--hc-space-5); }
 .gte-scale-bar { position: relative; display: flex; width: 100%; height: 1.25rem; border-radius: 3px; overflow: visible; }
 .gte-scale-seg { height: 100%; }
 .gte-seg-black-dominating { background: #2a0d0d; }
@@ -47,14 +30,14 @@
 
 .gte-scale-marker { position: absolute; top: 0; width: 0; height: 100%; transform: translateX(-50%); }
 .gte-scale-marker::before { content: ''; position: absolute; left: -1px; top: -0.3rem; width: 2px; height: calc(100% + 0.6rem); }
-.gte-scale-marker-guess::before { background: #1a56db; }
-.gte-scale-marker-truth::before { background: #d97706; }
+.gte-scale-marker-guess::before { background: var(--hc-accent); }
+.gte-scale-marker-truth::before { background: var(--hc-warning); }
 .gte-scale-marker-label { position: absolute; left: 50%; transform: translateX(-50%); font-size: 0.68rem; white-space: nowrap; font-weight: bold; }
-.gte-scale-marker-guess .gte-scale-marker-label { top: -1.15rem; color: #1a56db; }
-.gte-scale-marker-truth .gte-scale-marker-label { bottom: -1.15rem; color: #d97706; }
+.gte-scale-marker-guess .gte-scale-marker-label { top: -1.15rem; color: var(--hc-accent); }
+.gte-scale-marker-truth .gte-scale-marker-label { bottom: -1.15rem; color: var(--hc-warning); }
 
-.gte-scale-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 0.75rem; margin-top: 1.6rem; font-size: 0.72rem; opacity: 0.85; }
-.gte-scale-legend-item { display: inline-flex; align-items: center; gap: 0.25rem; }
+.gte-scale-legend { display: flex; flex-wrap: wrap; gap: var(--hc-space-1) var(--hc-space-3); margin-top: 1.6rem; font-size: 0.72rem; color: var(--hc-text-muted); }
+.gte-scale-legend-item { display: inline-flex; align-items: center; gap: var(--hc-space-1); }
 .gte-scale-swatch { display: inline-block; width: 0.65rem; height: 0.65rem; border-radius: 2px; }
 
 /* Compact eval scale (item 5, user feedback 2026-09-16): summary-row use, no legend, no marker
@@ -65,17 +48,16 @@
 .gte-scale-compact .gte-scale-marker::before { top: -1px; height: calc(100% + 2px); width: 2px; }
 
 /* Summary screen (item 5, user feedback 2026-09-16): bars instead of a text list. */
-.gte-bar-row { display: flex; align-items: center; gap: 0.6rem; margin: 0.3rem 0; }
-.gte-bar { position: relative; flex: 1; height: 1rem; background: #e5e5e5; border-radius: 4px; overflow: hidden; }
-.gte-bar-fill { height: 100%; background: #1a56db; border-radius: 4px 0 0 4px; }
-.gte-bar-value { min-width: 3.5rem; font-size: 0.85rem; font-weight: bold; text-align: right; white-space: nowrap; }
+.gte-bar-row { display: flex; align-items: center; gap: var(--hc-space-2); margin: var(--hc-space-1) 0; }
+.gte-bar { position: relative; flex: 1; height: 1rem; background: var(--hc-surface-2); border-radius: 4px; overflow: hidden; }
+.gte-bar-fill { height: 100%; background: var(--hc-accent); border-radius: 4px 0 0 4px; }
+.gte-bar-value { min-width: 3.5rem; font-size: var(--hc-text-sm); font-weight: 600; text-align: right; white-space: nowrap; }
 
-.gte-summary-total-row { margin: 0.75rem 0 1.25rem; }
+.gte-summary-total-row { margin: var(--hc-space-3) 0 var(--hc-space-5); }
 .gte-summary-total-row .gte-bar { height: 1.6rem; }
-.gte-summary-total-row .gte-bar-value { min-width: 6rem; font-size: 1.1rem; }
+.gte-summary-total-row .gte-bar-value { min-width: 6rem; font-size: var(--hc-text-lg); }
 
 .gte-summary-list { list-style: none; padding: 0; margin: 0; }
-.gte-summary-row { padding: 0.4rem 0; border-top: 1px solid #eee; cursor: default; }
+.gte-summary-row { padding: var(--hc-space-2) 0; border-top: 1px solid var(--hc-border); cursor: default; }
 .gte-summary-row:first-child { border-top: none; }
-.gte-summary-row-values { font-size: 0.78rem; opacity: 0.8; white-space: nowrap; }
-.gte-topline { margin: 0.35rem 0; }
+.gte-summary-row-values { font-size: 0.78rem; color: var(--hc-text-muted); white-space: nowrap; }

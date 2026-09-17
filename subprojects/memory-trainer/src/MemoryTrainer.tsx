@@ -5,6 +5,7 @@ import type { ImportedGame } from '@human-chess/import';
 import {
   annotateLine, fullmove, inCheck, opposite, positionFromFen, turn, uciSquares, type Color, type SquareName,
 } from '@human-chess/rules';
+import { Button, Toolbar, Workbench } from '@human-chess/ui';
 import { classifyCompleteAttempt, compareReconstruction, fenSequence, type ReconstructionOutcome } from './compare';
 import { relativeTime } from './relativeTime';
 import {
@@ -19,10 +20,6 @@ type Screen =
   | { kind: 'import' }
   | { kind: 'reconstruct'; game: ImportedGame; reconstruction: Reconstruction }
   | { kind: 'review'; game: ImportedGame; reconstruction: Reconstruction; claimedComplete: boolean };
-
-/** `style` plus the one CSS custom property this file uses, so `--mt-height` can be set without
- * an `as` cast at every call site. */
-type ShellStyle = React.CSSProperties & { '--mt-height'?: string };
 
 /**
  * Ply → (colour, move number), anchored to the game's real start position — not always White
@@ -43,76 +40,14 @@ const ordinalMove = (
   };
 };
 
-/**
- * The viewport height available below the app's header (`.hc-app-shell__header`, rendered by apps/web's
- * App.tsx — outside this subproject, so its height is read from the DOM rather than assumed).
- * Recomputed on window resize and whenever the header itself resizes (login state changing,
- * engine status text wrapping, ...). Undefined until the first measurement lands; callers fall
- * back to a viewport-relative CSS value (`100vh`) for that first paint.
- */
-function useAvailableHeight(): number | undefined {
-  const [height, setHeight] = useState<number | undefined>(undefined);
-  useEffect(() => {
-    const header = document.querySelector<HTMLElement>('.hc-app-shell__header');
-    const compute = (): void => setHeight(window.innerHeight - (header?.getBoundingClientRect().height ?? 0));
-    compute();
-    window.addEventListener('resize', compute);
-    let observer: ResizeObserver | undefined;
-    if (header && typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(compute);
-      observer.observe(header);
-    }
-    return () => {
-      window.removeEventListener('resize', compute);
-      observer?.disconnect();
-    };
-  }, []);
-  return height;
-}
-
-/**
- * Tracks a DOM node's rendered content-box size, so a board can be given the exact pixel size
- * that fits the space CSS has actually allotted it (the smaller of that space's width and
- * height), rather than a width-only CSS percentage that ignores how tall the space is. A
- * callback ref (not a plain object ref read inside `useEffect`) because the measured element
- * mounts and unmounts as `MemoryTrainer` switches screens, while the hook call itself must stay
- * unconditional (Rules of Hooks) — a callback ref re-fires whenever the node changes.
- */
-function useElementSize<T extends HTMLElement>(): [(node: T | null) => void, { width: number; height: number } | undefined] {
-  const [node, setNode] = useState<T | null>(null);
-  const [size, setSize] = useState<{ width: number; height: number } | undefined>(undefined);
-  useEffect(() => {
-    if (!node || typeof ResizeObserver === 'undefined') {
-      setSize(undefined);
-      return;
-    }
-    const observer = new ResizeObserver((entries: ResizeObserverEntry[]) => {
-      const box = entries[0]?.contentRect;
-      if (box) setSize({ width: box.width, height: box.height });
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [node]);
-  return [setNode, size];
-}
-
-/** The square board size (CSS px) that fits inside a measured area without forcing the page to
- * scroll: the smaller of the area's width and height. '100%' until the first measurement lands
- * (a single-frame fallback; the area itself clips overflow while unmeasured). */
-function squareSize(area: { width: number; height: number } | undefined): string {
-  return area ? `${Math.max(0, Math.floor(Math.min(area.width, area.height)))}px` : '100%';
+/** CSS size string for `@human-chess/board`'s `Board`, from the pixel side length `Workbench`'s
+ * `board` render prop hands back (0 until the first measurement lands). */
+function boardSize(sizePx: number): string {
+  return sizePx > 0 ? `${sizePx}px` : '100%';
 }
 
 export function MemoryTrainer(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ kind: 'import' });
-  const availableHeight = useAvailableHeight();
-  // Both board areas are sized by the same pair of hooks regardless of which screen is showing
-  // (Rules of Hooks: the same hooks must run every render), so only one screen's ref is ever
-  // actually attached to a DOM node at a time.
-  const [reconstructBoardRef, reconstructBoardArea] = useElementSize<HTMLDivElement>();
-  const [reviewBoardRef, reviewBoardArea] = useElementSize<HTMLDivElement>();
-  const shellStyle: ShellStyle | undefined =
-    availableHeight !== undefined ? { '--mt-height': `${Math.max(0, Math.floor(availableHeight))}px` } : undefined;
 
   const startOver = (): void => setScreen({ kind: 'import' });
 
@@ -150,11 +85,7 @@ export function MemoryTrainer(): React.JSX.Element {
   };
 
   if (screen.kind === 'import') {
-    return (
-      <div className="memory-trainer" style={shellStyle}>
-        <ImportScreen storageKey={STORAGE_KEY} title="Memory trainer" onImported={beginReconstruction} />
-      </div>
-    );
+    return <ImportScreen storageKey={STORAGE_KEY} title="Memory trainer" onImported={beginReconstruction} />;
   }
 
   if (screen.kind === 'reconstruct') {
@@ -166,56 +97,20 @@ export function MemoryTrainer(): React.JSX.Element {
     // game's length itself; ReviewScreen is the only place that compares against it.
     const onDone = (claimedComplete: boolean): void => setScreen({ kind: 'review', game, reconstruction, claimedComplete });
     return (
-      <div className="memory-trainer" style={shellStyle}>
-        <GameIdentity game={game} withResult={false} />
-        <RecencyNote game={game} refetching={refetching} error={refetchError} onFetchAgain={() => fetchAgain(game)} />
-        <div className="mt-reconstruct">
-          <div className="mt-board-area" ref={reconstructBoardRef}>
-            <Board
-              fen={currentFen(reconstruction)}
-              orientation={game.playedAs ?? 'white'}
-              turnColor={sideToMove(reconstruction)}
-              dests={reconstructionDests(reconstruction)}
-              movableColor={sideToMove(reconstruction)}
-              lastMove={lastReconstructedMove(reconstruction)}
-              check={inCheck(reconstruction.pos)}
-              onMove={onMove}
-              size={squareSize(reconstructBoardArea)}
-            />
-          </div>
-          <div className="mt-side">
-            <p className="memory-trainer-note">
-              Enter both sides' moves as best you remember them. Wrong moves are accepted silently —
-              the board just keeps going from your version of the position. Promotions always become
-              a queen.
-            </p>
-            <MoveList startFen={reconstruction.startFen} ucis={reconstructedUcis(reconstruction)} />
-            <div className="mt-buttons">
-              <button className="memory-trainer-done" onClick={() => onDone(false)}>
-                I have no idea
-              </button>
-              <button className="memory-trainer-claim-complete" onClick={() => onDone(true)}>
-                That's the whole game
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ReconstructScreen
+        game={game}
+        reconstruction={reconstruction}
+        onMove={onMove}
+        onDone={onDone}
+        refetching={refetching}
+        refetchError={refetchError}
+        onFetchAgain={() => fetchAgain(game)}
+      />
     );
   }
 
   const { game, reconstruction, claimedComplete } = screen;
-  return (
-    <ReviewScreen
-      game={game}
-      reconstruction={reconstruction}
-      claimedComplete={claimedComplete}
-      onAnotherGame={startOver}
-      shellStyle={shellStyle}
-      boardAreaRef={reviewBoardRef}
-      boardArea={reviewBoardArea}
-    />
-  );
+  return <ReviewScreen game={game} reconstruction={reconstruction} claimedComplete={claimedComplete} onAnotherGame={startOver} />;
 }
 
 /** One line identifying the fetched game — site, players, which colour the learner played, when
@@ -312,9 +207,9 @@ function RecencyNote({
     <p className="memory-trainer-recency-note">
       Not the game you just played? A finished game can take a minute or two to appear on {game.source}
       {game.source === 'chess.com' ? ', and this app reuses its last chess.com fetch for 60 s' : ''}.{' '}
-      <button onClick={onFetchAgain} disabled={refetching}>
+      <Button variant="quiet" size="sm" onClick={onFetchAgain} disabled={refetching}>
         {refetching ? 'Fetching…' : 'Fetch again'}
-      </button>
+      </Button>
       {error && (
         <span role="alert" className="memory-trainer-recency-error">
           {' '}
@@ -351,25 +246,96 @@ function MoveList({ startFen, ucis }: { startFen: string; ucis: string[] }): Rea
   );
 }
 
+/**
+ * The reconstruction screen: the board on the left (via Workbench's `board` render prop) takes
+ * moves from memory; the right panel leads with the prompt (what to do, and the one action that
+ * claims the attempt complete), then the game's identity/recency context and the move list so
+ * far, then "give up" and "flip" at the bottom — the same board/aside split every Workbench
+ * screen uses (docs/design/2026-09-17-ui.md).
+ */
+function ReconstructScreen({
+  game,
+  reconstruction,
+  onMove,
+  onDone,
+  refetching,
+  refetchError,
+  onFetchAgain,
+}: {
+  game: ImportedGame;
+  reconstruction: Reconstruction;
+  onMove: (from: SquareName, to: SquareName) => void;
+  onDone: (claimedComplete: boolean) => void;
+  refetching: boolean;
+  refetchError: string | undefined;
+  onFetchAgain: () => void;
+}): React.JSX.Element {
+  const [flipped, setFlipped] = useState(false);
+  const baseOrientation = game.playedAs ?? 'white';
+  const orientation = flipped ? opposite(baseOrientation) : baseOrientation;
+
+  return (
+    <Workbench
+      title="Memory trainer"
+      primary={
+        <>
+          <p className="memory-trainer-note">
+            Enter both sides' moves as best you remember them. Wrong moves are accepted silently —
+            the board just keeps going from your version of the position. Promotions always become
+            a queen.
+          </p>
+          <Button className="memory-trainer-claim-complete" variant="primary" onClick={() => onDone(true)}>
+            That's the whole game
+          </Button>
+        </>
+      }
+      board={sizePx => (
+        <Board
+          fen={currentFen(reconstruction)}
+          orientation={orientation}
+          turnColor={sideToMove(reconstruction)}
+          dests={reconstructionDests(reconstruction)}
+          movableColor={sideToMove(reconstruction)}
+          lastMove={lastReconstructedMove(reconstruction)}
+          check={inCheck(reconstruction.pos)}
+          onMove={onMove}
+          size={boardSize(sizePx)}
+        />
+      )}
+      footer={
+        <Toolbar>
+          <Button className="memory-trainer-done" variant="secondary" onClick={() => onDone(false)}>
+            I have no idea
+          </Button>
+          <Button variant="quiet" onClick={() => setFlipped(f => !f)}>
+            Flip board
+          </Button>
+        </Toolbar>
+      }
+    >
+      <GameIdentity game={game} withResult={false} />
+      <RecencyNote game={game} refetching={refetching} error={refetchError} onFetchAgain={onFetchAgain} />
+      <MoveList startFen={reconstruction.startFen} ucis={reconstructedUcis(reconstruction)} />
+    </Workbench>
+  );
+}
+
 function ReviewScreen({
   game,
   reconstruction,
   claimedComplete,
   onAnotherGame,
-  shellStyle,
-  boardAreaRef,
-  boardArea,
 }: {
   game: ImportedGame;
   reconstruction: Reconstruction;
   claimedComplete: boolean;
   onAnotherGame: () => void;
-  shellStyle: ShellStyle | undefined;
-  boardAreaRef: (node: HTMLDivElement | null) => void;
-  boardArea: { width: number; height: number } | undefined;
 }): React.JSX.Element {
-  // ReviewScreen only mounts once per attempt (ReplayBoard below owns its own step state), so
-  // this pure comparison runs once rather than needing memoisation.
+  const [flipped, setFlipped] = useState(false);
+  const [replayIndex, setReplayIndex] = useState(0);
+
+  // ReviewScreen only mounts once per attempt, so this pure comparison runs once rather than
+  // needing memoisation.
   const userUcis = reconstructedUcis(reconstruction);
   const userSans = reconstructedSans(reconstruction);
   const segments = compareReconstruction(game.startFen, game.ucis, userUcis);
@@ -393,36 +359,76 @@ function ReviewScreen({
     ? classifyCompleteAttempt(segments, game.ucis.length, userUcis.length)
     : undefined;
 
+  const replayFens = realFens.slice(0, lastMatchPly + 1);
+  const replayUcis = game.ucis.slice(0, lastMatchPly);
+  const hasReplayBoard = replayFens.length > 1;
+  const clampedIndex = Math.min(replayIndex, replayFens.length - 1);
+  const replayFen = replayFens[clampedIndex] ?? replayFens[0] ?? game.startFen;
+  // replayFens[0] is the start position (no previous move); replayFens[i] for i > 0 is the
+  // position after replayUcis[i - 1], so that is the real move that produced the position shown.
+  const replayUci = clampedIndex > 0 ? replayUcis[clampedIndex - 1] : undefined;
+  const replayLastMove: [SquareName, SquareName] | undefined = replayUci ? uciSquares(replayUci) : undefined;
+  const canPrev = hasReplayBoard && clampedIndex > 0;
+  const canNext = hasReplayBoard && clampedIndex < replayFens.length - 1;
+
+  const baseOrientation = game.playedAs ?? 'white';
+  const orientation = flipped ? opposite(baseOrientation) : baseOrientation;
+
   return (
-    <div className="memory-trainer memory-trainer-review" style={shellStyle}>
-      <h2>How you did</h2>
-      <GameIdentity game={game} withResult={true} />
-      <p>
-        {userUcis.length === 0
-          ? 'You entered no moves.'
-          : outcome?.kind === 'perfect'
-            ? `Perfect: the whole game, ${plies(outcome.moves)}.`
-            : outcome?.kind === 'matched-shorter'
-              ? `You matched all ${plies(outcome.matched)} you entered, but the game went on for ${plies(outcome.remaining)} more.`
-              : outcome?.kind === 'matched-longer'
-                ? `You entered ${plies(outcome.extra)} more than the game had.`
-                : correctBeforeFirstDivergence > 0
-                  ? `You reconstructed the first ${correctBeforeFirstDivergence} ${correctBeforeFirstDivergence === 1 ? 'ply' : 'plies'} correctly.`
-                  : 'The very first move you entered did not match the real game.'}
-      </p>
-
-      {realFens.length > 1 && (
-        <div className="mt-review-board">
-          <ReplayBoard
-            fens={realFens.slice(0, lastMatchPly + 1)}
-            ucis={game.ucis.slice(0, lastMatchPly)}
-            orientation={game.playedAs ?? 'white'}
-            size={squareSize(boardArea)}
-            boardSlotRef={boardAreaRef}
+    <Workbench
+      title="How you did"
+      primary={
+        <p>
+          {userUcis.length === 0
+            ? 'You entered no moves.'
+            : outcome?.kind === 'perfect'
+              ? `Perfect: the whole game, ${plies(outcome.moves)}.`
+              : outcome?.kind === 'matched-shorter'
+                ? `You matched all ${plies(outcome.matched)} you entered, but the game went on for ${plies(outcome.remaining)} more.`
+                : outcome?.kind === 'matched-longer'
+                  ? `You entered ${plies(outcome.extra)} more than the game had.`
+                  : correctBeforeFirstDivergence > 0
+                    ? `You reconstructed the first ${correctBeforeFirstDivergence} ${correctBeforeFirstDivergence === 1 ? 'ply' : 'plies'} correctly.`
+                    : 'The very first move you entered did not match the real game.'}
+        </p>
+      }
+      board={sizePx =>
+        hasReplayBoard ? (
+          <Board
+            fen={replayFen}
+            orientation={orientation}
+            turnColor="white"
+            dests={new Map()}
+            movableColor={undefined}
+            lastMove={replayLastMove}
+            check={false}
+            onMove={() => {}}
+            size={boardSize(sizePx)}
           />
-        </div>
-      )}
-
+        ) : null
+      }
+      footer={
+        <Toolbar>
+          {hasReplayBoard && (
+            <>
+              <Button size="sm" onClick={() => setReplayIndex(i => Math.max(0, i - 1))} disabled={!canPrev}>
+                prev
+              </Button>
+              <Button size="sm" onClick={() => setReplayIndex(i => Math.min(replayFens.length - 1, i + 1))} disabled={!canNext}>
+                next
+              </Button>
+            </>
+          )}
+          <Button variant="quiet" onClick={() => setFlipped(f => !f)}>
+            Flip board
+          </Button>
+          <Button variant="secondary" onClick={onAnotherGame}>
+            Another game
+          </Button>
+        </Toolbar>
+      }
+    >
+      <GameIdentity game={game} withResult={true} />
       <div className="mt-review-details">
         {diverged.length === 0 && segments.length > 0 && <p>No divergence — you reconstructed the whole game you entered.</p>}
 
@@ -442,55 +448,6 @@ function ReviewScreen({
           );
         })}
       </div>
-
-      <button onClick={onAnotherGame}>Another game</button>
-    </div>
-  );
-}
-
-function ReplayBoard({
-  fens,
-  ucis,
-  orientation,
-  size,
-  boardSlotRef,
-}: {
-  fens: string[];
-  ucis: string[];
-  orientation: Color;
-  size: string;
-  boardSlotRef: (node: HTMLDivElement | null) => void;
-}): React.JSX.Element {
-  const [index, setIndex] = useState(0);
-  const clampedIndex = Math.min(index, fens.length - 1);
-  const fen = fens[clampedIndex] ?? fens[0]!;
-  // fens[0] is the start position (no previous move); fens[i] for i > 0 is the position after
-  // ucis[i - 1], so that is the real move that produced the position now shown.
-  const uci = clampedIndex > 0 ? ucis[clampedIndex - 1] : undefined;
-  const lastMove: [SquareName, SquareName] | undefined = uci ? uciSquares(uci) : undefined;
-  return (
-    <div className="memory-trainer-replay">
-      <div className="mt-board-area" ref={boardSlotRef}>
-        <Board
-          fen={fen}
-          orientation={orientation}
-          turnColor="white"
-          dests={new Map()}
-          movableColor={undefined}
-          lastMove={lastMove}
-          check={false}
-          onMove={() => {}}
-          size={size}
-        />
-      </div>
-      <div className="memory-trainer-replay-controls">
-        <button onClick={() => setIndex(i => Math.max(0, i - 1))} disabled={index === 0}>
-          prev
-        </button>
-        <button onClick={() => setIndex(i => Math.min(fens.length - 1, i + 1))} disabled={index >= fens.length - 1}>
-          next
-        </button>
-      </div>
-    </div>
+    </Workbench>
   );
 }

@@ -2,6 +2,10 @@
 // against a rating-limited engine opponent, then let the engine's own evaluation of the final
 // position say who stood better (A1: the verdict is a real engine Analysis, never invented).
 // Design record: memory/subprojects/opening-training-game.md.
+// UI: docs/design/2026-09-17-ui.md. Setup is a Page (Fields + SegmentedControls + one primary
+// Start Button); once a game is underway the screen is a Workbench, board left, with the
+// current status line and (once the game ends) the engine's verdict as `primary` throughout —
+// that content is unchanged from before this restyle, only its container is.
 import { useEffect, useMemo, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { formatScore, whitePerspective, type Analysis, type PvLine, type Score, type UciEngine } from '@human-chess/engine';
@@ -20,6 +24,7 @@ import {
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
 import { START_FEN, type Color } from '@human-chess/rules';
+import { Button, Field, Page, SegmentedControl, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
 import { verdict as computeVerdict, type Verdict } from './verdict';
 import './opening-training-game.css';
 
@@ -46,6 +51,7 @@ interface Settings {
 }
 
 type ColorChoice = Color | 'random';
+const COLOR_CHOICES: ColorChoice[] = ['white', 'black', 'random'];
 
 type VerdictState =
   | { kind: 'idle' }
@@ -125,56 +131,48 @@ export function OpeningTrainingGame({ engine }: OpeningTrainingGameProps): React
   const newGame = (): void => setSettings(undefined);
 
   if (!settings) {
+    const engineStatus: { kind: StatusKind; text: string } =
+      engine instanceof Error
+        ? { kind: 'error', text: `The engine could not be loaded: ${engine.message}` }
+        : !readyEngine
+          ? { kind: 'busy', text: 'Waiting for the engine to load…' }
+          : { kind: 'info', text: `Engine ready: ${readyEngine.name}.` };
+
     return (
-      <div className="otg">
-        <h2>Opening training game</h2>
-        <p className="otg-note">
-          Play a fixed number of moves each side from the start, then the engine's own evaluation of the final position says who
-          stood better. Untimed for now.
-        </p>
-        <div className="otg-setup">
-          <div className="otg-field">
-            <span>Moves each side</span>
-            <div className="otg-choices">
-              {MOVE_PRESETS.map(n => (
-                <button key={n} className={n === movesN ? 'selected' : ''} onClick={() => setMovesN(n)}>
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="otg-field">
-            <span>Your colour</span>
-            <div className="otg-choices">
-              {(['white', 'black', 'random'] satisfies ColorChoice[]).map(c => (
-                <button key={c} className={c === colorChoice ? 'selected' : ''} onClick={() => setColorChoice(c)}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="otg-field">
-            <label htmlFor="otg-elo">Opponent Elo</label>
-            <select id="otg-elo" value={elo} onChange={e => setElo(Number(e.target.value))}>
-              {ELO_OPTIONS.map(o => (
-                <option key={o} value={o}>
-                  {o} — {limitedStrength(o).description}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="otg-note">
-            {engine instanceof Error
-              ? `The engine could not be loaded: ${engine.message}`
-              : !readyEngine
-                ? 'Waiting for the engine to load…'
-                : `Engine ready: ${readyEngine.name}.`}
-          </p>
-          <button onClick={start} disabled={!readyEngine}>
-            Start
-          </button>
-        </div>
-      </div>
+      <Page
+        title="Opening training game"
+        intro="Play a fixed number of moves each side from the start, then the engine's own evaluation of the final position says who stood better. Untimed for now."
+      >
+        <Field label="Moves each side">
+          <SegmentedControl
+            options={MOVE_PRESETS.map(n => ({ value: n, label: String(n) }))}
+            value={movesN}
+            onChange={setMovesN}
+            ariaLabel="Moves each side"
+          />
+        </Field>
+        <Field label="Your colour">
+          <SegmentedControl
+            options={COLOR_CHOICES.map(c => ({ value: c, label: c }))}
+            value={colorChoice}
+            onChange={setColorChoice}
+            ariaLabel="Your colour"
+          />
+        </Field>
+        <Field label="Opponent Elo" htmlFor="otg-elo">
+          <select id="otg-elo" value={elo} onChange={e => setElo(Number(e.target.value))}>
+            {ELO_OPTIONS.map(o => (
+              <option key={o} value={o}>
+                {o} — {limitedStrength(o).description}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Status kind={engineStatus.kind}>{engineStatus.text}</Status>
+        <Button variant="primary" onClick={start} disabled={!readyEngine}>
+          Start
+        </Button>
+      </Page>
     );
   }
 
@@ -192,13 +190,60 @@ export function OpeningTrainingGame({ engine }: OpeningTrainingGameProps): React
     return 'Waiting for the opponent.';
   };
 
-  return (
-    <div className="otg">
-      <h2>Opening training game</h2>
-      <p className="otg-note">
-        {settings.movesN} moves each side, untimed for now. You play {settings.playerColor}.
+  const statusKind: StatusKind =
+    engine instanceof Error || engineState.kind === 'failed'
+      ? 'error'
+      : !readyEngine || engineState.kind === 'thinking'
+        ? 'busy'
+        : 'info';
+
+  // The status/verdict line: this is the thing the player must see next, so it is Workbench's
+  // `primary` throughout, not just once the game ends (docs/design/2026-09-17-ui.md screen note).
+  const primary = !finished ? (
+    <Status kind={statusKind}>{status()}</Status>
+  ) : game.end ? (
+    <>
+      <Status kind="info">{describeEnd(game)}</Status>
+      {natural && (
+        <p className="otg-outcome">
+          <strong>{outcomeWord(natural)}</strong>
+        </p>
+      )}
+    </>
+  ) : verdictState.kind === 'loading' || verdictState.kind === 'idle' ? (
+    <Status kind="busy">Evaluating the final position…</Status>
+  ) : verdictState.kind === 'failed' ? (
+    <Status kind="error">The engine failed: {verdictState.message}</Status>
+  ) : (
+    <>
+      <p>
+        Final evaluation, White's perspective: <strong>{formatScore(verdictState.whiteScore)}</strong>{' '}
+        <span className="otg-provenance">
+          ({verdictState.analysis.engine}, depth {verdictState.line.depth})
+        </span>
       </p>
-      <div className="otg-play">
+      <p className="otg-outcome">
+        <strong>{outcomeWord(verdictState.verdict)}</strong>
+      </p>
+    </>
+  );
+
+  // Once the move cap is reached the status line ("Reached N moves each.") still shows, above
+  // the verdict, exactly as before the design pass.
+  const primaryWithCap = plyLimitReached ? (
+    <>
+      <Status kind="info">{status()}</Status>
+      {primary}
+    </>
+  ) : (
+    primary
+  );
+
+  return (
+    <Workbench
+      title="Opening training game"
+      primary={primaryWithCap}
+      board={(sizePx: number) => (
         <Board
           fen={fen}
           orientation={settings.playerColor}
@@ -208,48 +253,23 @@ export function OpeningTrainingGame({ engine }: OpeningTrainingGameProps): React
           lastMove={lastMove(game)}
           check={isInCheck(game)}
           onMove={onPlayerMove}
+          size={`${sizePx}px`}
         />
-        <p className="otg-status" aria-live="polite">
-          {status()}
-        </p>
-        <MoveList moves={game.moves} />
-
-        {finished && (
-          <div className="otg-verdict">
-            {game.end ? (
-              <>
-                <p>{describeEnd(game)}</p>
-                {natural && (
-                  <p>
-                    <strong>{outcomeWord(natural)}</strong>
-                  </p>
-                )}
-              </>
-            ) : verdictState.kind === 'loading' || verdictState.kind === 'idle' ? (
-              <p>Evaluating the final position…</p>
-            ) : verdictState.kind === 'failed' ? (
-              <p>The engine failed: {verdictState.message}</p>
-            ) : (
-              <>
-                <p>
-                  Final evaluation, White's perspective: <strong>{formatScore(verdictState.whiteScore)}</strong>{' '}
-                  <span className="otg-provenance">
-                    ({verdictState.analysis.engine}, depth {verdictState.line.depth})
-                  </span>
-                </p>
-                <p>
-                  <strong>{outcomeWord(verdictState.verdict)}</strong>
-                </p>
-              </>
-            )}
-            <div className="otg-actions">
-              <button onClick={newGame}>New game</button>
-              <button onClick={rematch}>Rematch</button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+      footer={
+        finished ? (
+          <Toolbar>
+            <Button onClick={newGame}>New game</Button>
+            <Button onClick={rematch}>Rematch</Button>
+          </Toolbar>
+        ) : undefined
+      }
+    >
+      <p className="otg-note">
+        {settings.movesN} moves each side, untimed for now. You play {settings.playerColor}.
+      </p>
+      <MoveList moves={game.moves} />
+    </Workbench>
   );
 }
 

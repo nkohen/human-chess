@@ -3,6 +3,12 @@
 // suggest — never claim — the next level. Every move, evaluation-adjacent number and result
 // shown here traces to useEngineGame/the play package; nothing is generated free-form (A1, V3).
 // Design record: memory/subprojects/bot-rating-test.md.
+// UI: docs/design/2026-09-17-ui.md. One Workbench for the whole screen (board/editor left):
+// `primary` is the Elo control + Start button before a game, the live status line (plus, once
+// the game ends, the unchanged "suggested next level" line) during and after one; the FEN/side-
+// to-move/castling setup controls are `aside`; the record table is `children`; reset/resign are
+// `footer`. None of the underlying state, calculations or gating changed — only where each piece
+// renders.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Board, BoardEditor, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
@@ -29,6 +35,7 @@ import {
   type Color,
   type Position,
 } from '@human-chess/rules';
+import { Button, Field, Page, SegmentedControl, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
 import { appendRecord, clearRecords, loadRecords, type BotRatingRecord, type GameOutcome } from './records';
 import { ELO_LEVELS, suggestNextElo, suggestedStartingElo } from './suggest';
 import { highestWin, summarize } from './summary';
@@ -42,6 +49,11 @@ export interface BotRatingTestProps {
 const STANDARD_START_FEN = START_FEN;
 
 type ColorChoice = 'white' | 'black' | 'random';
+const COLOR_CHOICES: { value: ColorChoice; label: string }[] = [
+  { value: 'white', label: 'White' },
+  { value: 'black', label: 'Black' },
+  { value: 'random', label: 'Random' },
+];
 
 interface ActiveGame {
   elo: number;
@@ -61,6 +73,12 @@ const CASTLING_LABEL: Record<(typeof CASTLING_LETTERS)[number], string> = {
   k: 'Black O-O',
   q: 'Black O-O-O',
 };
+
+// The board slot is sized to a bare square (useFitSquare, packages/ui); BoardEditor also draws a
+// palette row below the board, so a size reservation keeps that combination from overflowing the
+// slot's allotted height (the board column's width in this layout comfortably fits the palette
+// on one row, so one row's worth of height is enough of a reserve).
+const EDITOR_PALETTE_RESERVE_PX = 64;
 
 function SummaryTable({ records }: { records: BotRatingRecord[] }): React.JSX.Element {
   const rows = summarize(records);
@@ -228,92 +246,101 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
 
   if (engine instanceof Error) {
     return (
-      <div className="brt">
-        <p className="brt-status">The engine could not be loaded: {engine.message}</p>
-      </div>
+      <Page title="Bot rating test">
+        <Status kind="error">The engine could not be loaded: {engine.message}</Status>
+      </Page>
     );
   }
   if (!engine) {
     return (
-      <div className="brt">
-        <p className="brt-status">Loading the engine…</p>
-      </div>
+      <Page title="Bot rating test">
+        <Status kind="busy">Loading the engine…</Status>
+      </Page>
     );
   }
 
   if (!active) {
     return (
-      <div className="brt">
-        <h2>Bot rating test</h2>
-        <div className="brt-setup">
-          <label>
-            Bot level (UCI_Elo)
-            <select value={elo} onChange={e => setElo(Number(e.target.value))}>
-              {ELO_LEVELS.map(l => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Your colour
-            <select value={colorChoice} onChange={e => setColorChoice(e.target.value as ColorChoice)}>
-              <option value="white">White</option>
-              <option value="black">Black</option>
-              <option value="random">Random</option>
-            </select>
-          </label>
-          <label>
-            Start position (FEN)
-            <input type="text" value={fenText} onChange={e => setFenText(e.target.value)} />
-          </label>
-          <label className="brt-board-toggle">
-            <input type="checkbox" checked={boardMode} onChange={e => setBoardMode(e.target.checked)} />
-            Set up on a board
-          </label>
-          {boardMode && (
-            <div className="brt-board-editor">
-              <BoardEditor
-                fen={placement}
-                orientation={colorChoice === 'black' ? 'black' : 'white'}
-                onChange={handleEditorChange}
-                size="16rem"
-              />
+      <Workbench
+        title="Bot rating test"
+        board={(sizePx: number) =>
+          boardMode ? (
+            <BoardEditor
+              fen={placement}
+              orientation={colorChoice === 'black' ? 'black' : 'white'}
+              onChange={handleEditorChange}
+              size={`${Math.max(0, sizePx - EDITOR_PALETTE_RESERVE_PX)}px`}
+            />
+          ) : null
+        }
+        primary={
+          <>
+            <Field label="Bot level (UCI_Elo)" htmlFor="brt-elo">
+              <select id="brt-elo" value={elo} onChange={e => setElo(Number(e.target.value))}>
+                {ELO_LEVELS.map(l => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Button variant="primary" onClick={handleStart}>
+              Start
+            </Button>
+          </>
+        }
+        aside={
+          <>
+            <Field label="Your colour">
+              <SegmentedControl options={COLOR_CHOICES} value={colorChoice} onChange={setColorChoice} ariaLabel="Your colour" />
+            </Field>
+            <Field label="Start position (FEN)" htmlFor="brt-fen">
+              <input id="brt-fen" type="text" value={fenText} onChange={e => setFenText(e.target.value)} />
+            </Field>
+            <label className="brt-board-toggle">
+              <input type="checkbox" checked={boardMode} onChange={e => setBoardMode(e.target.checked)} />
+              Set up on a board
+            </label>
+            {boardMode && (
               <div className="brt-board-editor-controls">
-                <fieldset>
-                  <legend>Side to move</legend>
-                  <label>
-                    <input type="radio" name="brt-turn" checked={turnField === 'white'} onChange={() => handleTurnChange('white')} />
-                    White
-                  </label>
-                  <label>
-                    <input type="radio" name="brt-turn" checked={turnField === 'black'} onChange={() => handleTurnChange('black')} />
-                    Black
-                  </label>
-                </fieldset>
-                <fieldset>
-                  <legend>Castling rights</legend>
-                  {CASTLING_LETTERS.filter(c => allowedCastling.includes(c)).map(c => (
-                    <label key={c}>
-                      <input type="checkbox" checked={castlingField.includes(c)} onChange={() => toggleCastling(c)} />
-                      {CASTLING_LABEL[c]}
-                    </label>
-                  ))}
-                  {allowedCastling.length === 0 && <p className="brt-castling-none">No castling rights possible from this placement.</p>}
-                </fieldset>
-                <div className="brt-actions">
-                  <button type="button" onClick={handleClearBoard}>Clear board</button>
-                  <button type="button" onClick={handleResetBoard}>Start position</button>
-                </div>
+                <Field label="Side to move">
+                  <SegmentedControl
+                    options={[
+                      { value: 'white' as Color, label: 'White' },
+                      { value: 'black' as Color, label: 'Black' },
+                    ]}
+                    value={turnField}
+                    onChange={handleTurnChange}
+                    ariaLabel="Side to move"
+                  />
+                </Field>
+                <Field label="Castling rights">
+                  <div className="brt-castling-row">
+                    {CASTLING_LETTERS.filter(c => allowedCastling.includes(c)).map(c => (
+                      <label key={c}>
+                        <input type="checkbox" checked={castlingField.includes(c)} onChange={() => toggleCastling(c)} />
+                        {CASTLING_LABEL[c]}
+                      </label>
+                    ))}
+                    {allowedCastling.length === 0 && <p className="brt-castling-none">No castling rights possible from this placement.</p>}
+                  </div>
+                </Field>
               </div>
-            </div>
-          )}
-          {fenError && <p className="brt-error">{fenError}</p>}
-          <button onClick={handleStart}>Start</button>
-        </div>
+            )}
+            {fenError && <Status kind="error">{fenError}</Status>}
+          </>
+        }
+        footer={
+          boardMode ? (
+            <Toolbar>
+              <Button onClick={handleClearBoard}>Clear board</Button>
+              <Button onClick={handleResetBoard}>Start position</Button>
+            </Toolbar>
+          ) : undefined
+        }
+      >
         <SummaryTable records={records} />
-      </div>
+      </Workbench>
     );
   }
 
@@ -326,44 +353,51 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
     return 'Waiting for the bot.';
   };
 
+  const statusKind: StatusKind = engineState.kind === 'failed' ? 'error' : engineState.kind === 'thinking' ? 'busy' : 'info';
+
   const suggested = outcome !== undefined ? suggestNextElo(active.elo, outcome) : active.elo;
 
   return (
-    <div className="brt">
-      <h2>Bot rating test</h2>
-      <p>
-        Playing {active.playerColor} against Stockfish, UCI_Elo {active.elo}.
-      </p>
-      <Board
-        fen={fen}
-        orientation={active.playerColor}
-        turnColor={sideToMove(game)}
-        dests={dests}
-        movableColor={!ended && isPlayersTurn(game) ? active.playerColor : undefined}
-        lastMove={lastMove(game)}
-        check={isInCheck(game)}
-        onMove={onPlayerMove}
-      />
-      <p className="brt-status" aria-live="polite">
-        {statusText()}
-      </p>
-      <div className="brt-moves">
-        {game.moves.length === 0 ? '(no moves yet)' : <MoveLine startFen={game.startFen} ucis={uciMoves(game)} orientation={active.playerColor} />}
-      </div>
-
-      {!ended && (
-        <div className="brt-actions">
-          <button onClick={() => setResigned(true)}>Resign</button>
-        </div>
+    <Workbench
+      title="Bot rating test"
+      status={
+        <p>
+          Playing {active.playerColor} against Stockfish, UCI_Elo {active.elo}.
+        </p>
+      }
+      board={(sizePx: number) => (
+        <Board
+          fen={fen}
+          orientation={active.playerColor}
+          turnColor={sideToMove(game)}
+          dests={dests}
+          movableColor={!ended && isPlayersTurn(game) ? active.playerColor : undefined}
+          lastMove={lastMove(game)}
+          check={isInCheck(game)}
+          onMove={onPlayerMove}
+          size={`${sizePx}px`}
+        />
       )}
-
-      {ended && (
-        <div className="brt-postgame">
-          <p>Suggested next level: <strong>{suggested}</strong></p>
-          <div className="brt-actions">
-            <button onClick={() => beginGame(suggested, colorChoice, fenText)}>Play suggested level</button>
-            <button onClick={() => setActive(undefined)}>Change settings</button>
-            <button
+      primary={
+        <>
+          <Status kind={statusKind}>{statusText()}</Status>
+          {ended && (
+            <p>
+              Suggested next level: <strong>{suggested}</strong>
+            </p>
+          )}
+        </>
+      }
+      footer={
+        !ended ? (
+          <Toolbar>
+            <Button onClick={() => setResigned(true)}>Resign</Button>
+          </Toolbar>
+        ) : (
+          <Toolbar>
+            <Button onClick={() => beginGame(suggested, colorChoice, fenText)}>Play suggested level</Button>
+            <Button onClick={() => setActive(undefined)}>Change settings</Button>
+            <Button
               onClick={() => {
                 const ok = typeof confirm === 'function' ? confirm('Clear all recorded bot-rating-test games? This cannot be undone.') : false;
                 if (!ok) return;
@@ -372,11 +406,15 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
               }}
             >
               Clear my records
-            </button>
-          </div>
-          <SummaryTable records={records} />
-        </div>
-      )}
-    </div>
+            </Button>
+          </Toolbar>
+        )
+      }
+    >
+      <div className="brt-moves">
+        {game.moves.length === 0 ? '(no moves yet)' : <MoveLine startFen={game.startFen} ucis={uciMoves(game)} orientation={active.playerColor} />}
+      </div>
+      {ended && <SummaryTable records={records} />}
+    </Workbench>
   );
 }

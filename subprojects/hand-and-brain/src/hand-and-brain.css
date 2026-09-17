@@ -1,0 +1,20 @@
+/* Only what's genuinely this subproject's: the row of piece-type call buttons and the
+ * monospace move list. Spacing, colour, buttons, panels and the board-left/actions-right layout
+ * all come from @human-chess/ui (docs/design/2026-09-17-ui.md). */
+
+.hb-calls {
+  display: flex;
+  gap: var(--hc-space-2);
+  flex-wrap: wrap;
+}
+
+.hb-call-button {
+  text-transform: capitalize;
+}
+
+.hb-move-line,
+.hb-no-moves {
+  margin: 0 0 var(--hc-space-1);
+  font-family: var(--hc-mono);
+  font-size: var(--hc-text-sm);
+}

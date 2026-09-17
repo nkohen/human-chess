@@ -11,7 +11,8 @@ import type { ImportedGame } from '@human-chess/import';
 import {
   ReviewCancelled, reviewGame, type Classification, type EvalOrEnd, type GameReview, type ReviewedMove, type ReviewProgress,
 } from '@human-chess/review';
-import { inCheck, positionFromFen, uciSquares, type SquareName } from '@human-chess/rules';
+import { inCheck, opposite, positionFromFen, uciSquares, type SquareName } from '@human-chess/rules';
+import { Button, Field, Status, Toolbar, Workbench } from '@human-chess/ui';
 import {
   loadDepth, loadMovetimeSeconds, MAX_DEPTH, MAX_MOVETIME_SECONDS, MIN_DEPTH, MIN_MOVETIME_SECONDS, saveDepth, saveMovetimeSeconds,
 } from './storage';
@@ -31,16 +32,18 @@ export function GameReviewer({ engine }: GameReviewerProps): React.JSX.Element {
   const startOver = (): void => setScreen({ kind: 'import' });
 
   if (screen.kind === 'import') {
-    return (
-      <div className="gr">
-        <ImportScreen storageKey={STORAGE_KEY} title="Game reviewer" onImported={game => setScreen({ kind: 'review', game })} />
-      </div>
-    );
+    return <ImportScreen storageKey={STORAGE_KEY} title="Game reviewer" onImported={game => setScreen({ kind: 'review', game })} />;
   }
   return <ReviewScreen engine={engine} game={screen.game} onAnotherGame={startOver} />;
 }
 
 type ReviewPhase = 'waiting-for-engine' | 'analysing' | 'done' | 'failed';
+
+/** CSS size string for `@human-chess/board`'s `Board`, from the pixel side length `Workbench`'s
+ * `board` render prop hands back (0 until the first measurement lands). */
+function boardSize(sizePx: number): string {
+  return sizePx > 0 ? `${sizePx}px` : '100%';
+}
 
 function ReviewScreen({
   engine,
@@ -57,6 +60,7 @@ function ReviewScreen({
   const [review, setReview] = useState<GameReview | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [selectedPly, setSelectedPly] = useState(0);
+  const [flipped, setFlipped] = useState(false);
 
   // Persisted per the openings builder's depth pattern (subprojects/openings-builder/src/
   // storage.ts): both settings survive a reload, and either one changing restarts the review
@@ -130,178 +134,152 @@ function ReviewScreen({
     };
   }, [readyEngine, game, depth, movetimeSeconds]);
 
-  if (engine instanceof Error) {
-    return (
-      <div className="gr">
-        <p className="gr-status">The engine could not be loaded: {engine.message}</p>
-        <button onClick={onAnotherGame}>Another game</button>
-      </div>
-    );
-  }
-  const settingsRow = (
-    <ReviewSettings
-      depth={depth}
-      depthText={depthText}
-      onDepthChange={setDepthText}
-      onDepthCommit={finalizeDepth}
-      movetimeSeconds={movetimeSeconds}
-      movetimeText={movetimeText}
-      onMovetimeChange={setMovetimeText}
-      onMovetimeCommit={finalizeMovetimeSeconds}
-    />
+  const baseOrientation = game.playedAs ?? 'white';
+  const orientation = flipped ? opposite(baseOrientation) : baseOrientation;
+
+  const move = review && selectedPly > 0 ? review.moves[selectedPly - 1] : undefined;
+  const fen = move ? move.fenAfter : game.startFen;
+  const lastMove: [SquareName, SquareName] | undefined = move ? uciSquares(move.uci) : undefined;
+  const canPrev = review ? selectedPly > 0 : false;
+  const canNext = review ? selectedPly < review.moves.length : false;
+
+  const capHint = `Depth ${depth}, at most ${movetimeSeconds} s per move (whichever comes first).`;
+
+  const settingsFields = (
+    <div className="gr-settings">
+      <Field label="Depth" htmlFor="gr-depth">
+        <input
+          id="gr-depth"
+          type="number"
+          min={MIN_DEPTH}
+          max={MAX_DEPTH}
+          value={depthText}
+          onChange={e => setDepthText(e.target.value)}
+          onBlur={e => finalizeDepth(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') finalizeDepth(e.currentTarget.value);
+          }}
+        />
+      </Field>
+      <Field label="Max seconds per move" htmlFor="gr-movetime">
+        <input
+          id="gr-movetime"
+          type="number"
+          min={MIN_MOVETIME_SECONDS}
+          max={MAX_MOVETIME_SECONDS}
+          value={movetimeText}
+          onChange={e => setMovetimeText(e.target.value)}
+          onBlur={e => finalizeMovetimeSeconds(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') finalizeMovetimeSeconds(e.currentTarget.value);
+          }}
+        />
+      </Field>
+    </div>
   );
 
-  if (phase === 'waiting-for-engine') {
-    return (
-      <div className="gr">
-        {settingsRow}
-        <p className="gr-status">Loading the engine…</p>
-      </div>
+  let status: React.ReactNode;
+  let primary: React.ReactNode;
+  let showAnotherGame = false;
+
+  if (engine instanceof Error) {
+    status = <Status kind="error">The engine could not be loaded: {engine.message}</Status>;
+    showAnotherGame = true;
+  } else if (phase === 'waiting-for-engine') {
+    status = (
+      <>
+        <Status kind="busy">Loading the engine…</Status>
+        <p className="gr-time-cap-hint">{capHint}</p>
+      </>
     );
-  }
-  if (phase === 'analysing') {
+    primary = settingsFields;
+  } else if (phase === 'analysing') {
     const k = progress?.searched ?? 0;
     const n = progress?.toSearch ?? game.ucis.length;
     const eta = reviewEta(progress, startedAtRef.current);
-    return (
-      <div className="gr">
-        {settingsRow}
-        <p className="gr-status">
+    status = (
+      <>
+        <Status kind="busy">
           Analysing position {k} of {n} · {eta}
-        </p>
-      </div>
+        </Status>
+        <p className="gr-time-cap-hint">{capHint}</p>
+      </>
     );
-  }
-  if (phase === 'failed') {
-    return (
-      <div className="gr">
-        <p className="gr-status" role="alert">
-          The engine failed: {error}
-        </p>
-        {settingsRow}
+    primary = settingsFields;
+  } else if (phase === 'failed') {
+    status = (
+      <>
+        <Status kind="error">The engine failed: {error}</Status>
+        <p className="gr-time-cap-hint">{capHint}</p>
+      </>
+    );
+    primary = (
+      <>
+        {settingsFields}
         <p className="gr-settings-hint">Changing a setting retries the review.</p>
-        <button onClick={onAnotherGame}>Another game</button>
-      </div>
+      </>
     );
+    showAnotherGame = true;
+  } else if (review) {
+    primary = move ? <MoveSummary move={move} /> : <p className="gr-status">Starting position.</p>;
+    showAnotherGame = true;
   }
-  if (!review) {
-    // Unreachable in practice (phase is only 'done' once review is set), kept for exhaustiveness.
-    return <div className="gr" />;
-  }
-
-  const move = selectedPly > 0 ? review.moves[selectedPly - 1] : undefined;
-  const fen = move ? move.fenAfter : game.startFen;
-  const lastMove: [SquareName, SquareName] | undefined = move ? uciSquares(move.uci) : undefined;
-  // Ply 0 (the starting position) is a valid stop, not a floor to avoid — "prev" can reach it.
-  const canPrev = selectedPly > 0;
-  const canNext = selectedPly < review.moves.length;
 
   return (
-    <div className="gr gr-review">
-      <h2>Game reviewer</h2>
+    <Workbench
+      title="Game reviewer"
+      status={status}
+      primary={primary}
+      aside={review && review.moves.length > 0 ? <EvalStrip review={review} selectedPly={selectedPly} onSelect={setSelectedPly} /> : undefined}
+      board={sizePx => (
+        <Board
+          fen={fen}
+          orientation={orientation}
+          turnColor="white"
+          dests={new Map()}
+          movableColor={undefined}
+          lastMove={lastMove}
+          check={inCheck(positionFromFen(fen))}
+          onMove={() => undefined}
+          size={boardSize(sizePx)}
+        />
+      )}
+      footer={
+        <Toolbar>
+          {review && (
+            <>
+              <Button size="sm" onClick={() => setSelectedPly(p => Math.max(0, p - 1))} disabled={!canPrev}>
+                prev
+              </Button>
+              <Button size="sm" onClick={() => setSelectedPly(p => Math.min(review.moves.length, p + 1))} disabled={!canNext}>
+                next
+              </Button>
+            </>
+          )}
+          <Button variant="quiet" onClick={() => setFlipped(f => !f)}>
+            Flip board
+          </Button>
+          {showAnotherGame && (
+            <Button variant="secondary" onClick={onAnotherGame}>
+              Another game
+            </Button>
+          )}
+        </Toolbar>
+      }
+    >
       {game.white && game.black && (
         <p className="gr-players">
           {game.white} vs {game.black} {game.result ? `(${game.result})` : ''}
         </p>
       )}
-
-      <EvalStrip review={review} selectedPly={selectedPly} onSelect={setSelectedPly} />
-
-      <Board
-        fen={fen}
-        orientation={game.playedAs ?? 'white'}
-        turnColor="white"
-        dests={new Map()}
-        movableColor={undefined}
-        lastMove={lastMove}
-        check={inCheck(positionFromFen(fen))}
-        onMove={() => undefined}
-      />
-
-      <div className="gr-nav">
-        <button onClick={() => setSelectedPly(p => Math.max(0, p - 1))} disabled={!canPrev}>
-          prev
-        </button>
-        <button onClick={() => setSelectedPly(p => Math.min(review.moves.length, p + 1))} disabled={!canNext}>
-          next
-        </button>
-      </div>
-
-      {move ? (
-        <MoveDetail move={move} />
-      ) : (
-        <p className="gr-status">Starting position.</p>
+      {review && (
+        <>
+          {review.end && <p className="gr-end">{describeEnd(review.end)}</p>}
+          <MoveTable moves={review.moves} selectedPly={selectedPly} onSelect={setSelectedPly} />
+          <Legend />
+        </>
       )}
-
-      {review.end && <p className="gr-end">{describeEnd(review.end)}</p>}
-
-      <MoveList moves={review.moves} selectedPly={selectedPly} onSelect={setSelectedPly} />
-
-      <Legend />
-
-      <button onClick={onAnotherGame}>Another game</button>
-    </div>
-  );
-}
-
-/** Depth and per-position time cap, persisted (subprojects/openings-builder's depth pattern),
- * shown before/while reviewing so the settings that produced the currently running (or about
- * to run) review are visible, not hidden behind a menu. Free text while focused, committed on
- * blur/Enter — same reasoning as the openings builder's depth field: committing every keystroke
- * would restart the review mid-type. */
-function ReviewSettings({
-  depth,
-  depthText,
-  onDepthChange,
-  onDepthCommit,
-  movetimeSeconds,
-  movetimeText,
-  onMovetimeChange,
-  onMovetimeCommit,
-}: {
-  depth: number;
-  depthText: string;
-  onDepthChange: (raw: string) => void;
-  onDepthCommit: (raw: string) => void;
-  movetimeSeconds: number;
-  movetimeText: string;
-  onMovetimeChange: (raw: string) => void;
-  onMovetimeCommit: (raw: string) => void;
-}): React.JSX.Element {
-  return (
-    <div className="gr-settings">
-      <label className="gr-setting">
-        Depth{' '}
-        <input
-          type="number"
-          min={MIN_DEPTH}
-          max={MAX_DEPTH}
-          value={depthText}
-          onChange={e => onDepthChange(e.target.value)}
-          onBlur={e => onDepthCommit(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') onDepthCommit(e.currentTarget.value);
-          }}
-        />
-      </label>
-      <label className="gr-setting">
-        Max seconds per move{' '}
-        <input
-          type="number"
-          min={MIN_MOVETIME_SECONDS}
-          max={MAX_MOVETIME_SECONDS}
-          value={movetimeText}
-          onChange={e => onMovetimeChange(e.target.value)}
-          onBlur={e => onMovetimeCommit(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') onMovetimeCommit(e.currentTarget.value);
-          }}
-        />
-      </label>
-      <p className="gr-settings-hint">
-        Depth {depth}, at most {movetimeSeconds} s per move (whichever comes first).
-      </p>
-    </div>
+    </Workbench>
   );
 }
 
@@ -326,9 +304,13 @@ function formatDuration(ms: number): string {
   return `${Math.max(1, Math.round(seconds))} s`;
 }
 
-function MoveDetail({ move }: { move: ReviewedMove }): React.JSX.Element {
+/** The selected move's summary — played move, eval, cp loss, the best move when the played one
+ * wasn't it, the classification badge, and provenance. Text and numbers are unchanged from the
+ * previous per-move detail panel (A1): only its place on screen (now `Workbench`'s `primary`)
+ * moved. */
+function MoveSummary({ move }: { move: ReviewedMove }): React.JSX.Element {
   return (
-    <div className="gr-detail">
+    <div className="gr-summary">
       <p>
         Played <strong>{move.san}</strong> — {formatEvalOrEnd(move.evalAfterPlayed)}
         {move.lossCp !== undefined && move.classification !== 'best' && ` (${(move.lossCp / 100).toFixed(2)} pawns lost)`}
@@ -361,7 +343,10 @@ function Legend(): React.JSX.Element {
   );
 }
 
-function MoveList({
+/** Every reviewed move as one row: move, eval, loss, classification, best move, provenance — all
+ * straight off `ReviewedMove` (A1/V3), nothing computed here beyond formatting. Replaces the
+ * previous White/Black move-pair list; clicking a row selects that ply, same as before. */
+function MoveTable({
   moves,
   selectedPly,
   onSelect,
@@ -370,31 +355,43 @@ function MoveList({
   selectedPly: number;
   onSelect: (ply: number) => void;
 }): React.JSX.Element {
-  const pairs: { moveNumber: number; white: ReviewedMove | undefined; black: ReviewedMove | undefined }[] = [];
-  for (let i = 0; i < moves.length; i += 2) {
-    pairs.push({ moveNumber: i / 2 + 1, white: moves[i], black: moves[i + 1] });
-  }
   return (
-    <ol className="gr-moves">
-      {pairs.map(p => (
-        <li key={p.moveNumber}>
-          <span className="gr-move-number">{p.moveNumber}.</span>
-          {p.white && <MoveCell move={p.white} selected={selectedPly === p.white.ply} onSelect={onSelect} />}
-          {p.black && <MoveCell move={p.black} selected={selectedPly === p.black.ply} onSelect={onSelect} />}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function MoveCell({ move, selected, onSelect }: { move: ReviewedMove; selected: boolean; onSelect: (ply: number) => void }): React.JSX.Element {
-  return (
-    <button
-      className={`gr-move gr-badge-${move.classification}${selected ? ' gr-move-selected' : ''}`}
-      onClick={() => onSelect(move.ply)}
-    >
-      {move.san}
-    </button>
+    <table className="gr-move-table">
+      <thead>
+        <tr>
+          <th>Move</th>
+          <th>Eval</th>
+          <th>Loss</th>
+          <th>Class</th>
+          <th>Best</th>
+          <th>Provenance</th>
+        </tr>
+      </thead>
+      <tbody>
+        {moves.map(m => (
+          <tr key={m.ply} className={m.ply === selectedPly ? 'gr-move-row-selected' : undefined} onClick={() => onSelect(m.ply)}>
+            <td>
+              {/* ply is 1-based; the same White-first numbering the previous pair list used. A
+                  button, not just a clickable row, so the move is reachable by keyboard. */}
+              <button type="button" className="gr-move-button" aria-pressed={m.ply === selectedPly} onClick={() => onSelect(m.ply)}>
+                {Math.ceil(m.ply / 2)}
+                {m.ply % 2 === 1 ? '. ' : '… '}
+                {m.san}
+              </button>
+            </td>
+            <td>{formatEvalOrEnd(m.evalAfterPlayed)}</td>
+            <td>{m.lossCp !== undefined ? (m.lossCp / 100).toFixed(2) : '—'}</td>
+            <td>
+              <span className={`gr-badge gr-badge-${m.classification}`}>{classificationLabel(m.classification)}</span>
+            </td>
+            <td>{m.classification !== 'best' ? m.bestSan : '—'}</td>
+            <td className="gr-provenance">
+              {m.provenance.engine}, depth {m.provenance.depthBefore} → {m.provenance.depthAfter}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

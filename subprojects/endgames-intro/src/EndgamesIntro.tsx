@@ -4,10 +4,12 @@ import { formatScore, whitePerspective, type Analysis, type UciEngine } from '@h
 import { describeEnd, isInCheck, isPlayersTurn, lastMove, playerDests, result, sideToMove } from '@human-chess/play';
 import { curatedEndgames, curatedGameDate, curatedOpponent, endgameLadder, EVAL_DEPTH, type CuratedPosition, type EndgameLesson } from '@human-chess/positions';
 import { positionFromFen, turn } from '@human-chess/rules';
+import { Button, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
 import { lessonOutcome } from './lessonAdapt';
 import { loadConfident, saveConfident } from './progress';
 import { useCuratedGame } from './useCuratedGame';
 import { useLessonGame } from './useLessonGame';
+import './endgames-intro.css';
 
 export interface EndgamesIntroProps {
   /** A ready (initialised) engine, or undefined while it loads; or an Error when it could not load. */
@@ -114,6 +116,25 @@ export function EndgamesIntro({ engine }: EndgamesIntroProps): React.JSX.Element
     return 'Waiting for your opponent.';
   };
 
+  // Status kind is presentational only (icon/colour) — never changes the text a claim carries.
+  // Curated real-game positions never claim a "success" (we don't say which side should win a
+  // real game, per the comment on selectCurated above), so that one stays 'info' even at the end.
+  const lessonStatusKind: StatusKind =
+    engine instanceof Error || engineState.kind === 'failed'
+      ? 'error'
+      : !engine || engineState.kind === 'thinking'
+        ? 'busy'
+        : game.end && outcome === 'won'
+          ? 'success'
+          : 'info';
+
+  const curatedStatusKind: StatusKind =
+    engine instanceof Error || curatedEngineState.kind === 'failed'
+      ? 'error'
+      : !engine || curatedEngineState.kind === 'thinking'
+        ? 'busy'
+        : 'info';
+
   const startingEvalLine = ((): string => {
     if (!curatedEntry) return '';
     const line = startingEval?.lines[0];
@@ -125,42 +146,120 @@ export function EndgamesIntro({ engine }: EndgamesIntroProps): React.JSX.Element
     return 'Evaluating the starting position…';
   })();
 
+  const inCurated = mode === 'curated' && curatedEntry !== undefined;
+
+  const title = inCurated ? `vs ${curatedOpponent(curatedEntry!.game) ?? 'unknown opponent'}` : lesson.title;
+
+  const statusContent = inCurated ? (
+    <>
+      <p className="endgames-provenance">
+        From your game on {curatedEntry!.game.site === 'chess.com' ? 'chess.com' : 'lichess'}
+        {curatedGameDate(curatedEntry!.game) ? ` (${curatedGameDate(curatedEntry!.game)})` : ''}.
+        {curatedEntry!.source === 'screenshot-transcription' && ' (transcribed from a screenshot — a piece could be off.)'}
+        {curatedEntry!.game.url && (
+          <>
+            {' '}
+            <a href={curatedEntry!.game.url} target="_blank" rel="noreferrer">
+              view game
+            </a>
+          </>
+        )}
+      </p>
+      <p className="endgames-colour">You play {curatedEntry!.playAs}.</p>
+      <Status kind={curatedStatusKind}>{curatedStatus()}</Status>
+    </>
+  ) : (
+    <>
+      <p className="endgames-colour">You play {game.playerColor}.</p>
+      <Status kind={lessonStatusKind}>{status()}</Status>
+    </>
+  );
+
+  const primaryContent = inCurated
+    ? curatedGame.end
+      ? (
+          <div className="endgames-dialog" role="dialog">
+            {/* A real position from a real game, not a won-endgame lesson: state how it ended
+                (from rules, via describeEnd) without claiming which side "should" have won. */}
+            <p>{describeEnd(curatedGame)}</p>
+            <p className="endgames-starting-eval">{startingEvalLine}</p>
+            <Button variant="primary" onClick={() => restartCurated()}>
+              Play again
+            </Button>
+          </div>
+        )
+      : undefined
+    : showIntro
+      ? (
+          <div className="endgames-dialog" role="dialog">
+            {lesson.introduces && <p className="endgames-newpiece">New piece: the {lesson.introduces}.</p>}
+            <p>{lesson.intro}</p>
+            <Button variant="primary" onClick={() => setShowIntro(false)}>
+              Let&apos;s go
+            </Button>
+          </div>
+        )
+      : outcome === 'won'
+        ? (
+            <div className="endgames-dialog" role="dialog">
+              <p>Do you think you can consistently always win this game or should we win one more time?</p>
+              <Button variant="primary" onClick={markConfident}>
+                I&apos;m Confident!
+              </Button>
+              <Button onClick={() => restart()}>Play Again</Button>
+            </div>
+          )
+        : outcome === 'not-won'
+          ? (
+              <div className="endgames-dialog" role="dialog">
+                <p>{describeEnd(game)} Let&apos;s try that one again.</p>
+                <Button variant="primary" onClick={() => restart()}>
+                  Try again
+                </Button>
+              </div>
+            )
+          : undefined;
+
+  const footerContent = inCurated ? (
+    !curatedGame.end ? (
+      <Toolbar>
+        <Button onClick={() => restartCurated()}>Restart this position</Button>
+      </Toolbar>
+    ) : undefined
+  ) : (
+    <Toolbar>
+      {!game.end && <Button onClick={() => restart()}>Restart this position</Button>}
+      {next && !confirmSkip && <Button onClick={() => setConfirmSkip(true)}>Skip this lesson</Button>}
+      {next && confirmSkip && (
+        <>
+          <span>Are you sure? Later lessons assume this one.</span>
+          <Button onClick={() => goTo(next)}>Yes, skip</Button>
+          <Button onClick={() => setConfirmSkip(false)}>No</Button>
+        </>
+      )}
+    </Toolbar>
+  );
+
   return (
-    <div className="endgames">
-      <aside className="endgames-lessons">
-        <h2>Endgames first</h2>
-        <ol>
-          {endgameLadder.map(l => (
-            <li key={l.id}>
-              <button className={mode === 'lesson' && l.id === lesson.id ? 'current' : ''} onClick={() => goTo(l)}>
-                {confident.has(l.id) ? '✓ ' : ''}{l.title}
-              </button>
-            </li>
-          ))}
-        </ol>
-
-        <h3>From your games</h3>
-        <ol className="endgames-curated-list">
-          {curatedEndgames.map(e => (
-            <li key={e.id}>
-              <button
-                className={mode === 'curated' && curatedEntry?.id === e.id ? 'current' : ''}
-                title={e.note}
-                onClick={() => selectCurated(e)}
-              >
-                vs {curatedOpponent(e.game) ?? 'unknown opponent'} ({e.game.site === 'chess.com' ? 'chess.com' : 'lichess'}),{' '}
-                {curatedGameDate(e.game) ?? 'date unknown'} — you play {e.playAs}
-                {e.source === 'screenshot-transcription' && <span className="endgames-transcribed-hint"> (transcribed from a screenshot)</span>}
-              </button>
-            </li>
-          ))}
-        </ol>
-      </aside>
-
-      {mode === 'lesson' ? (
-        <main className="endgames-play">
-          <h3>{lesson.title}</h3>
-          <p className="endgames-colour">You play {game.playerColor}.</p>
+    <Workbench
+      title={title}
+      status={statusContent}
+      primary={primaryContent}
+      footer={footerContent}
+      board={sizePx =>
+        inCurated ? (
+          <Board
+            fen={curatedFen}
+            orientation={curatedEntry!.playAs}
+            turnColor={sideToMove(curatedGame)}
+            dests={curatedDests}
+            movableColor={isPlayersTurn(curatedGame) && readyEngine ? curatedGame.playerColor : undefined}
+            lastMove={lastMove(curatedGame)}
+            check={isInCheck(curatedGame)}
+            onMove={onCuratedMove}
+            size={`${sizePx}px`}
+          />
+        ) : (
           <Board
             fen={fen}
             orientation={game.playerColor}
@@ -170,93 +269,44 @@ export function EndgamesIntro({ engine }: EndgamesIntroProps): React.JSX.Element
             lastMove={lastMove(game)}
             check={isInCheck(game)}
             onMove={onPlayerMove}
+            size={`${sizePx}px`}
           />
-          <p className="endgames-status" aria-live="polite">{status()}</p>
-
-          {showIntro && (
-            <div className="endgames-dialog" role="dialog">
-              {lesson.introduces && <p className="endgames-newpiece">New piece: the {lesson.introduces}.</p>}
-              <p>{lesson.intro}</p>
-              <button onClick={() => setShowIntro(false)}>Let's go</button>
-            </div>
-          )}
-
-          {!showIntro && outcome === 'won' && (
-            <div className="endgames-dialog" role="dialog">
-              <p>Do you think you can consistently always win this game or should we win one more time?</p>
-              <button onClick={markConfident}>I'm Confident!</button>
-              <button onClick={() => restart()}>Play Again</button>
-            </div>
-          )}
-
-          {!showIntro && outcome === 'not-won' && (
-            <div className="endgames-dialog" role="dialog">
-              <p>{describeEnd(game)} Let's try that one again.</p>
-              <button onClick={() => restart()}>Try again</button>
-            </div>
-          )}
-
-          <div className="endgames-actions">
-            {!game.end && <button onClick={() => restart()}>Restart this position</button>}
-            {next && !confirmSkip && <button onClick={() => setConfirmSkip(true)}>Skip this lesson</button>}
-            {next && confirmSkip && (
-              <span>
-                Are you sure? Later lessons assume this one.{' '}
-                <button onClick={() => goTo(next)}>Yes, skip</button>
-                <button onClick={() => setConfirmSkip(false)}>No</button>
-              </span>
-            )}
-          </div>
-        </main>
-      ) : (
-        curatedEntry && (
-          <main className="endgames-play">
-            <h3>vs {curatedOpponent(curatedEntry.game) ?? 'unknown opponent'}</h3>
-            <p className="endgames-provenance">
-              From your game on {curatedEntry.game.site === 'chess.com' ? 'chess.com' : 'lichess'}
-              {curatedGameDate(curatedEntry.game) ? ` (${curatedGameDate(curatedEntry.game)})` : ''}.
-              {curatedEntry.source === 'screenshot-transcription' && ' (transcribed from a screenshot — a piece could be off.)'}
-              {curatedEntry.game.url && (
-                <>
-                  {' '}
-                  <a href={curatedEntry.game.url} target="_blank" rel="noreferrer">
-                    view game
-                  </a>
-                </>
-              )}
-            </p>
-            <p className="endgames-colour">You play {curatedEntry.playAs}.</p>
-            <Board
-              fen={curatedFen}
-              orientation={curatedEntry.playAs}
-              turnColor={sideToMove(curatedGame)}
-              dests={curatedDests}
-              movableColor={isPlayersTurn(curatedGame) && readyEngine ? curatedGame.playerColor : undefined}
-              lastMove={lastMove(curatedGame)}
-              check={isInCheck(curatedGame)}
-              onMove={onCuratedMove}
-            />
-            <p className="endgames-status" aria-live="polite">{curatedStatus()}</p>
-
-            {curatedGame.end && (
-              <div className="endgames-dialog" role="dialog">
-                {/* A real position from a real game, not a won-endgame lesson: state how it
-                    ended (from rules, via describeEnd) without claiming which side "should"
-                    have won. */}
-                <p>{describeEnd(curatedGame)}</p>
-                <p className="endgames-starting-eval">{startingEvalLine}</p>
-                <button onClick={() => restartCurated()}>Play again</button>
-              </div>
-            )}
-
-            {!curatedGame.end && (
-              <div className="endgames-actions">
-                <button onClick={() => restartCurated()}>Restart this position</button>
-              </div>
-            )}
-          </main>
         )
-      )}
-    </div>
+      }
+    >
+      <h3 className="endgames-section-title">Lessons</h3>
+      <ol className="endgames-lesson-list">
+        {endgameLadder.map(l => (
+          <li key={l.id}>
+            <Button
+              variant="quiet"
+              className={mode === 'lesson' && l.id === lesson.id ? 'endgames-current' : ''}
+              onClick={() => goTo(l)}
+            >
+              {confident.has(l.id) ? '✓ ' : ''}
+              {l.title}
+            </Button>
+          </li>
+        ))}
+      </ol>
+
+      <h3 className="endgames-section-title">From your games</h3>
+      <ol className="endgames-curated-list">
+        {curatedEndgames.map(e => (
+          <li key={e.id}>
+            <Button
+              variant="quiet"
+              className={mode === 'curated' && curatedEntry?.id === e.id ? 'endgames-current' : ''}
+              title={e.note}
+              onClick={() => selectCurated(e)}
+            >
+              vs {curatedOpponent(e.game) ?? 'unknown opponent'} ({e.game.site === 'chess.com' ? 'chess.com' : 'lichess'}),{' '}
+              {curatedGameDate(e.game) ?? 'date unknown'} — you play {e.playAs}
+              {e.source === 'screenshot-transcription' && <span className="endgames-transcribed-hint"> (transcribed from a screenshot)</span>}
+            </Button>
+          </li>
+        ))}
+      </ol>
+    </Workbench>
   );
 }

@@ -2,10 +2,11 @@
 // and the opponent's "what if" replies they want in the tree — memory/subprojects/openings-builder-trainer.md,
 // "Building a repertoire"). Every move played is added to the tree. The MultiPV panel on the
 // right gives the multi-line engine the user's interview asked for (priority 1, same file).
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
+import { Button, Panel, Status, Toolbar, Workbench } from '@human-chess/ui';
 import { ExplorerPanel } from './ExplorerPanel';
 import { MultiPvPanel } from './MultiPvPanel';
 import { addMove, childrenOf, fenAt, movesBeyond, removeMove, type Opening, type OpeningMove } from './repertoire';
@@ -14,9 +15,15 @@ export interface BuilderViewProps {
   opening: Opening;
   onOpeningChange: (opening: Opening) => void;
   engine: UciEngine | undefined;
+  /** The opening picker / new-opening form / build-drill toggle, shared with DrillView and
+   * rendered by the parent (OpeningsBuilder) since it outlives either view. Rendered as
+   * `primary` here — build mode has no other single "next action". */
+  controls: ReactNode;
+  /** The engine-failed-to-load banner, if any; rendered as Workbench's `status`. */
+  status?: ReactNode;
 }
 
-export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewProps): React.JSX.Element {
+export function BuilderView({ opening, onOpeningChange, engine, controls, status }: BuilderViewProps): React.JSX.Element {
   // The path of edges taken from the root to here. Re-derived to the empty path whenever the
   // selected opening changes (a different id means a different tree entirely).
   const [path, setPath] = useState<OpeningMove[]>([]);
@@ -76,8 +83,41 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
   };
 
   return (
-    <div className="ob-builder">
-      <div className="ob-board-col">
+    <Workbench
+      title={opening.name}
+      status={status}
+      primary={controls}
+      aside={
+        <div className="ob-aside-scroll">
+          <Panel title="Engine lines">
+            <MultiPvPanel
+              engine={engine}
+              fen={fen}
+              onPlayMove={playAndAdd}
+              orientation={opening.color}
+              inTree={children.map(m => m.uci)}
+              {...(turn(pos) !== opening.color ? { onAddReplies: addReplies } : {})}
+            />
+          </Panel>
+          {turn(pos) !== opening.color && (
+            <Panel title="Lichess explorer">
+              <ExplorerPanel fen={fen} onAddMoves={addReplies} />
+            </Panel>
+          )}
+          {replyError && <Status kind="error">{replyError}</Status>}
+        </div>
+      }
+      footer={
+        <Toolbar>
+          <Button variant="quiet" onClick={() => setPath([])} disabled={path.length === 0}>
+            Back to start
+          </Button>
+          <Button variant="quiet" onClick={() => setPath(p => p.slice(0, -1))} disabled={path.length === 0}>
+            Back
+          </Button>
+        </Toolbar>
+      }
+      board={sizePx => (
         <Board
           fen={fen}
           orientation={opening.color}
@@ -87,53 +127,33 @@ export function BuilderView({ opening, onOpeningChange, engine }: BuilderViewPro
           lastMove={lastMove}
           check={inCheck(pos)}
           onMove={onBoardMove}
+          size={`${sizePx}px`}
         />
-        <div className="ob-breadcrumb">
-          <button onClick={() => setPath([])} disabled={path.length === 0}>
-            Root
-          </button>
-          <button onClick={() => setPath(p => p.slice(0, -1))} disabled={path.length === 0}>
-            Back
-          </button>
-          {path.length === 0 ? (
-            <span className="ob-breadcrumb-line">(start)</span>
-          ) : (
-            <MoveLine startFen={fenAt(opening.root)} ucis={path.map(m => m.uci)} orientation={opening.color} />
-          )}
-        </div>
-      </div>
-
-      <div className="ob-side-col">
-        <div className="ob-children">
-          <h4>Tree at this position</h4>
-          {children.length === 0 && <p className="ob-multipv-status">No moves recorded here yet.</p>}
-          <ul>
-            {children.map(m => (
-              <li key={m.uci}>
-                <button onClick={() => setPath(p => [...p, m])}>{m.san}</button>
-                <button
-                  className="ob-remove"
-                  title={`Remove ${m.san} from the tree`}
-                  aria-label={`Remove ${m.san} from the tree`}
-                  onClick={() => removeReply(m)}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <MultiPvPanel
-          engine={engine}
-          fen={fen}
-          onPlayMove={playAndAdd}
-          orientation={opening.color}
-          inTree={children.map(m => m.uci)}
-          {...(turn(pos) !== opening.color ? { onAddReplies: addReplies } : {})}
-        />
-        {turn(pos) !== opening.color && <ExplorerPanel fen={fen} onAddMoves={addReplies} />}
-        {replyError && <p className="ob-reply-error">{replyError}</p>}
-      </div>
-    </div>
+      )}
+    >
+      <div className="ob-path">{path.length === 0 ? <Status kind="info">(start)</Status> : <MoveLine startFen={fenAt(opening.root)} ucis={path.map(m => m.uci)} orientation={opening.color} />}</div>
+      <Panel title="Tree at this position">
+        {children.length === 0 && <Status kind="info">No moves recorded here yet.</Status>}
+        <ul className="ob-children">
+          {children.map(m => (
+            <li key={m.uci}>
+              <Button variant="secondary" size="sm" onClick={() => setPath(p => [...p, m])}>
+                {m.san}
+              </Button>
+              <Button
+                variant="quiet"
+                size="sm"
+                className="ob-remove"
+                title={`Remove ${m.san} from the tree`}
+                aria-label={`Remove ${m.san} from the tree`}
+                onClick={() => removeReply(m)}
+              >
+                ×
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+    </Workbench>
   );
 }

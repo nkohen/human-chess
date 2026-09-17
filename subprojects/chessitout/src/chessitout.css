@@ -1,19 +1,26 @@
-.chessitout { max-width: 32rem; padding: 1rem; margin: 0 auto; }
-.ci-status { min-height: 1.5em; }
-.ci-turn { font-weight: bold; margin: 0.5rem 0 0; }
-.ci-material { font-weight: bold; margin: 0.25rem 0 0.5rem; }
-.ci-prompt { margin: 0.5rem 0 0.25rem; }
-.ci-vote-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0; }
-.ci-elo { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
-.ci-moves { font-family: monospace; padding-left: 1.25rem; margin: 0.75rem 0; }
-.ci-moves li { margin: 0.1rem 0; }
-.ci-result p { margin: 0.35rem 0; }
-.ci-tally { font-weight: bold; }
-.ci-provenance { color: #666; font-size: 0.9em; }
-.ci-view { margin: 0.5rem 0; }
-.ci-mining-note { color: #666; font-size: 0.9em; margin: 0.25rem 0 0; }
-.ci-stop { margin: 0.5rem 0; }
-.ci-source { display: flex; gap: 1rem; align-items: center; border: none; padding: 0; margin: 0 0 0.5rem; }
-.ci-source legend { font-weight: bold; padding: 0; }
-.ci-source label { display: inline-flex; align-items: center; gap: 0.3rem; font-weight: normal; }
-.ci-provenance-line { color: #666; font-size: 0.9em; margin: 0.25rem 0; }
+/* Everything generic (layout, spacing, buttons, colours) now comes from @human-chess/ui's
+   Workbench/Field/SegmentedControl/Status/Panel/Toolbar and its tokens; this file keeps only
+   what is genuinely Chessitout's own: the turn/material call-outs above the vote prompt, the
+   vote-button row's wrap behaviour, the move list, and the small provenance/note lines. */
+
+.ci-turn { font-weight: 600; margin: 0 0 var(--hc-space-1); }
+.ci-material { font-weight: 600; margin: 0 0 var(--hc-space-2); }
+.ci-prompt { margin: 0 0 var(--hc-space-2); }
+
+/* The two vote buttons wrap rather than overflow if the side column is ever narrower than both
+   labels together (Toolbar itself does not wrap). */
+.ci-vote-buttons { flex-wrap: wrap; }
+
+.ci-moves {
+  font-family: var(--hc-mono);
+  font-size: var(--hc-text-sm);
+  padding-left: var(--hc-space-4);
+  margin: 0;
+}
+.ci-moves li { margin: var(--hc-space-1) 0; }
+
+.ci-tally { font-weight: 600; }
+
+.ci-provenance { color: var(--hc-text-muted); font-size: var(--hc-text-sm); }
+.ci-provenance-line { color: var(--hc-text-muted); font-size: var(--hc-text-sm); margin: var(--hc-space-1) 0; }
+.ci-mining-note { color: var(--hc-text-muted); font-size: var(--hc-text-sm); margin: var(--hc-space-1) 0 0; }

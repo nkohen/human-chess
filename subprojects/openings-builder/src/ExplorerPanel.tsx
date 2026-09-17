@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { LichessLoginRequired, LichessRateLimited, EXPLORER_RATING_BUCKETS, explorerMoves, ratingBucketsBetween, type ExplorerResult } from '@human-chess/lichess';
 import { LichessLogin, useLichessSession } from '@human-chess/lichess/react';
+import { Button, Field, Status } from '@human-chess/ui';
 import { loadExplorerBand, saveExplorerBand, type ExplorerBand } from './storage';
 
 export interface ExplorerPanelProps {
@@ -69,7 +70,7 @@ export function ExplorerPanel({ fen, onAddMoves }: ExplorerPanelProps): React.JS
   if (!session) {
     return (
       <div className="ob-explorer">
-        <p className="ob-explorer-status">Log in with lichess to see what opponents at your rating actually play</p>
+        <Status kind="info">Log in with lichess to see what opponents at your rating actually play</Status>
         <LichessLogin />
       </div>
     );
@@ -80,45 +81,43 @@ export function ExplorerPanel({ fen, onAddMoves }: ExplorerPanelProps): React.JS
   return (
     <div className="ob-explorer">
       <div className="ob-explorer-band">
-        <label>
-          Rating from{' '}
-          <select value={band.min} onChange={e => setBand(b => ({ ...b, min: Number(e.target.value) }))}>
+        <Field label="Rating from" htmlFor="ob-explorer-min">
+          <select id="ob-explorer-min" value={band.min} onChange={e => setBand(b => ({ ...b, min: Number(e.target.value) }))}>
             {EXPLORER_RATING_BUCKETS.filter(r => r <= band.max).map(r => (
               <option key={r} value={r}>
                 {r}
               </option>
             ))}
           </select>
-        </label>
-        <label>
-          {' '}to{' '}
-          <select value={band.max} onChange={e => setBand(b => ({ ...b, max: Number(e.target.value) }))}>
+        </Field>
+        <Field label="to" htmlFor="ob-explorer-max">
+          <select id="ob-explorer-max" value={band.max} onChange={e => setBand(b => ({ ...b, max: Number(e.target.value) }))}>
             {EXPLORER_RATING_BUCKETS.filter(r => r >= band.min).map(r => (
               <option key={r} value={r}>
                 {r}
               </option>
             ))}
           </select>
-        </label>
+        </Field>
       </div>
 
-      {loading && <p className="ob-explorer-status">Looking up opponent replies…</p>}
-      {error && <p className="ob-explorer-status">{error}</p>}
+      {loading && <Status kind="busy">Looking up opponent replies…</Status>}
+      {error && <Status kind="error">{error}</Status>}
 
       {result && (
         <>
           <p className="ob-explorer-provenance">{result.provenance}</p>
           {result.moves.length === 0 ? (
-            <p className="ob-explorer-status">No games found at this rating band.</p>
+            <Status kind="info">No games found at this rating band.</Status>
           ) : (
             <ul className="ob-explorer-moves">
               {result.moves.map(m => {
                 const pct = wdlPercents(m);
                 return (
                   <li key={m.uci}>
-                    <button onClick={() => onAddMoves([m.uci])}>
+                    <Button variant="secondary" className="ob-explorer-move-button" onClick={() => onAddMoves([m.uci])}>
                       {m.san} — {(m.share * 100).toFixed(1)}%
-                    </button>
+                    </Button>
                     <span className="ob-explorer-wdl" title={wdlTitle(pct, m.total)}>
                       <span className="ob-explorer-wdl-white" style={{ width: `${pct.white}%` }} title={`White wins ${pct.white.toFixed(1)}%`} />
                       <span className="ob-explorer-wdl-draw" style={{ width: `${pct.draws}%` }} title={`Draw ${pct.draws.toFixed(1)}%`} />
@@ -130,9 +129,9 @@ export function ExplorerPanel({ fen, onAddMoves }: ExplorerPanelProps): React.JS
             </ul>
           )}
           {aboveThreshold.length > 0 && (
-            <button className="ob-explorer-add-threshold" onClick={() => onAddMoves(aboveThreshold)}>
+            <Button variant="secondary" size="sm" className="ob-explorer-add-threshold" onClick={() => onAddMoves(aboveThreshold)}>
               Add replies played ≥ {ADD_THRESHOLD_SHARE * 100}% (first guess) to the tree
-            </button>
+            </Button>
           )}
         </>
       )}

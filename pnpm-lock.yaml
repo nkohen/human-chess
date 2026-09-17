@@ -135,6 +135,9 @@ importers:
       '@human-chess/site-client':
         specifier: workspace:*
         version: link:../site-client
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -144,6 +147,9 @@ importers:
       '@human-chess/site-client':
         specifier: workspace:*
         version: link:../site-client
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -206,6 +212,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -227,6 +236,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -248,6 +260,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -269,6 +284,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -287,6 +305,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -299,6 +320,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -314,6 +338,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -332,6 +359,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -350,6 +380,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -365,6 +398,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -386,6 +422,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.3.0

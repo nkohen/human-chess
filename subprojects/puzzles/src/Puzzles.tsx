@@ -5,24 +5,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { inCheck, isPromotionMove, legalDests, turn, type SquareName } from '@human-chess/rules';
+import { Button, Field, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
 import { fetchNextPuzzle, fetchPuzzleById, type ParsedPuzzle } from './puzzle';
 import { attemptMove, currentFen, startSolve, type SolveState, type SolveStatus } from './solve';
-
-// No CSS file exists yet for this subproject (apps/web owns subproject stylesheets elsewhere
-// in the repo, and this agent does not edit apps/web); kept inline and minimal, same pattern
-// as subprojects/hand-and-brain/src/HandAndBrain.tsx.
-const styles = {
-  root: { display: 'grid', gridTemplateColumns: 'minmax(0, 24rem) 16rem', gap: '1rem', padding: '1rem' },
-  play: { maxWidth: '24rem' },
-  toMove: { margin: '0.5rem 0 0', fontWeight: 'bold' as const },
-  status: { minHeight: '1.5em', fontWeight: 'bold' as const },
-  meta: { color: '#666', fontSize: '0.9em' },
-  themes: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' as const, margin: '0.25rem 0' },
-  theme: { border: '1px solid #8886', borderRadius: '999px', padding: '0.1rem 0.6rem', fontSize: '0.85em' },
-  actions: { display: 'flex', gap: '0.5rem', marginTop: '0.5rem', alignItems: 'center' },
-  error: { color: '#b00020' },
-  tally: { fontFamily: 'monospace' },
-};
+import './puzzles.css';
 
 const STATUS_TEXT: Record<SolveStatus, string> = {
   thinking: 'Thinking…',
@@ -30,6 +16,16 @@ const STATUS_TEXT: Record<SolveStatus, string> = {
   wrong: 'Wrong — try again.',
   solved: 'Solved!',
   'failed-solved': 'Solved, after a mistake.',
+};
+
+// Presentational only (icon/colour) — the text above is the only actual verdict (A1); this just
+// picks which Status glyph/colour carries it.
+const STATUS_KIND: Record<SolveStatus, StatusKind> = {
+  thinking: 'info',
+  correct: 'success',
+  wrong: 'error',
+  solved: 'success',
+  'failed-solved': 'success',
 };
 
 const label = (color: string): string => color[0]!.toUpperCase() + color.slice(1);
@@ -140,63 +136,99 @@ export function Puzzles(): React.JSX.Element {
   const finished = solveState?.status === 'solved' || solveState?.status === 'failed-solved';
   const dests = solveState && !finished ? legalDests(solveState.pos) : new Map<SquareName, SquareName[]>();
 
-  return (
-    <div style={styles.root}>
-      <main style={styles.play}>
-        <h3>Puzzles</h3>
+  // The live prompt/feedback line: who's to move and the puzzle's rating, plus (while still
+  // solving) the thinking/correct/wrong verdict. Once finished, that verdict moves into
+  // `primary` alongside the "Next puzzle" call to action instead of staying here.
+  const statusContent = (
+    <>
+      {puzzle && (
+        <p className="puzzles-meta">
+          {label(puzzle.solverColor)} to move — lichess puzzle rating: {puzzle.rating}
+        </p>
+      )}
+      {solveState && !finished && <Status kind={STATUS_KIND[solveState.status]}>{STATUS_TEXT[solveState.status]}</Status>}
+      {loading && <Status kind="busy">Loading a puzzle…</Status>}
+      {error && <Status kind="error">{error}</Status>}
+    </>
+  );
 
-        {puzzle && solveState && (
-          <>
-            <Board
-              fen={currentFen(solveState)}
-              orientation={puzzle.solverColor}
-              // Always the real side to move: chessground marks the king of `turnColor` when in
-              // check, so after a mating solution the mated king is the one highlighted.
-              turnColor={turn(solveState.pos)}
-              dests={dests}
-              movableColor={finished ? undefined : puzzle.solverColor}
-              lastMove={solveState.lastMove}
-              check={inCheck(solveState.pos)}
-              onMove={onMove}
-            />
-            <p style={styles.toMove}>{label(puzzle.solverColor)} to move</p>
-            <p style={styles.status} aria-live="polite">{STATUS_TEXT[solveState.status]}</p>
-            <p style={styles.meta}>
-              lichess puzzle rating: {puzzle.rating}
-            </p>
-            {finished && (
-              // Themes name the motif and would give the solution away, so they appear only once solved.
-              <div style={styles.themes}>
-                {puzzle.themes.map(theme => (
-                  <span key={theme} style={styles.theme}>{theme}</span>
-                ))}
-              </div>
-            )}
-          </>
+  // Once solved, the verdict + themes (naming the motif would give the solution away, so they
+  // only appear now) + the one forward action — Next puzzle — become the primary block.
+  const primaryContent =
+    finished && solveState ? (
+      <div className="puzzles-solved" role="dialog">
+        <Status kind={STATUS_KIND[solveState.status]}>{STATUS_TEXT[solveState.status]}</Status>
+        {puzzle && (
+          <div className="puzzles-themes">
+            {puzzle.themes.map(theme => (
+              <span key={theme} className="puzzles-theme">
+                {theme}
+              </span>
+            ))}
+          </div>
         )}
+        <Button variant="primary" onClick={loadNext} disabled={loading}>
+          Next puzzle
+        </Button>
+      </div>
+    ) : undefined;
 
-        {loading && <p>Loading a puzzle…</p>}
-        {error && <p style={styles.error} role="alert">{error}</p>}
+  // The footer holds only the secondary "skip" action; the puzzle-id lookup is a small form in
+  // the panel body, where its field and button have room (in the footer toolbar they wrapped
+  // onto three lines).
+  const footerContent = !finished ? (
+    <Toolbar>
+      <Button variant="quiet" onClick={loadNext} disabled={loading}>
+        Next puzzle
+      </Button>
+    </Toolbar>
+  ) : undefined;
 
-        <div style={styles.actions}>
-          <button onClick={loadNext} disabled={loading}>Next puzzle</button>
+  return (
+    <Workbench
+      title="Puzzles"
+      status={statusContent}
+      primary={primaryContent}
+      footer={footerContent}
+      board={sizePx =>
+        puzzle && solveState ? (
+          <Board
+            fen={currentFen(solveState)}
+            orientation={puzzle.solverColor}
+            // Always the real side to move: chessground marks the king of `turnColor` when in
+            // check, so after a mating solution the mated king is the one highlighted.
+            turnColor={turn(solveState.pos)}
+            dests={dests}
+            movableColor={finished ? undefined : puzzle.solverColor}
+            lastMove={solveState.lastMove}
+            check={inCheck(solveState.pos)}
+            onMove={onMove}
+            size={`${sizePx}px`}
+          />
+        ) : (
+          <div className="puzzles-board-placeholder" style={{ width: sizePx, height: sizePx }} />
+        )
+      }
+    >
+      <h3 className="puzzles-section-title">This session</h3>
+      <p>Solved first try: {tally.solvedFirstTry}</p>
+      <p>Solved after a mistake: {tally.solvedAfterMistake}</p>
+      <p>Total: {tally.total}</p>
+      <h3 className="puzzles-section-title">A specific puzzle</h3>
+      <div className="puzzles-id-row">
+        <Field label="Puzzle id" htmlFor="puzzles-id-input" className="puzzles-id-field">
           <input
-            aria-label="Load puzzle by id"
+            id="puzzles-id-input"
             placeholder="Puzzle id"
             value={idInput}
             onChange={e => setIdInput(e.target.value)}
             disabled={loading}
           />
-          <button onClick={loadById} disabled={loading || !idInput.trim()}>Load puzzle by id</button>
-        </div>
-      </main>
-
-      <aside style={styles.tally}>
-        <h4>This session</h4>
-        <p>Solved first try: {tally.solvedFirstTry}</p>
-        <p>Solved after a mistake: {tally.solvedAfterMistake}</p>
-        <p>Total: {tally.total}</p>
-      </aside>
-    </div>
+        </Field>
+        <Button onClick={loadById} disabled={loading || !idInput.trim()}>
+          Load puzzle by id
+        </Button>
+      </div>
+    </Workbench>
   );
 }

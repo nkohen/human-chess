@@ -3,6 +3,7 @@
 // entry ("./react" subpath) so non-React consumers of fetchLatestLichessGame/importPgn never
 // pull in React.
 import { useEffect, useRef, useState } from 'react';
+import { Button, Field, Page, SegmentedControl, Status } from '@human-chess/ui';
 import { fetchLatestChesscomGame } from './chesscom';
 import { fetchLatestLichessGame } from './lichess';
 import { toImportedGame } from './parse';
@@ -88,6 +89,17 @@ export function fetchLatestGameFrom(site: ImportSite, username: string): Promise
   return FETCHERS[site](username);
 }
 
+/** The source picked in the SegmentedControl: either site ImportScreen can fetch a latest game
+ * from, or 'pgn' to switch the form over to pasting one. Local display state only — the fetch
+ * path still only ever knows about `ImportSite`. */
+type Source = ImportSite | 'pgn';
+
+const SOURCE_OPTIONS: { value: Source; label: string }[] = [
+  { value: 'lichess', label: 'lichess' },
+  { value: 'chess.com', label: 'chess.com' },
+  { value: 'pgn', label: 'pasted PGN' },
+];
+
 /**
  * Import a game by username from lichess or chess.com (fetches the player's latest game) or by
  * pasting a PGN. Guards against a stale fetch clobbering a screen the user already moved past:
@@ -97,6 +109,7 @@ export function fetchLatestGameFrom(site: ImportSite, username: string): Promise
 export function ImportScreen({ onImported, storageKey, title = 'Import a game' }: ImportScreenProps): React.JSX.Element {
   const { username, setUsername, save } = useLastUsername(storageKey);
   const [site, setSite] = useState<ImportSite>(() => loadLastSite(storageKey));
+  const [pgnMode, setPgnMode] = useState(false);
   const [pgnText, setPgnText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -105,6 +118,16 @@ export function ImportScreen({ onImported, storageKey, title = 'Import a game' }
     setSite(next);
     saveLastSite(storageKey, next);
     setError(undefined);
+  };
+
+  const chooseSource = (next: Source): void => {
+    if (next === 'pgn') {
+      setPgnMode(true);
+      setError(undefined);
+      return;
+    }
+    setPgnMode(false);
+    chooseSite(next);
   };
 
   const requestIdRef = useRef(0);
@@ -152,48 +175,35 @@ export function ImportScreen({ onImported, storageKey, title = 'Import a game' }
   };
 
   return (
-    <div className="hc-import">
-      <h2>{title}</h2>
-      <section>
-        <div className="hc-import-site" role="radiogroup" aria-label="Site">
-          {(Object.keys(SITE_LABELS) as ImportSite[]).map(value => (
-            <label key={value} className="hc-import-site-option">
-              <input
-                type="radio"
-                name={`${storageKey}-site`}
-                value={value}
-                checked={site === value}
-                onChange={() => chooseSite(value)}
-                disabled={loading}
-              />
-              {SITE_LABELS[value]}
-            </label>
-          ))}
-        </div>
-        <label htmlFor="hc-import-username">{SITE_DISPLAY_NAMES[site]} username</label>
-        <input
-          id="hc-import-username"
-          value={username}
-          onChange={e => setUsername(e.target.value)}
-          placeholder={`${SITE_DISPLAY_NAMES[site]} username`}
-          disabled={loading}
-        />
-        <button onClick={fetchGame} disabled={loading || !username.trim()}>
-          {loading ? 'Fetching…' : `Fetch my latest game from ${SITE_LABELS[site]}`}
-        </button>
-      </section>
-      <section>
-        <label htmlFor="hc-import-pgn">Or paste a PGN</label>
-        <textarea id="hc-import-pgn" rows={8} value={pgnText} onChange={e => setPgnText(e.target.value)} />
-        <button onClick={usePastedPgn} disabled={!pgnText.trim() || loading}>
-          Use this PGN
-        </button>
-      </section>
-      {error && (
-        <p className="hc-import-error" role="alert">
-          {error}
-        </p>
+    <Page title={title} width="medium">
+      <SegmentedControl options={SOURCE_OPTIONS} value={pgnMode ? 'pgn' : site} onChange={chooseSource} ariaLabel="Import source" />
+      {!pgnMode && (
+        <>
+          <Field label={`${SITE_DISPLAY_NAMES[site]} username`} htmlFor="hc-import-username">
+            <input
+              id="hc-import-username"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder={`${SITE_DISPLAY_NAMES[site]} username`}
+              disabled={loading}
+            />
+          </Field>
+          <Button variant="primary" onClick={fetchGame} disabled={loading || !username.trim()}>
+            {loading ? 'Fetching…' : `Fetch my latest game from ${SITE_LABELS[site]}`}
+          </Button>
+        </>
       )}
-    </div>
+      {pgnMode && (
+        <>
+          <Field label="Paste a PGN" htmlFor="hc-import-pgn">
+            <textarea id="hc-import-pgn" rows={8} value={pgnText} onChange={e => setPgnText(e.target.value)} />
+          </Field>
+          <Button onClick={usePastedPgn} disabled={!pgnText.trim() || loading}>
+            Use this PGN
+          </Button>
+        </>
+      )}
+      {error && <Status kind="error">{error}</Status>}
+    </Page>
   );
 }

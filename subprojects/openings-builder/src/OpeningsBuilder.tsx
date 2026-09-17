@@ -4,10 +4,12 @@
 // building first, drilling third.
 import { useEffect, useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
-import type { Color } from '@human-chess/rules';
+import type { Color, SquareName } from '@human-chess/rules';
+import { Board } from '@human-chess/board';
+import { Button, Field, SegmentedControl, Status, Workbench } from '@human-chess/ui';
 import { BuilderView } from './BuilderView';
 import { DrillView } from './DrillView';
-import { createOpening, type Opening } from './repertoire';
+import { createOpening, START_FEN, type Opening } from './repertoire';
 import { loadRepertoire, saveRepertoire } from './storage';
 import './openings-builder.css';
 
@@ -17,6 +19,8 @@ export interface OpeningsBuilderProps {
 }
 
 type Mode = 'build' | 'drill';
+
+const NO_DESTS = new Map<SquareName, SquareName[]>();
 
 export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
@@ -52,56 +56,86 @@ export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Ele
     setSelectedId(undefined);
   };
 
-  return (
-    <div className="ob">
-      <header className="ob-header">
-        <h2>Openings builder</h2>
-        <div className="ob-picker">
-          <select
-            value={selectedId ?? ''}
-            onChange={e => setSelectedId(e.target.value || undefined)}
-            aria-label="Choose an opening"
-          >
-            <option value="">Choose an opening…</option>
-            {openings.map(o => (
-              <option key={o.id} value={o.id}>
-                {o.name} ({o.color})
-              </option>
-            ))}
-          </select>
-          {selected && <button onClick={remove}>Delete</button>}
-        </div>
-        <div className="ob-new">
-          <input
-            type="text"
-            placeholder="New opening name"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
+  // Shared between build mode (rendered as `primary`, top of the right panel) and drill mode
+  // (rendered as `aside`, above the move list — drill's own primary is the drill prompt).
+  const controls = (
+    <div className="ob-controls">
+      <Field label="Opening" htmlFor="ob-opening-select">
+        <select id="ob-opening-select" value={selectedId ?? ''} onChange={e => setSelectedId(e.target.value || undefined)}>
+          <option value="">Choose an opening…</option>
+          {openings.map(o => (
+            <option key={o.id} value={o.id}>
+              {o.name} ({o.color})
+            </option>
+          ))}
+        </select>
+      </Field>
+      {selected && (
+        <Button variant="secondary" onClick={remove}>
+          Delete
+        </Button>
+      )}
+      <Field label="New opening name" htmlFor="ob-new-name">
+        <input id="ob-new-name" type="text" placeholder="New opening name" value={newName} onChange={e => setNewName(e.target.value)} />
+      </Field>
+      <Field label="Colour">
+        <SegmentedControl
+          ariaLabel="New opening colour"
+          options={[
+            { value: 'white', label: 'White' },
+            { value: 'black', label: 'Black' },
+          ]}
+          value={newColor}
+          onChange={setNewColor}
+        />
+      </Field>
+      <Button variant={selected ? 'secondary' : 'primary'} onClick={create} disabled={!newName.trim()}>
+        Create
+      </Button>
+      {selected && (
+        <Field label="Mode">
+          <SegmentedControl
+            ariaLabel="Build or drill"
+            options={[
+              { value: 'build', label: 'Build' },
+              { value: 'drill', label: 'Drill' },
+            ]}
+            value={mode}
+            onChange={setMode}
           />
-          <select value={newColor} onChange={e => setNewColor(e.target.value as Color)}>
-            <option value="white">White</option>
-            <option value="black">Black</option>
-          </select>
-          <button onClick={create} disabled={!newName.trim()}>
-            Create
-          </button>
-        </div>
-        {selected && (
-          <div className="ob-mode" role="tablist">
-            <button role="tab" aria-selected={mode === 'build'} className={mode === 'build' ? 'current' : ''} onClick={() => setMode('build')}>
-              Build
-            </button>
-            <button role="tab" aria-selected={mode === 'drill'} className={mode === 'drill' ? 'current' : ''} onClick={() => setMode('drill')}>
-              Drill
-            </button>
-          </div>
-        )}
-      </header>
-
-      {engine instanceof Error && <p className="ob-multipv-status">The engine could not be loaded: {engine.message}</p>}
-      {!selected && <p className="ob-multipv-status">Pick or create an opening to get started.</p>}
-      {selected && mode === 'build' && <BuilderView opening={selected} onOpeningChange={updateOpening} engine={readyEngine} />}
-      {selected && mode === 'drill' && <DrillView opening={selected} />}
+        </Field>
+      )}
     </div>
+  );
+
+  const engineStatus = engine instanceof Error ? <Status kind="error">The engine could not be loaded: {engine.message}</Status> : undefined;
+
+  if (selected && mode === 'build') {
+    return <BuilderView opening={selected} onOpeningChange={updateOpening} engine={readyEngine} controls={controls} status={engineStatus} />;
+  }
+  if (selected && mode === 'drill') {
+    return <DrillView opening={selected} controls={controls} status={engineStatus} />;
+  }
+
+  return (
+    <Workbench
+      title="Openings builder"
+      status={engineStatus}
+      primary={controls}
+      board={sizePx => (
+        <Board
+          fen={START_FEN}
+          orientation="white"
+          turnColor="white"
+          dests={NO_DESTS}
+          movableColor={undefined}
+          check={false}
+          onMove={() => {}}
+          size={`${sizePx}px`}
+        />
+      )}
+    >
+      <Status kind="info">Pick or create an opening to get started.</Status>
+    </Workbench>
   );
 }

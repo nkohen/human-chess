@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { MoveLine } from '@human-chess/board';
 import { whitePerspective, type Analysis, type PvLine, type Score, type UciEngine } from '@human-chess/engine';
 import { positionFromFen, turn, type Color } from '@human-chess/rules';
+import { Button, Field, Status } from '@human-chess/ui';
 import { loadDepth, MAX_DEPTH, MIN_DEPTH, saveDepth } from './storage';
 
 export interface MultiPvPanelProps {
@@ -74,21 +75,21 @@ function LineButtons({ fen, lines, orientation, onPlayMove, onAddReplies, inTree
           const first = line.pv[0];
           return (
             <li key={line.multipv}>
-              <button disabled={!first} onClick={() => first && onPlayMove(first)}>
+              <Button variant="secondary" className="ob-multipv-line-button" disabled={!first} onClick={() => first && onPlayMove(first)}>
                 <strong>{formatScore(whitePerspective(line.score, turn(pos)))}</strong>{' '}
                 <MoveLine startFen={fen} ucis={line.pv.slice(0, PV_SAN_MOVES)} {...(orientation ? { orientation } : {})} />
-              </button>
+              </Button>
               {first && inTree.includes(first) && <span className="ob-multipv-intree"> in tree</span>}
             </li>
           );
         })}
       </ol>
       {onAddReplies && firsts.length > 0 && (
-        <button className="ob-add-replies" disabled={newReplies.length === 0} onClick={() => onAddReplies(newReplies)}>
+        <Button variant="secondary" size="sm" className="ob-add-replies" disabled={newReplies.length === 0} onClick={() => onAddReplies(newReplies)}>
           {newReplies.length === 0
             ? 'All of these opponent replies are in the tree'
             : `Add ${newReplies.length === 1 ? 'this opponent reply' : `these ${newReplies.length} opponent replies`} to the tree`}
-        </button>
+        </Button>
       )}
     </>
   );
@@ -141,9 +142,9 @@ export function MultiPvPanel({ engine, fen, onPlayMove, orientation, onAddReplie
   // the input is capped there; 6 is a floor below which the lines are too shallow to be worth
   // showing at all.
   const depthControl = (
-    <label className="ob-depth">
-      Depth{' '}
+    <Field label="Depth" htmlFor="ob-depth" className="ob-depth">
       <input
+        id="ob-depth"
         type="number"
         min={MIN_DEPTH}
         max={MAX_DEPTH}
@@ -154,14 +155,14 @@ export function MultiPvPanel({ engine, fen, onPlayMove, orientation, onAddReplie
           if (e.key === 'Enter') finalizeDepth(e.currentTarget.value);
         }}
       />
-    </label>
+    </Field>
   );
 
   if (!engine) {
     return (
       <div className="ob-multipv">
         {depthControl}
-        <p className="ob-multipv-status">The engine is not loaded.</p>
+        <Status kind="info">The engine is not loaded.</Status>
       </div>
     );
   }
@@ -169,7 +170,7 @@ export function MultiPvPanel({ engine, fen, onPlayMove, orientation, onAddReplie
     return (
       <div className="ob-multipv">
         {depthControl}
-        <p className="ob-multipv-status">The engine failed: {error}</p>
+        <Status kind="error">The engine failed: {error}</Status>
       </div>
     );
   }
@@ -181,7 +182,7 @@ export function MultiPvPanel({ engine, fen, onPlayMove, orientation, onAddReplie
         <p className="ob-multipv-provenance">
           {analysis.engine}, depth {analysis.lines[0]?.depth ?? depth}, multipv {analysis.multipv} — scores from White's perspective
         </p>
-        {analysis.lines.length === 0 && <p className="ob-multipv-status">No lines returned.</p>}
+        {analysis.lines.length === 0 && <Status kind="info">No lines returned.</Status>}
         <LineButtons fen={fen} lines={analysis.lines} orientation={orientation} onPlayMove={onPlayMove} onAddReplies={onAddReplies} inTree={inTree} />
       </div>
     );
@@ -203,7 +204,7 @@ export function MultiPvPanel({ engine, fen, onPlayMove, orientation, onAddReplie
   return (
     <div className="ob-multipv">
       {depthControl}
-      <p className="ob-multipv-status">Analysing…</p>
+      <Status kind="busy">Analysing…</Status>
     </div>
   );
 }

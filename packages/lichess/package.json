@@ -7,5 +7,5 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": { ".": "./src/index.ts", "./react": "./src/react.tsx" },
-  "dependencies": { "@human-chess/site-client": "workspace:*", "react": "^19.0.0" }
+  "dependencies": { "@human-chess/site-client": "workspace:*", "@human-chess/ui": "workspace:*", "react": "^19.0.0" }
 }

@@ -1,0 +1,57 @@
+/* Genuinely puzzles' own (docs/design/2026-09-17-ui.md, adoption rule 5): the theme pills
+   (packages/ui has no "tag list" primitive), the meta/tally text, and a placeholder for the
+   board slot before the first puzzle has loaded. Everything reads its colour and spacing from
+   --hc-* tokens; nothing here redefines button, panel or layout styling packages/ui already
+   provides. */
+
+.puzzles-board-placeholder {
+  background: var(--hc-surface);
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+}
+
+.puzzles-meta {
+  margin: 0;
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+}
+
+.puzzles-solved {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--hc-space-2);
+}
+
+.puzzles-themes {
+  display: flex;
+  gap: var(--hc-space-2);
+  flex-wrap: wrap;
+}
+
+.puzzles-theme {
+  border: 1px solid var(--hc-border);
+  border-radius: 999px;
+  padding: 0.1rem var(--hc-space-3);
+  font-size: var(--hc-text-sm);
+  color: var(--hc-text-muted);
+}
+
+.puzzles-section-title {
+  margin: 0 0 var(--hc-space-2);
+  font-size: var(--hc-text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hc-text-muted);
+}
+
+.puzzles-id-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--hc-space-2);
+}
+
+.puzzles-id-row .puzzles-id-field {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+}

@@ -2,7 +2,9 @@
 // button. Published as the package's "./react" subpath so consumers that don't need React (or
 // don't want it pulled in) can import the plain client from the package root instead.
 import { useCallback, useEffect, useState } from 'react';
+import { Button, Status } from '@human-chess/ui';
 import { currentLichessSession, lastLichessLoginError, logoutLichess, startLichessLogin, subscribeLichessAuth, type LichessSession } from './auth';
+import './lichess-login.css';
 
 export interface UseLichessSessionResult {
   session: LichessSession | undefined;
@@ -57,8 +59,10 @@ export function useLichessSession(): UseLichessSessionResult {
   return { session, login, logout, busy, error };
 }
 
-/** "Log in with lichess", or "lichess: <username>" + "Log out". Class names are stable:
- * `.lichess-login`, `.lichess-login-user`, `.lichess-login-error` — see apps/web/src/styles.css. */
+/** "Log in with lichess", or "lichess: <username>" + "Log out". Uses `@human-chess/ui`'s
+ * `Button`/`Status` for the shared look; `lichess-login.css` (this package, imported above) is
+ * only the small bit of layout that is genuinely this component's own — see that file's header
+ * comment. Class names are stable: `.lichess-login`, `.lichess-login-user`, `.lichess-login-error`. */
 export function LichessLogin(): React.JSX.Element {
   const { session, login, logout, busy, error } = useLichessSession();
   return (
@@ -66,16 +70,20 @@ export function LichessLogin(): React.JSX.Element {
       {session ? (
         <>
           <span className="lichess-login-user">lichess: {session.username}</span>
-          <button onClick={logout} disabled={busy}>
+          <Button variant="secondary" size="sm" onClick={logout} disabled={busy}>
             Log out
-          </button>
+          </Button>
         </>
       ) : (
-        <button onClick={() => login()} disabled={busy}>
+        <Button variant="secondary" size="sm" onClick={() => login()} disabled={busy}>
           Log in with lichess
-        </button>
+        </Button>
       )}
-      {error && <span className="lichess-login-error">{error}</span>}
+      {error && (
+        <Status kind="error" className="lichess-login-error">
+          {error}
+        </Status>
+      )}
     </div>
   );
 }

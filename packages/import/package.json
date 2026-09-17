@@ -15,6 +15,7 @@
     "@human-chess/lichess": "workspace:*",
     "@human-chess/rules": "workspace:*",
     "@human-chess/site-client": "workspace:*",
+    "@human-chess/ui": "workspace:*",
     "react": "^19.0.0"
   }
 }

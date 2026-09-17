@@ -16,6 +16,7 @@ import {
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
 import { inCheck, pieceCounts, positionFromFen, turn, uciSquares, START_FEN, type Color, type SquareName } from '@human-chess/rules';
+import { Button, Field, Panel, SegmentedControl, Status, Toolbar, Workbench } from '@human-chess/ui';
 import { pickUnshownCuratedMidgame } from './curatedPick';
 import { describeMaterialDifference } from './material';
 import { loadPositionSource, savePositionSource, type PositionSource } from './positionSource';
@@ -239,18 +240,35 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     setTally(t => (outcome === 'right' ? { ...t, right: t.right + 1 } : { ...t, wrong: t.wrong + 1 }));
   }, [phase, position, vote, generation]);
 
+  // A non-interactive starting-position board, used while there is no mined/curated position to
+  // show yet (engine still loading, engine failed, or mining in flight) so the two-column layout
+  // (and its board sizing) stays put across those transient phases instead of jumping in once a
+  // real position arrives.
+  const idleBoard = (sizePx: number): React.JSX.Element => (
+    <Board
+      fen={START_FEN}
+      orientation="white"
+      turnColor="white"
+      dests={new Map()}
+      movableColor={undefined}
+      check={false}
+      onMove={() => undefined}
+      size={`${sizePx}px`}
+    />
+  );
+
   if (engine instanceof Error) {
     return (
-      <div className="chessitout">
-        <p className="ci-status">The engine could not be loaded: {engine.message}</p>
-      </div>
+      <Workbench title="Chessitout" board={idleBoard} primary={<Status kind="error">The engine could not be loaded: {engine.message}</Status>}>
+        {null}
+      </Workbench>
     );
   }
   if (!engine) {
     return (
-      <div className="chessitout">
-        <p className="ci-status">Loading the engine…</p>
-      </div>
+      <Workbench title="Chessitout" board={idleBoard} primary={<Status kind="busy">Loading the engine…</Status>}>
+        {null}
+      </Workbench>
     );
   }
 
@@ -259,53 +277,59 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
   // is likewise only editable before its choice takes effect (there it disables after the first
   // move rather than hiding).
   const sourceSelector = (
-    <fieldset className="ci-source">
-      <legend>Position source</legend>
-      <label>
-        <input type="radio" name="ci-source" checked={positionSource === 'mined'} onChange={() => changeSource('mined')} />
-        Mined by the engine
-      </label>
-      <label>
-        <input type="radio" name="ci-source" checked={positionSource === 'curated'} onChange={() => changeSource('curated')} />
-        From your games
-      </label>
-    </fieldset>
+    <Field label="Position source">
+      <SegmentedControl<PositionSource>
+        ariaLabel="Position source"
+        options={[
+          { value: 'mined', label: 'Mined by the engine' },
+          { value: 'curated', label: 'From your games' },
+        ]}
+        value={positionSource}
+        onChange={changeSource}
+      />
+    </Field>
   );
 
   if (phase === 'mining') {
     return (
-      <div className="chessitout">
-        <h2>Chessitout</h2>
-        {sourceSelector}
-        {miningError ? (
-          <>
-            <p className="ci-status">The engine failed to load a position: {miningError}</p>
-            <button onClick={next}>Try again</button>
-          </>
-        ) : positionSource === 'curated' ? (
-          <p className="ci-status">Loading one of your games…</p>
-        ) : (
-          <>
-            <p className="ci-status">
+      <Workbench
+        title="Chessitout"
+        board={idleBoard}
+        primary={
+          miningError ? (
+            <>
+              <Status kind="error">The engine failed to load a position: {miningError}</Status>
+              <Button variant="primary" onClick={next}>
+                Try again
+              </Button>
+            </>
+          ) : positionSource === 'curated' ? (
+            <Status kind="busy">Loading one of your games…</Status>
+          ) : (
+            <Status kind="busy">
               {miningProgress
                 ? `Mining a position… (attempt ${miningProgress.attempt} of ${miningProgress.maxAttempts})`
                 : 'Mining a position…'}
-            </p>
-            <p className="ci-mining-note">
-              Looking for a middlegame where one side is {MIN_ABS_EVAL_CP / 100} to {MAX_ABS_EVAL_CP / 100} pawns better according to the engine.
-            </p>
-          </>
+            </Status>
+          )
+        }
+      >
+        {sourceSelector}
+        {!miningError && positionSource === 'mined' && (
+          <p className="ci-mining-note">
+            Looking for a middlegame where one side is {MIN_ABS_EVAL_CP / 100} to {MAX_ABS_EVAL_CP / 100} pawns better according to the engine.
+          </p>
         )}
-      </div>
+      </Workbench>
     );
   }
 
   if (!position) {
     // Should not happen once phase leaves 'mining', but keeps the render exhaustive and typed.
     return (
-      <div className="chessitout">
-        <p className="ci-status">Mining a position…</p>
-      </div>
+      <Workbench title="Chessitout" board={idleBoard} primary={<Status kind="busy">Mining a position…</Status>}>
+        {null}
+      </Workbench>
     );
   }
 
@@ -316,34 +340,45 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     // an invented one.
     const lastMined = position.moves[position.moves.length - 1];
     const miningLastMove: [SquareName, SquareName] | undefined = lastMined ? uciSquares(lastMined) : undefined;
+    const votingBoard = (sizePx: number): React.JSX.Element => (
+      <Board
+        fen={position.fen}
+        orientation={viewFrom}
+        turnColor={turn(pos)}
+        dests={new Map()}
+        movableColor={undefined}
+        lastMove={miningLastMove}
+        check={inCheck(pos)}
+        onMove={() => undefined}
+        size={`${sizePx}px`}
+      />
+    );
     return (
-      <div className="chessitout">
-        <h2>Chessitout</h2>
+      <Workbench
+        title="Chessitout"
+        board={votingBoard}
+        primary={
+          <>
+            <p className="ci-turn">{turn(pos) === 'white' ? 'White to move' : 'Black to move'}</p>
+            <p className="ci-material">{describeMaterialDifference(pieceCounts(pos))}</p>
+            <p className="ci-prompt">Who stands better?</p>
+            <Toolbar className="ci-vote-buttons">
+              <Button onClick={() => onVote('white')}>White is better</Button>
+              <Button onClick={() => onVote('black')}>Black is better</Button>
+            </Toolbar>
+          </>
+        }
+        footer={
+          <Toolbar>
+            <Button variant="quiet" onClick={() => setViewFrom(c => (c === 'white' ? 'black' : 'white'))}>
+              Flip board (seen from {viewFrom === 'white' ? "White's" : "Black's"} side)
+            </Button>
+          </Toolbar>
+        }
+      >
         {sourceSelector}
-        <Board
-          fen={position.fen}
-          orientation={viewFrom}
-          turnColor={turn(pos)}
-          dests={new Map()}
-          movableColor={undefined}
-          lastMove={miningLastMove}
-          check={inCheck(pos)}
-          onMove={() => undefined}
-        />
-        <div className="ci-view">
-          <button className="ci-flip" onClick={() => setViewFrom(c => (c === 'white' ? 'black' : 'white'))}>
-            Flip board (seen from {viewFrom === 'white' ? "White's" : "Black's"} side)
-          </button>
-        </div>
         {curatedEntry && <CuratedProvenance entry={curatedEntry} />}
-        <p className="ci-turn">{turn(pos) === 'white' ? 'White to move' : 'Black to move'}</p>
-        <p className="ci-material">{describeMaterialDifference(pieceCounts(pos))}</p>
-        <p className="ci-prompt">Who stands better?</p>
-        <div className="ci-vote-buttons">
-          <button onClick={() => onVote('white')}>White is better</button>
-          <button onClick={() => onVote('black')}>Black is better</button>
-        </div>
-      </div>
+      </Workbench>
     );
   }
 
@@ -383,11 +418,58 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
         ? `unavailable — ${finalAnalysisError}`
         : 'evaluating…';
 
+  const playBoard = (sizePx: number): React.JSX.Element => (
+    <Board
+      fen={fen}
+      orientation={playerColor ?? 'white'}
+      turnColor={sideToMove(game)}
+      dests={playerDests(game)}
+      movableColor={phase === 'playing' && isPlayersTurn(game) ? game.playerColor : undefined}
+      lastMove={lastMove(game)}
+      check={isInCheck(game)}
+      onMove={onPlayerMove}
+      size={`${sizePx}px`}
+    />
+  );
+
+  const primary =
+    phase === 'playing' ? (
+      <>
+        <Status kind={engineState.kind === 'failed' ? 'error' : engineState.kind === 'thinking' ? 'busy' : 'info'}>
+          {engineState.kind === 'failed'
+            ? `The engine failed: ${engineState.message}`
+            : engineState.kind === 'thinking'
+              ? 'Engine is thinking…'
+              : `You are playing ${playerColor}. Your move.`}
+        </Status>
+        <Button variant="primary" onClick={onStop} disabled={engineState.kind === 'thinking'}>
+          Stop and evaluate
+        </Button>
+      </>
+    ) : (
+      <>
+        <Button variant="primary" onClick={next}>
+          Next position
+        </Button>
+        {curatedEntry && <CuratedProvenance entry={curatedEntry} />}
+        <p>{headline}</p>
+        <p>
+          Your vote: {voteLabel} — {voteOutcome === 'right' ? 'right.' : 'wrong.'}
+          <br />
+          {curatedEntry ? 'Engine' : 'Engine at mining time'}: {formatScore(position.eval.score)}{' '}
+          <span className="ci-provenance">
+            ({position.eval.engine}, depth {position.eval.depth})
+          </span>
+          .
+          <br />
+          Engine now: {nowText}
+        </p>
+      </>
+    );
+
   return (
-    <div className="chessitout">
-      <h2>Chessitout</h2>
-      <div className="ci-elo">
-        <label htmlFor="ci-elo-select">Opponent strength (Elo):</label>
+    <Workbench title="Chessitout" board={playBoard} primary={primary}>
+      <Field label="Opponent strength (Elo)" htmlFor="ci-elo-select">
         <select
           id="ci-elo-select"
           value={elo}
@@ -398,52 +480,17 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
             <option key={v} value={v}>{v}</option>
           ))}
         </select>
-      </div>
-      <Board
-        fen={fen}
-        orientation={playerColor ?? 'white'}
-        turnColor={sideToMove(game)}
-        dests={playerDests(game)}
-        movableColor={phase === 'playing' && isPlayersTurn(game) ? game.playerColor : undefined}
-        lastMove={lastMove(game)}
-        check={isInCheck(game)}
-        onMove={onPlayerMove}
-      />
-      <p className="ci-status" aria-live="polite">
-        {phase === 'playing' &&
-          (engineState.kind === 'failed'
-            ? `The engine failed: ${engineState.message}`
-            : engineState.kind === 'thinking'
-              ? 'Engine is thinking…'
-              : `You are playing ${playerColor}. Your move.`)}
-      </p>
-      {phase === 'playing' && (
-        <button className="ci-stop" onClick={onStop} disabled={engineState.kind === 'thinking'}>
-          Stop and evaluate
-        </button>
-      )}
-      <ol className="ci-moves">
-        {moveLines.length === 0 ? <li>No moves yet.</li> : moveLines.map((line, i) => <li key={i}>{line}</li>)}
-      </ol>
-
+      </Field>
+      <Panel title="Moves">
+        <ol className="ci-moves">
+          {moveLines.length === 0 ? <li>No moves yet.</li> : moveLines.map((line, i) => <li key={i}>{line}</li>)}
+        </ol>
+      </Panel>
       {phase === 'result' && (
-        <div className="ci-result">
-          {curatedEntry && <CuratedProvenance entry={curatedEntry} />}
-          <p>{headline}</p>
-          <p>
-            Your vote: {voteLabel} — {voteOutcome === 'right' ? 'right.' : 'wrong.'}
-            <br />
-            {curatedEntry ? 'Engine' : 'Engine at mining time'}: {formatScore(position.eval.score)}{' '}
-            <span className="ci-provenance">({position.eval.engine}, depth {position.eval.depth})</span>.
-            <br />
-            Engine now: {nowText}
-          </p>
-          <p className="ci-tally">
-            Votes: {tally.right} right, {tally.wrong} wrong (of {tally.right + tally.wrong}).
-          </p>
-          <button onClick={next}>Next position</button>
-        </div>
+        <p className="ci-tally">
+          Votes: {tally.right} right, {tally.wrong} wrong (of {tally.right + tally.wrong}).
+        </p>
       )}
-    </div>
+    </Workbench>
   );
 }

@@ -11,7 +11,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import { EngineError, formatPawns, formatScore, whitePerspective, type Analysis, type Score, type UciEngine } from '@human-chess/engine';
 import { generateRecipePosition, pickRecipe, type RecipePosition } from '@human-chess/positions';
-import { inCheck, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
+import { inCheck, positionFromFen, turn, uciSquares, START_FEN, type SquareName } from '@human-chess/rules';
+import { Button, Field, Page, Status, Workbench } from '@human-chess/ui';
 import { EvalScale } from './EvalScale';
 import { band, describeBand, grade, MAX_POINTS, points, SLIDER_MAX_CP, SLIDER_MIN_CP } from './scoring';
 import './guess-the-eval.css';
@@ -39,6 +40,24 @@ interface RoundResult {
 // once there is a sense of how long a round should feel.
 const ROUNDS = 5;
 const ANALYSE_DEPTH = 14;
+
+/** A non-interactive starting-position board shown while there is no generated position yet
+ * (engine still loading, engine failed, or a position generating/failed) so the two-column
+ * layout and its board sizing stays put across those transient phases. */
+function idleBoard(sizePx: number): React.JSX.Element {
+  return (
+    <Board
+      fen={START_FEN}
+      orientation="white"
+      turnColor="white"
+      dests={EMPTY_DESTS}
+      movableColor={undefined}
+      check={false}
+      onMove={() => undefined}
+      size={`${sizePx}px`}
+    />
+  );
+}
 
 export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
@@ -154,71 +173,82 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
 
   if (engine instanceof Error) {
     return (
-      <div className="gte">
-        <p className="gte-status">The engine could not be loaded: {engine.message}</p>
-      </div>
+      <Workbench title="Guess the eval" board={idleBoard} primary={<Status kind="error">The engine could not be loaded: {engine.message}</Status>}>
+        {null}
+      </Workbench>
     );
   }
   if (!engine) {
     return (
-      <div className="gte">
-        <p className="gte-status">Loading the engine…</p>
-      </div>
+      <Workbench title="Guess the eval" board={idleBoard} primary={<Status kind="busy">Loading the engine…</Status>}>
+        {null}
+      </Workbench>
     );
   }
   if (error) {
     return (
-      <div className="gte">
-        <p className="gte-status">{error}</p>
-        <button onClick={startGeneration}>Try again</button>
-      </div>
+      <Workbench
+        title="Guess the eval"
+        board={idleBoard}
+        primary={
+          <>
+            <Status kind="error">{error}</Status>
+            <Button variant="primary" onClick={startGeneration}>
+              Try again
+            </Button>
+          </>
+        }
+      >
+        {null}
+      </Workbench>
     );
   }
   if (phase === 'summary') {
     const total = results.reduce((sum, r) => sum + r.points, 0);
     const maxTotal = ROUNDS * MAX_POINTS;
     return (
-      <div className="gte">
-        <h2>Guess the eval</h2>
-        <div className="gte-summary">
-          <button className="gte-primary" onClick={playAgain}>
+      <Page
+        title="Guess the eval"
+        actions={
+          <Button variant="primary" onClick={playAgain}>
             Play again
-          </button>
-          <div className="gte-bar-row gte-summary-total-row">
-            <div className="gte-bar">
-              <div className="gte-bar-fill" style={{ width: `${Math.min(100, (total / maxTotal) * 100)}%` }} />
-            </div>
-            <span className="gte-bar-value">
-              {total} / {maxTotal}
-            </span>
+          </Button>
+        }
+      >
+        <div className="gte-bar-row gte-summary-total-row">
+          <div className="gte-bar">
+            <div className="gte-bar-fill" style={{ width: `${Math.min(100, (total / maxTotal) * 100)}%` }} />
           </div>
-          <ol className="gte-summary-list">
-            {results.map((r, i) => (
-              <li key={i} className="gte-summary-row" title={r.recipeDescription}>
-                <div className="gte-bar-row">
-                  <div className="gte-bar">
-                    <div className="gte-bar-fill" style={{ width: `${Math.min(100, (r.points / MAX_POINTS) * 100)}%` }} />
-                  </div>
-                  <span className="gte-bar-value">{r.points}</span>
-                </div>
-                <div className="gte-bar-row">
-                  <EvalScale guessCp={r.guessCp} truth={r.truth} compact />
-                  <span className="gte-summary-row-values">
-                    {formatScore(r.truth)} · guess {formatPawns(r.guessCp)}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ol>
+          <span className="gte-bar-value">
+            {total} / {maxTotal}
+          </span>
         </div>
-      </div>
+        <ol className="gte-summary-list">
+          {results.map((r, i) => (
+            <li key={i} className="gte-summary-row" title={r.recipeDescription}>
+              <div className="gte-bar-row">
+                <div className="gte-bar">
+                  <div className="gte-bar-fill" style={{ width: `${Math.min(100, (r.points / MAX_POINTS) * 100)}%` }} />
+                </div>
+                <span className="gte-bar-value">{r.points}</span>
+              </div>
+              <div className="gte-bar-row">
+                <EvalScale guessCp={r.guessCp} truth={r.truth} compact />
+                <span className="gte-summary-row-values">
+                  {formatScore(r.truth)} · guess {formatPawns(r.guessCp)}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </Page>
     );
   }
   if (!position || !pos) {
     return (
-      <div className="gte">
-        <p className="gte-status">Generating a position…</p>
-      </div>
+      <Workbench title="Guess the eval" board={idleBoard} primary={<Status kind="busy">Generating a position…</Status>}>
+        {null}
+      </Workbench>
     );
   }
 
@@ -230,51 +260,58 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
   const lastMinedMove = position.moves[position.moves.length - 1];
   const lastMove: [SquareName, SquareName] | undefined = lastMinedMove ? uciSquares(lastMinedMove) : undefined;
 
+  const roundBoard = (sizePx: number): React.JSX.Element => (
+    <Board
+      fen={position.fen}
+      orientation="white"
+      turnColor={turn(pos)}
+      dests={EMPTY_DESTS}
+      movableColor={undefined}
+      lastMove={lastMove}
+      check={inCheck(pos)}
+      onMove={() => undefined}
+      size={`${sizePx}px`}
+    />
+  );
+
+  const revealed = phase === 'revealed' && truth && gradeResult && line && roundResult;
+
+  const primary = revealed ? (
+    <>
+      <Button variant="primary" onClick={advance}>
+        {roundIndex + 1 >= ROUNDS ? 'See results' : 'Next position'}
+      </Button>
+      <EvalScale guessCp={guessCp} truth={truth} />
+    </>
+  ) : (
+    <>
+      <Field label="Your guess, White's perspective" htmlFor="gte-slider" hint={formatPawns(guessCp)}>
+        <input
+          id="gte-slider"
+          type="range"
+          min={SLIDER_MIN_CP}
+          max={SLIDER_MAX_CP}
+          step={10}
+          value={guessCp}
+          disabled={phase === 'evaluating'}
+          onChange={e => setGuessCp(Number(e.target.value))}
+        />
+      </Field>
+      <Button variant="primary" onClick={lockIn} disabled={phase === 'evaluating'}>
+        {phase === 'evaluating' ? 'Evaluating…' : 'Lock in'}
+      </Button>
+    </>
+  );
+
   return (
-    <div className="gte">
-      <h2>Guess the eval</h2>
+    <Workbench title="Guess the eval" board={roundBoard} primary={primary}>
       <p className="gte-round">
         Position {roundIndex + 1} of {ROUNDS}
       </p>
       <p className="gte-turn">{turn(pos) === 'white' ? 'White to move' : 'Black to move'}</p>
-      <Board
-        fen={position.fen}
-        orientation="white"
-        turnColor={turn(pos)}
-        dests={EMPTY_DESTS}
-        movableColor={undefined}
-        lastMove={lastMove}
-        check={inCheck(pos)}
-        onMove={() => undefined}
-      />
-      {phase !== 'revealed' && <p className="gte-source">Position source: engine self-play.</p>}
-
-      {phase !== 'revealed' && (
-        <div className="gte-guess">
-          <label htmlFor="gte-slider">
-            Your guess, White's perspective: <strong>{formatPawns(guessCp)}</strong>
-          </label>
-          <input
-            id="gte-slider"
-            type="range"
-            min={SLIDER_MIN_CP}
-            max={SLIDER_MAX_CP}
-            step={10}
-            value={guessCp}
-            disabled={phase === 'evaluating'}
-            onChange={e => setGuessCp(Number(e.target.value))}
-          />
-          <button onClick={lockIn} disabled={phase === 'evaluating'}>
-            {phase === 'evaluating' ? 'Evaluating…' : 'Lock in'}
-          </button>
-        </div>
-      )}
-
-      {phase === 'revealed' && truth && gradeResult && line && roundResult && (
-        <div className="gte-reveal">
-          <button className="gte-primary" onClick={advance}>
-            {roundIndex + 1 >= ROUNDS ? 'See results' : 'Next position'}
-          </button>
+      {!revealed && <p className="gte-source">Position source: engine self-play.</p>}
+      {revealed && truth && gradeResult && line && roundResult && (
+        <>
           <p className="gte-source">Position source: {position.description}.</p>
           <p>
             Engine evaluation, White's perspective: <strong>{formatScore(truth)}</strong>{' '}
@@ -283,7 +320,6 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
             </span>
           </p>
           <p>{describeBand(band(truth))}.</p>
-          <EvalScale guessCp={guessCp} truth={truth} />
           <p>
             Your guess of {formatPawns(guessCp)} was {gradeResult.sameBand ? 'in the same band.' : 'in a different band.'}
           </p>
@@ -293,8 +329,8 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
           <div className="gte-topline">
             Top line: <MoveLine startFen={position.fen} ucis={line.pv} />
           </div>
-        </div>
+        </>
       )}
-    </div>
+    </Workbench>
   );
 }

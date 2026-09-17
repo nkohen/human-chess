@@ -5,11 +5,18 @@
 // Design record: memory/subprojects/visualization-trainer.md. The line and the end position are
 // never invented — they come from a real engine call and @human-chess/rules board-state reads
 // (A1); the questions themselves come from @human-chess/facts, never generated free-form (V3).
+//
+// Layout: docs/design/2026-09-17-ui.md. Board screen, so it renders inside Workbench (board
+// left, actions right): the always-visible start board is the `board` slot, the line to
+// visualize plus the three questions and their answer/check button are `primary` (the thing the
+// learner must act on next), the round count and running score — and, once revealed, the end
+// position — are `children`.
 import { useEffect, useMemo, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { endPosition, PIECE_ON_OPTIONS, questionsFor, type Position, type Question } from '@human-chess/facts';
 import { fenOf, inCheck, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
+import { Button, Field, SegmentedControl, Status, type StatusKind, Workbench } from '@human-chess/ui';
 import { LINE_PLIES, ROUNDS, randomStartPosition } from './exercise';
 import './visualization-trainer.css';
 
@@ -31,6 +38,10 @@ type Answers = { check: boolean | undefined; pieceOn: string | undefined; materi
 
 const EMPTY_ANSWERS: Answers = { check: undefined, pieceOn: undefined, material: '' };
 const EMPTY_DESTS = new Map<SquareName, SquareName[]>();
+const YES_NO_OPTIONS: { value: 'yes' | 'no'; label: string }[] = [
+  { value: 'yes', label: 'Yes' },
+  { value: 'no', label: 'No' },
+];
 
 /** An empty material answer is unanswered, not a guess of 0 — `Number('')` is 0 and would
  * otherwise silently count as correct whenever the true balance happens to be 0. */
@@ -132,96 +143,89 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
     setRevealed(true);
   };
 
-  const status = (): string | undefined => {
-    if (engine instanceof Error) return `The engine could not be loaded: ${engine.message}`;
-    if (!engine) return 'Loading the engine…';
-    if (exercise.kind === 'loading') return 'The engine is choosing a line…';
-    if (exercise.kind === 'failed') return `The engine failed: ${exercise.message}`;
+  const statusInfo = (): { kind: StatusKind; text: string } | undefined => {
+    if (engine instanceof Error) return { kind: 'error', text: `The engine could not be loaded: ${engine.message}` };
+    if (!engine) return { kind: 'busy', text: 'Loading the engine…' };
+    if (exercise.kind === 'loading') return { kind: 'busy', text: 'The engine is choosing a line…' };
+    if (exercise.kind === 'failed') return { kind: 'error', text: `The engine failed: ${exercise.message}` };
     return undefined;
   };
+  const status = statusInfo();
 
-  const statusText = status();
+  // Yes/No is a button-pair for one choice, so it is a SegmentedControl (adoption rule 4); the
+  // control has no built-in disabled state, so the answer is simply locked (onChange ignored)
+  // once revealed, and the CSS dims it to match (visualization-trainer.css).
+  const checkValue = answers.check === true ? 'yes' : answers.check === false ? 'no' : '';
 
   return (
-    <div className="viz">
-      <h2>Visualization trainer</h2>
-
-      {sessionDone ? (
-        <div className="viz-summary">
-          <p className="viz-summary-score">
-            Session complete: {tally.correct} / {tally.total} correct
-          </p>
-          <button onClick={playAgain}>Play again</button>
-        </div>
-      ) : (
-        <>
-          <p className="viz-round">
-            Exercise {round} of {ROUNDS}
-          </p>
-          <p className="viz-tally">
-            Score: {tally.correct} / {tally.total}
-          </p>
-
-          <div className="viz-board">
-            <Board
-              fen={startFen}
-              orientation="white"
-              turnColor={turn(startPos)}
-              dests={EMPTY_DESTS}
-              movableColor={undefined}
-              lastMove={startLastMove}
-              check={inCheck(startPos)}
-              onMove={() => undefined}
-              // Drawing the line's arrows on the start board would do the visualizing for the learner.
-              drawable={revealed}
-            />
-          </div>
-
-          {statusText && (
-            <p className="viz-status" aria-live="polite">
-              {statusText}
+    <Workbench
+      title="Visualization trainer"
+      status={status && <Status kind={status.kind}>{status.text}</Status>}
+      board={sizePx => (
+        <Board
+          fen={startFen}
+          orientation="white"
+          turnColor={turn(startPos)}
+          dests={EMPTY_DESTS}
+          movableColor={undefined}
+          lastMove={startLastMove}
+          check={inCheck(startPos)}
+          onMove={() => undefined}
+          size={`${sizePx}px`}
+          // Drawing the line's arrows on the start board would do the visualizing for the learner.
+          drawable={revealed}
+        />
+      )}
+      primary={
+        sessionDone ? (
+          <div className="viz-summary">
+            <p className="viz-summary-score">
+              Session complete: {tally.correct} / {tally.total} correct
             </p>
-          )}
-
-          {exercise.kind === 'no-line' && (
-            <div className="viz-dialog" role="dialog">
-              <p>The engine returned no line.</p>
-              <button onClick={retryExercise}>Try another</button>
+            <Button variant="primary" onClick={playAgain}>
+              Play again
+            </Button>
+          </div>
+        ) : exercise.kind === 'no-line' ? (
+          <div className="viz-dialog" role="dialog">
+            <p>The engine returned no line.</p>
+            <Button variant="primary" onClick={retryExercise}>
+              Try another
+            </Button>
+          </div>
+        ) : exercise.kind === 'ready' ? (
+          <div className="viz-exercise">
+            <div className="viz-line">
+              Visualize this line: <MoveLine startFen={exercise.startFen} ucis={exercise.ucis} preview={revealed} />
             </div>
-          )}
 
-          {exercise.kind === 'ready' && (
-            <div className="viz-exercise">
-              <div className="viz-line">
-                Visualize this line: <MoveLine startFen={exercise.startFen} ucis={exercise.ucis} preview={revealed} />
-              </div>
+            <div className={`viz-question${revealed ? ' viz-question-locked' : ''}`}>
+              <Field label={checkQ?.kind === 'check' ? checkQ.prompt : ''}>
+                <SegmentedControl
+                  ariaLabel={checkQ?.kind === 'check' ? checkQ.prompt : 'Is it check?'}
+                  options={YES_NO_OPTIONS}
+                  value={checkValue}
+                  onChange={value => {
+                    if (revealed) return;
+                    setAnswers(a => ({ ...a, check: value === 'yes' }));
+                  }}
+                />
+              </Field>
+              {revealed && checkQ?.kind === 'check' && (
+                <span className={answers.check === checkQ.answer ? 'viz-correct' : 'viz-wrong'}>
+                  {answers.check === checkQ.answer ? 'Correct' : `Wrong — it was ${checkQ.answer ? 'yes' : 'no'}`}
+                </span>
+              )}
+            </div>
 
-              <div className="viz-question">
-                <p>{checkQ?.kind === 'check' ? checkQ.prompt : ''}</p>
-                <button
-                  className={answers.check === true ? 'selected' : ''}
+            <div className="viz-question">
+              <Field label={pieceOnQ?.kind === 'piece-on' ? pieceOnQ.prompt : ''} htmlFor="viz-piece-on">
+                <select
+                  id="viz-piece-on"
                   disabled={revealed}
-                  onClick={() => setAnswers(a => ({ ...a, check: true }))}
+                  value={answers.pieceOn ?? ''}
+                  onChange={e => setAnswers(a => ({ ...a, pieceOn: e.target.value }))}
                 >
-                  Yes
-                </button>
-                <button
-                  className={answers.check === false ? 'selected' : ''}
-                  disabled={revealed}
-                  onClick={() => setAnswers(a => ({ ...a, check: false }))}
-                >
-                  No
-                </button>
-                {revealed && checkQ?.kind === 'check' && (
-                  <span className={answers.check === checkQ.answer ? 'viz-correct' : 'viz-wrong'}>
-                    {answers.check === checkQ.answer ? 'Correct' : `Wrong — it was ${checkQ.answer ? 'yes' : 'no'}`}
-                  </span>
-                )}
-              </div>
-
-              <div className="viz-question">
-                <p>{pieceOnQ?.kind === 'piece-on' ? pieceOnQ.prompt : ''}</p>
-                <select disabled={revealed} value={answers.pieceOn ?? ''} onChange={e => setAnswers(a => ({ ...a, pieceOn: e.target.value }))}>
                   <option value="" disabled>
                     choose…
                   </option>
@@ -231,57 +235,80 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
                     </option>
                   ))}
                 </select>
-                {revealed && pieceOnQ?.kind === 'piece-on' && (
-                  <span className={answers.pieceOn === pieceOnQ.answer ? 'viz-correct' : 'viz-wrong'}>
-                    {answers.pieceOn === pieceOnQ.answer ? 'Correct' : `Wrong — it was ${pieceOnQ.answer}`}
-                  </span>
-                )}
-              </div>
-
-              <div className="viz-question">
-                {materialQ?.kind === 'material' && (
-                  <p className="viz-material-before">
-                    Material now: White {materialQ.before.white}, Black {materialQ.before.black} (balance{' '}
-                    {formatSigned(materialQ.before.balance)}).
-                  </p>
-                )}
-                <p>{materialQ?.kind === 'material' ? materialQ.prompt : ''}</p>
-                <input type="number" disabled={revealed} value={answers.material} onChange={e => setAnswers(a => ({ ...a, material: e.target.value }))} />
-                {revealed && materialQ?.kind === 'material' && (
-                  <span className={isMaterialCorrect(answers.material, materialQ.answer) ? 'viz-correct' : 'viz-wrong'}>
-                    {isMaterialCorrect(answers.material, materialQ.answer) ? 'Correct' : `Wrong — it was ${formatSigned(materialQ.answer)}`}
-                  </span>
-                )}
-              </div>
-
-              {!revealed && (
-                <button className="viz-check" onClick={checkAnswers}>
-                  Check answers
-                </button>
-              )}
-
-              {revealed && end && (
-                <div className="viz-end">
-                  <p>The end position:</p>
-                  <div className="viz-board">
-                    <Board
-                      fen={fenOf(end)}
-                      orientation="white"
-                      turnColor={turn(end)}
-                      dests={EMPTY_DESTS}
-                      movableColor={undefined}
-                      lastMove={endLastMove}
-                      check={inCheck(end)}
-                      onMove={() => undefined}
-                    />
-                  </div>
-                  <button onClick={nextExercise}>{round >= ROUNDS ? 'See results' : 'Next'}</button>
-                </div>
+              </Field>
+              {revealed && pieceOnQ?.kind === 'piece-on' && (
+                <span className={answers.pieceOn === pieceOnQ.answer ? 'viz-correct' : 'viz-wrong'}>
+                  {answers.pieceOn === pieceOnQ.answer ? 'Correct' : `Wrong — it was ${pieceOnQ.answer}`}
+                </span>
               )}
             </div>
+
+            <div className="viz-question">
+              {materialQ?.kind === 'material' && (
+                <p className="viz-material-before">
+                  Material now: White {materialQ.before.white}, Black {materialQ.before.black} (balance{' '}
+                  {formatSigned(materialQ.before.balance)}).
+                </p>
+              )}
+              <Field label={materialQ?.kind === 'material' ? materialQ.prompt : ''} htmlFor="viz-material">
+                <input
+                  id="viz-material"
+                  type="number"
+                  disabled={revealed}
+                  value={answers.material}
+                  onChange={e => setAnswers(a => ({ ...a, material: e.target.value }))}
+                />
+              </Field>
+              {revealed && materialQ?.kind === 'material' && (
+                <span className={isMaterialCorrect(answers.material, materialQ.answer) ? 'viz-correct' : 'viz-wrong'}>
+                  {isMaterialCorrect(answers.material, materialQ.answer) ? 'Correct' : `Wrong — it was ${formatSigned(materialQ.answer)}`}
+                </span>
+              )}
+            </div>
+
+            {!revealed && (
+              <Button variant="primary" onClick={checkAnswers}>
+                Check answers
+              </Button>
+            )}
+
+            {revealed && (
+              <Button variant="primary" onClick={nextExercise}>
+                {round >= ROUNDS ? 'See results' : 'Next'}
+              </Button>
+            )}
+          </div>
+        ) : undefined
+      }
+    >
+      {sessionDone ? null : (
+        <div className="viz-progress">
+          <p className="viz-round">
+            Exercise {round} of {ROUNDS}
+          </p>
+          <p className="viz-tally">
+            Score: {tally.correct} / {tally.total}
+          </p>
+
+          {revealed && end && (
+            <div className="viz-end">
+              <p>The end position:</p>
+              <div className="viz-board-end">
+                <Board
+                  fen={fenOf(end)}
+                  orientation="white"
+                  turnColor={turn(end)}
+                  dests={EMPTY_DESTS}
+                  movableColor={undefined}
+                  lastMove={endLastMove}
+                  check={inCheck(end)}
+                  onMove={() => undefined}
+                />
+              </div>
+            </div>
           )}
-        </>
+        </div>
       )}
-    </div>
+    </Workbench>
   );
 }

@@ -1,23 +1,63 @@
-.gr { max-width: 32rem; padding: 1rem; margin: 0 auto; }
-.hc-import section { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
-.hc-import textarea { font-family: monospace; }
-.hc-import-site { display: flex; gap: 1rem; }
-.hc-import-site-option { display: inline-flex; align-items: center; gap: 0.3rem; }
-.hc-import-error, .gr-status[role='alert'] { color: #b00020; }
-.gr-status { min-height: 1.5em; }
-.gr-players { opacity: 0.75; margin-top: -0.5rem; }
+/* Genuinely this subproject's: the classification badges, the per-move table's columns, and the
+ * evaluation chart — none of this is covered by @human-chess/ui's tokens/primitives. Layout,
+ * buttons, fields and status lines all come from Workbench/Field/Button/Status now (2026-09-17
+ * UI pass); the import screen's own former styles here (`.hc-import*`) are gone with it — that
+ * markup now lives entirely in @human-chess/import's Page/Field/SegmentedControl. */
 
-.gr-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; font-size: 0.9rem; margin-bottom: 0.5rem; }
-.gr-setting input { width: 3.5rem; }
-.gr-settings-hint { flex-basis: 100%; opacity: 0.75; margin: 0; }
+.gr-players {
+  margin: 0 0 var(--hc-space-2);
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+}
 
-.gr-nav { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
+.gr-status {
+  margin: 0;
+  min-height: 1.5em;
+}
 
-.gr-detail p { margin: 0.3rem 0; }
-.gr-provenance { color: #666; font-size: 0.85em; }
-.gr-end { font-weight: bold; }
+.gr-time-cap-hint {
+  margin: var(--hc-space-1) 0 0;
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+}
 
-.gr-badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 0.25rem; font-size: 0.85em; color: #fff; }
+.gr-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hc-space-3);
+}
+
+.gr-settings input {
+  width: 4rem;
+}
+
+.gr-settings-hint {
+  margin: var(--hc-space-1) 0 0;
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+}
+
+.gr-summary p {
+  margin: var(--hc-space-1) 0;
+}
+
+.gr-provenance {
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+}
+
+.gr-end {
+  margin: 0 0 var(--hc-space-2);
+  font-weight: bold;
+}
+
+.gr-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--hc-radius);
+  font-size: 0.85em;
+  color: #fff;
+}
 .gr-badge-best { background: #2e7d32; }
 .gr-badge-good { background: #558b2f; }
 .gr-badge-inaccuracy { background: #f9a825; color: #000; }
@@ -26,22 +66,72 @@
 .gr-badge-mate-lost { background: #6a1b9a; }
 .gr-badge-mate-allowed { background: #4527a0; }
 
-.gr-moves { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; list-style: none; padding: 0; margin: 0.75rem 0; }
-.gr-moves li { display: flex; align-items: center; gap: 0.25rem; }
-.gr-move-number { opacity: 0.6; }
-.gr-move { border: none; border-radius: 0.2rem; padding: 0.1rem 0.4rem; cursor: pointer; }
-.gr-move-selected { outline: 2px solid #333; outline-offset: 1px; }
+/* Per-move table: move, eval, loss, classification, best move, provenance — scrolls inside
+ * Workbench's `children` column, so no scrolling of its own is needed here. */
+.gr-move-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--hc-space-3);
+  font-size: var(--hc-text-sm);
+}
 
-.gr-strip { display: block; width: 100%; height: 6rem; margin: 0.75rem 0; border: 1px solid #999; }
-.gr-chart-bg { fill: #a0a0a0; }
+.gr-move-table th,
+.gr-move-table td {
+  padding: var(--hc-space-1) var(--hc-space-2);
+  border-bottom: 1px solid var(--hc-border);
+  text-align: left;
+}
+
+.gr-move-table tbody tr {
+  cursor: pointer;
+}
+
+.gr-move-table tbody tr:hover {
+  background: var(--hc-surface-2);
+}
+
+/* The move cell is a real button (keyboard focus, aria-pressed) styled as plain text. */
+.gr-move-button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.gr-move-row-selected {
+  background: var(--hc-surface-2);
+  outline: 2px solid var(--hc-accent);
+  outline-offset: -2px;
+}
+
+.gr-strip {
+  display: block;
+  width: 100%;
+  height: 6rem;
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+}
+.gr-chart-bg { fill: var(--hc-surface-2); }
 .gr-chart-white { fill: #f4f4f4; }
 .gr-chart-black { fill: #303030; }
-.gr-chart-zero { stroke: #d33; stroke-width: 1px; stroke-dasharray: 4 3; }
-.gr-chart-line { fill: none; stroke: #666; stroke-width: 1px; }
-.gr-chart-selected { stroke: #1e88e5; stroke-width: 2px; }
+.gr-chart-zero { stroke: var(--hc-danger); stroke-width: 1px; stroke-dasharray: 4 3; }
+.gr-chart-line { fill: none; stroke: var(--hc-text-muted); stroke-width: 1px; }
+.gr-chart-selected { stroke: var(--hc-accent); stroke-width: 2px; }
 .gr-chart-mark { stroke: #000; stroke-width: 1px; }
 .gr-chart-hit { fill: transparent; cursor: pointer; }
 .gr-chart-hit:hover { fill: rgba(30, 136, 229, 0.25); }
 
-.gr-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.75rem 0; }
-.gr-legend-hint { color: #666; font-size: 0.85em; }
+.gr-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hc-space-2);
+  margin: var(--hc-space-2) 0 0;
+}
+.gr-legend-hint {
+  color: var(--hc-text-muted);
+  font-size: 0.85em;
+}

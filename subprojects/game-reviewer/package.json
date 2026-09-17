@@ -13,6 +13,7 @@
     "@human-chess/import": "workspace:*",
     "@human-chess/review": "workspace:*",
     "@human-chess/rules": "workspace:*",
+    "@human-chess/ui": "workspace:*",
     "react": "^19.0.0"
   }
 }

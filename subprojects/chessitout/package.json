@@ -13,6 +13,7 @@
     "@human-chess/play": "workspace:*",
     "@human-chess/positions": "workspace:*",
     "@human-chess/rules": "workspace:*",
+    "@human-chess/ui": "workspace:*",
     "react": "^19.0.0"
   }
 }

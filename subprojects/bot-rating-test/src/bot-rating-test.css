@@ -1,18 +1,71 @@
-.brt { max-width: 40rem; padding: 1rem; margin: 0 auto; }
-.brt-setup { display: flex; flex-direction: column; gap: 0.75rem; }
-.brt-setup label { display: flex; flex-direction: column; gap: 0.25rem; }
-.brt-error { color: #b00020; }
-.brt-status { min-height: 1.5em; }
-.brt-moves { font-family: monospace; white-space: pre-wrap; }
-.brt-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
-.brt-postgame { margin-top: 0.75rem; }
-.brt-summary table { border-collapse: collapse; margin-top: 0.5rem; }
-.brt-summary th, .brt-summary td { border: 1px solid #ccc; padding: 0.25rem 0.5rem; text-align: right; }
-.brt-summary th:first-child, .brt-summary td:first-child { text-align: left; }
-.brt-highest { font-weight: bold; }
-.brt-board-toggle { flex-direction: row !important; align-items: center; gap: 0.4rem; }
-.brt-board-editor { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
-.brt-board-editor-controls { display: flex; flex-direction: column; gap: 0.5rem; min-width: 10rem; }
-.brt-board-editor-controls fieldset { border: 1px solid #ccc; border-radius: 4px; padding: 0.5rem; }
-.brt-board-editor-controls label { display: flex; flex-direction: row; align-items: center; gap: 0.3rem; }
-.brt-castling-none { font-size: 0.85em; color: #666; margin: 0; }
+/* Everything genuinely this subproject's own: the record table, the move list, and the compact
+ * castling/board-toggle rows. Page width, form layout, buttons, colours and the board/side-column
+ * grid all come from @human-chess/ui (docs/design/2026-09-17-ui.md) and are not duplicated here. */
+
+.brt-moves {
+  font-family: var(--hc-mono);
+  font-size: var(--hc-text-sm);
+  white-space: pre-wrap;
+}
+
+.brt-summary {
+  margin-top: var(--hc-space-3);
+}
+
+.brt-summary table {
+  border-collapse: collapse;
+  margin-top: var(--hc-space-2);
+  width: 100%;
+}
+
+.brt-summary th,
+.brt-summary td {
+  border: 1px solid var(--hc-border);
+  padding: var(--hc-space-1) var(--hc-space-2);
+  text-align: right;
+}
+
+.brt-summary th:first-child,
+.brt-summary td:first-child {
+  text-align: left;
+}
+
+.brt-highest {
+  font-weight: bold;
+}
+
+.brt-board-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--hc-space-2);
+  font-size: var(--hc-text-sm);
+  margin-bottom: var(--hc-space-3);
+}
+
+.brt-board-editor-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-3);
+  margin-bottom: var(--hc-space-3);
+}
+
+.brt-castling-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hc-space-1) var(--hc-space-3);
+  font-size: var(--hc-text-sm);
+}
+
+.brt-castling-row label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--hc-space-1);
+}
+
+.brt-castling-none {
+  font-size: var(--hc-text-sm);
+  color: var(--hc-text-muted);
+  margin: 0;
+}
