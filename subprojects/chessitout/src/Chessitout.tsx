@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { formatScore, whitePerspective, type Analysis, type UciEngine } from '@human-chess/engine';
-import { generateImbalancedPosition, type ImbalancedPosition } from '@human-chess/positions';
+import { generateImbalancedPosition, MAX_ABS_EVAL_CP, MIN_ABS_EVAL_CP, type ImbalancedPosition } from '@human-chess/positions';
 import {
   currentFen, describeEnd, isInCheck, isPlayersTurn, lastMove, limitedStrength, playerDests, sideToMove,
 } from '@human-chess/play';
@@ -22,10 +22,9 @@ export interface ChessitoutProps {
   engine: UciEngine | Error | undefined;
 }
 
-type Phase = 'mining' | 'voting' | 'choose-side' | 'playing' | 'result';
+type Phase = 'mining' | 'voting' | 'playing' | 'result';
 
-const MAX_PLIES = 40;
-const FINAL_ANALYSE_DEPTH = 16;
+const FINAL_ANALYSE_DEPTH = 20;
 const DEFAULT_ELO = 1800;
 const ELO_OPTIONS = [1320, 1500, 1800, 2100, 2400, 2700, 3000];
 
@@ -36,6 +35,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>('mining');
   const [position, setPosition] = useState<ImbalancedPosition | undefined>(undefined);
   const [miningError, setMiningError] = useState<string | undefined>(undefined);
+  const [miningProgress, setMiningProgress] = useState<{ attempt: number; maxAttempts: number } | undefined>(undefined);
   const [vote, setVote] = useState<Vote | undefined>(undefined);
   const [playerColor, setPlayerColor] = useState<Color | undefined>(undefined);
   // Which side the board is seen from while deciding who stands better; a flip is a viewing aid
@@ -53,7 +53,6 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     playerColor: playerColor ?? 'white',
     engine: readyEngine,
     opponent,
-    maxPlies: MAX_PLIES,
   });
 
   const next = useCallback(() => {
@@ -62,17 +61,30 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     setPosition(undefined);
     setViewFrom('white');
     setMiningError(undefined);
+    setMiningProgress(undefined);
     setVote(undefined);
     setPlayerColor(undefined);
     setFinalAnalysis(undefined);
     setFinalAnalysisError(undefined);
   }, []);
 
-  // Mine a fresh imbalanced position whenever a new attempt starts.
+  // Mine a fresh imbalanced position whenever a new attempt starts. Mining now searches deeper
+  // (up to depth 18, up to MAX_ATTEMPTS) and can take a while, so progress is reported via
+  // onProgress; an abandoned attempt (unmount, or `next`/a new generation firing this effect's
+  // cleanup) both flips `cancelled` and aborts the signal, so the engine stops the abandoned
+  // search rather than running it to completion for nothing.
   useEffect(() => {
     if (!readyEngine || phase !== 'mining') return;
     let cancelled = false;
-    generateImbalancedPosition(readyEngine)
+    const controller = new AbortController();
+    setMiningProgress(undefined);
+    generateImbalancedPosition(readyEngine, {
+      signal: controller.signal,
+      onProgress: (attempt, maxAttempts) => {
+        if (cancelled) return;
+        setMiningProgress({ attempt, maxAttempts });
+      },
+    })
       .then(pos => {
         if (cancelled) return;
         setPosition(pos);
@@ -84,6 +96,11 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
       });
     return () => {
       cancelled = true;
+      controller.abort();
+      // The signal is only checked between engine calls; stop() cuts short the search that is
+      // in flight so the next engine job (here or in another subproject) is not queued behind
+      // an abandoned depth-18 confirm (reviewer, 2026-09-17; same shape as GuessTheEval).
+      readyEngine.stop();
     };
   }, [readyEngine, phase, generation]);
 
@@ -96,12 +113,8 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
   // phase first becomes 'playing' already has the fresh game.
   const onVote = useCallback(
     (v: Vote) => {
-      setVote(v);
-      if (v === 'equal') {
-        setPhase('choose-side');
-        return;
-      }
       if (!position) return;
+      setVote(v);
       setPlayerColor(v);
       setPhase('playing');
       restart({ startFen: position.fen, playerColor: v });
@@ -109,23 +122,24 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     [position, restart],
   );
 
-  const onChooseSide = useCallback(
-    (color: Color) => {
-      if (!position) return;
-      setPlayerColor(color);
-      setPhase('playing');
-      restart({ startFen: position.fen, playerColor: color });
-    },
-    [position, restart],
-  );
-
+  // The only way out of 'playing' is the game itself ending (this effect) or the player clicking
+  // "Stop and evaluate" (onStop, below) — there is no ply cap any more. Both are guarded so
+  // stopping cannot fire twice or after the game has already ended: this effect only fires phase
+  // 'playing' -> 'result' once, on the render where `finished` first becomes true, and onStop
+  // only acts while phase is still 'playing' and the game is not `finished`.
   useEffect(() => {
     if (phase === 'playing' && finished) setPhase('result');
   }, [phase, finished]);
 
+  const onStop = useCallback(() => {
+    if (phase !== 'playing' || finished) return;
+    setPhase('result');
+  }, [phase, finished]);
+
   // Once the attempt is over, get the "now" reading of the final position, always from a real
-  // engine call (A1) — used as the result headline when the 40-ply cap (not a game end) is what
-  // stopped play, and always shown alongside the mining-time eval for the vote judgment. Skipped
+  // engine call (A1) — used as the result headline when the player stopped play with the "Stop
+  // and evaluate" button (not a game end), and always shown alongside the mining-time eval for
+  // the vote judgment. Skipped
   // when the game itself ended (checkmate/stalemate/etc.): the engine has no move to search for
   // in a position with no legal moves, so it returns no pv line and this would otherwise hang at
   // "evaluating…" forever; describeEnd(game) already says how the game ended in that case.
@@ -149,6 +163,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
       });
     return () => {
       cancelled = true;
+      readyEngine.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, readyEngine, finalAnalysis, finalAnalysisError, generation, game.end]);
@@ -188,7 +203,16 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
             <button onClick={next}>Try again</button>
           </>
         ) : (
-          <p className="ci-status">Mining a position…</p>
+          <>
+            <p className="ci-status">
+              {miningProgress
+                ? `Mining a position… (attempt ${miningProgress.attempt} of ${miningProgress.maxAttempts})`
+                : 'Mining a position…'}
+            </p>
+            <p className="ci-mining-note">
+              Looking for a middlegame where one side is {MIN_ABS_EVAL_CP / 100} to {MAX_ABS_EVAL_CP / 100} pawns better according to the engine.
+            </p>
+          </>
         )}
       </div>
     );
@@ -203,7 +227,7 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     );
   }
 
-  if (phase === 'voting' || phase === 'choose-side') {
+  if (phase === 'voting') {
     const pos = positionFromFen(position.fen);
     // position.moves is the real self-play move list mined to reach this position (A1); the
     // last entry is the move that produced position.fen, so this is a real previous move, not
@@ -230,24 +254,11 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
         </div>
         <p className="ci-turn">{turn(pos) === 'white' ? 'White to move' : 'Black to move'}</p>
         <p className="ci-material">{describeMaterialDifference(pieceCounts(pos))}</p>
-        {phase === 'voting' ? (
-          <>
-            <p className="ci-prompt">Who stands better?</p>
-            <div className="ci-vote-buttons">
-              <button onClick={() => onVote('white')}>White is better</button>
-              <button onClick={() => onVote('black')}>Black is better</button>
-              <button onClick={() => onVote('equal')}>Equal</button>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="ci-prompt">You called it equal. Which side do you want to play?</p>
-            <div className="ci-vote-buttons">
-              <button onClick={() => onChooseSide('white')}>Play White</button>
-              <button onClick={() => onChooseSide('black')}>Play Black</button>
-            </div>
-          </>
-        )}
+        <p className="ci-prompt">Who stands better?</p>
+        <div className="ci-vote-buttons">
+          <button onClick={() => onVote('white')}>White is better</button>
+          <button onClick={() => onVote('black')}>Black is better</button>
+        </div>
       </div>
     );
   }
@@ -267,13 +278,17 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
   const headline = ((): string | undefined => {
     if (phase !== 'result') return undefined;
     if (game.end) return describeEnd(game);
-    if (nowScore) return `Play stopped at the ${MAX_PLIES}-ply cap. Engine evaluation, White's perspective: ${formatScore(nowScore)}.`;
-    if (finalAnalysisError) return `Play stopped at the ${MAX_PLIES}-ply cap. Could not evaluate the final position: ${finalAnalysisError}`;
-    return `Play stopped at the ${MAX_PLIES}-ply cap. Evaluating the final position…`;
+    // Not a game end, so play only reaches 'result' here because the player clicked "Stop and
+    // evaluate" (there is no ply cap any more).
+    const fullMoves = Math.ceil(game.moves.length / 2);
+    const stoppedText = `You stopped play after ${fullMoves} move${fullMoves === 1 ? '' : 's'}.`;
+    if (nowScore) return `${stoppedText} Engine evaluation, White's perspective: ${formatScore(nowScore)}.`;
+    if (finalAnalysisError) return `${stoppedText} Could not evaluate the final position: ${finalAnalysisError}`;
+    return `${stoppedText} Evaluating the final position…`;
   })();
 
   const voteOutcome = position && vote ? judgeVote(vote, position.eval.score) : undefined;
-  const voteLabel = vote === 'white' ? 'White' : vote === 'black' ? 'Black' : 'Equal';
+  const voteLabel = vote === 'white' ? 'White' : 'Black';
   // The "now" analysis is never run once game.end is set (see the effect above); say so plainly
   // instead of hanging at "evaluating…" forever.
   const nowText = game.end
@@ -318,6 +333,11 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
               ? 'Engine is thinking…'
               : `You are playing ${playerColor}. Your move.`)}
       </p>
+      {phase === 'playing' && (
+        <button className="ci-stop" onClick={onStop} disabled={engineState.kind === 'thinking'}>
+          Stop and evaluate
+        </button>
+      )}
       <ol className="ci-moves">
         {moveLines.length === 0 ? <li>No moves yet.</li> : moveLines.map((line, i) => <li key={i}>{line}</li>)}
       </ol>

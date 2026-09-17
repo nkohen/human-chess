@@ -66,3 +66,24 @@ Interview closed 2026-09-16; the user may add more later.
 **Feedback pass 4 (2026-09-16):** a "Flip board" button while deciding who stands better (a
 viewing aid only; resets to White's side for each new position). Every board app-wide now
 highlights the previous move, including the mined position's last self-play move here.
+
+**Tuning (user, 2026-09-17):** the user found the first slice confusing — play stopped at a
+40-ply cap, and mined positions were near equal (a +0.3 came up), because the old band accepted
+any material difference with |eval| <= 150 cp at depth 10 with no minimum edge, and the vote
+judge treated |cp| <= 30 as "equal". Decisions: the edge must be 1 to 3.5 pawns (100-350 cp,
+`MIN_ABS_EVAL_CP`/`MAX_ABS_EVAL_CP` in `packages/positions/src/imbalanced.ts`); mine deeper into
+the middlegame (`RANDOM_PLIES` 8, `ENGINE_PLIES` 18, landing around ply 26, up from ply 18);
+raise the confirming search to depth 18 (`EVAL_DEPTH`), with a cheap depth-10 pre-screen
+(50-500 cp window) before paying for that depth so mining time stays sane; `MAX_ATTEMPTS` raised
+to 40 with `onProgress` reporting so the UI can show "attempt N of 40"; play the position out
+instead of capping at 40 plies — a "Stop and evaluate" button in `Chessitout.tsx` ends the
+attempt on the player's own call instead. The vote no longer has an 'equal' option
+(`subprojects/chessitout/src/vote.ts`'s `Vote` is now `'white' | 'black'`); the band guarantees a
+real edge, so there is no equal case to vote for.
+
+**On hold (user, 2026-09-17):** a stricter notion of "imbalanced" — the user's wording: "material
+disadvantage should not account for much of the disadvantage of the losing side, and both sides
+should have some pros and cons where it takes some thought to decide which balances out better"
+— is deferred until the user supplies pedagogical positions to derive criteria from; the current
+material-imbalance pre-filter in `imbalanced.ts` stays as a cheap stand-in until then. Do not
+attempt this without those positions.

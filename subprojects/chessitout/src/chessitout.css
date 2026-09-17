@@ -11,3 +11,5 @@
 .ci-tally { font-weight: bold; }
 .ci-provenance { color: #666; font-size: 0.9em; }
 .ci-view { margin: 0.5rem 0; }
+.ci-mining-note { color: #666; font-size: 0.9em; margin: 0.25rem 0 0; }
+.ci-stop { margin: 0.5rem 0; }

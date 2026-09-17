@@ -30,7 +30,7 @@ in the engine wrapper; `packages/facts`, `packages/import`, `packages/engine/src
 fullmove). Slice 10 (game reviewer + `packages/review`) landed last. A CDP browser smoke run of all
 routes passed (no exceptions; endgames move + engine reply, guess-the-eval reveal, puzzle fetch
 verified). All 11 slices reviewed by the code-reviewer agent and their findings fixed (last batch: restart-in-effect bugs in Chessitout and the bot-rating test, checkmate shown as "mate lost" in the reviewer, review cancellation, import screen lifted into `packages/import/react`). All bands and thresholds (draw band 30 cp, imbalance band 150 cp,
-classification cutoffs) are first guesses marked in code for the user to tune.
+classification cutoffs) are first guesses marked in code for the user to tune. (The imbalance band was retuned 2026-09-17 to 100-350 cp; see "Feedback pass 5" below and memory/subprojects/chessitout-variant.md.)
 Follow-up: memory-trainer/src/reconstruction.ts duplicates packages/play game state (no-playerColor mode); auto-queen idiom repeated in six files, wants one helper.
 
 Feedback pass 1 (2026-09-16, after the user played guess-the-eval and visualization): nine
@@ -97,3 +97,12 @@ lichess-style eval chart with a zero line and colour; Chessitout board flips whi
 every board (hover previews included) highlights the previous move, each derived from that
 screen's own move data (a worker did the sweep; the visualization trainer's start position now
 keeps its setup moves for it).
+
+Feedback pass 5 (2026-09-17, Chessitout): the user found the mined positions near-equal (a +0.3
+came up) and play capped at 40 plies, confusing. Retuned: the imbalance band is now 100-350 cp
+(1 to 3.5 pawns) confirmed at depth 18 with a depth-10 pre-screen ahead of it, self-play mines
+deeper (random 8 + engine 18 plies, landing around ply 26), `MAX_ATTEMPTS` raised to 40 with
+mining-progress reporting; the 'equal' vote is gone (a real edge is now guaranteed by the band);
+the 40-ply cap is gone, replaced by a player-driven "Stop and evaluate" button. A stricter,
+positional (not just material) notion of "imbalanced" is on hold until the user supplies
+pedagogical positions. Details in memory/subprojects/chessitout-variant.md.

@@ -150,7 +150,9 @@ async function imbalanced(engine: UciEngine, random: () => number, signal?: Abor
     return { fen: pos.fen, recipe: 'imbalanced', description: describeRecipe('imbalanced'), moves: pos.moves };
   } catch (err: unknown) {
     // generateImbalancedPosition throws only when it exhausts its mining attempts without
-    // finding a material imbalance within the eval band (about 1 in 5 calls) — never fabricate a
+    // finding a material imbalance within the eval band (rare since the 2026-09-17 retune to 40
+    // attempts; the band is now 1 to 3.5 pawns and the confirm is depth 18, so this recipe is
+    // the slowest one: 1.5 to 6 s measured in the browser's wasm engine) — never fabricate a
     // position for the player, fall back to a recipe that always succeeds instead. Any other
     // failure (a genuine engine error, an abort) is not this case and must propagate.
     if (err instanceof Error && /no imbalanced position found/.test(err.message)) {
@@ -164,7 +166,8 @@ async function imbalanced(engine: UciEngine, random: () => number, signal?: Abor
  * Generates one round's position for `recipe`. All engine work is bounded per recipe (see each
  * function's ply ranges and depths above) so a round stays within a few seconds against a native
  * engine; the wasm engine used in the browser is slower, which is why self-play depths are kept
- * low (4-6) rather than raised for quality.
+ * low (4-8) rather than raised for quality. The 'imbalanced' recipe shares Chessitout's miner
+ * and is the one exception: its depth-18 confirm makes it the slowest round (see above).
  */
 export async function generateRecipePosition(engine: UciEngine, recipe: RecipeId, opts: RecipePositionOpts = {}): Promise<RecipePosition> {
   const random = opts.random ?? Math.random;
