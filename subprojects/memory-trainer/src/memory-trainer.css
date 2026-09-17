@@ -1,0 +1,118 @@
+/* `--mt-height` is set from JS (MemoryTrainer.tsx's useAvailableHeight) to the measured space
+   below apps/web's `.app-header`; `100vh` is only the pre-measurement fallback for first paint. */
+.memory-trainer {
+  height: var(--mt-height, 100vh);
+  box-sizing: border-box;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.memory-trainer-note {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.memory-trainer-done {
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+
+/* A flex row that centers a square Board in whatever space CSS gives it; `min-width`/`min-height:
+   0` let it shrink below its content's natural size (the default `min-*: auto` on a flex/grid
+   item would otherwise keep it from shrinking, defeating the point). `overflow: hidden` clips
+   the single-frame '100%' fallback board before the size is first measured. */
+.mt-board-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Board beside the move list on wide screens, board above on narrow ones — mirrors the
+   `.endgames` sidebar-content grid in apps/web/src/styles.css. */
+.mt-reconstruct {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  gap: 1rem;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.mt-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+
+/* Scrolls in its own box instead of growing the page (the reconstruction note above the list
+   already explains promotions/no-feedback, so a long game's move list is the one thing here
+   that can get taller than the screen). */
+.memory-trainer-moves {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid #8884;
+  border-radius: 0.25rem;
+}
+
+@media (max-width: 40rem) {
+  .mt-reconstruct {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(10rem, 1fr) auto;
+  }
+  .memory-trainer-moves {
+    max-height: 30vh;
+  }
+}
+
+.memory-trainer-review h2,
+.memory-trainer-review > p {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+/* The replay board (and its prev/next controls) gets whatever the details box below doesn't
+   need; `.mt-board-area` inside ReplayBoard then measures *this* element's actual box, so the
+   board is sized by real layout, not a guess. */
+.mt-review-board {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.memory-trainer-replay {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0.5rem;
+}
+
+.memory-trainer-replay-controls {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+/* The list of divergence write-ups can be arbitrarily long (one paragraph per divergent
+   segment); it shrink-wraps short content (leaving the board more room) but is capped so a long
+   list scrolls inside its own box rather than pushing "Another game" off screen or crowding the
+   board out entirely. */
+.mt-review-details {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 45%;
+  overflow-y: auto;
+}
+
+.mt-review-details p {
+  margin: 0.3rem 0;
+}
