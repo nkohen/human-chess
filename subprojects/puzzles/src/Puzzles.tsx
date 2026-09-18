@@ -4,7 +4,7 @@
 // (memory/subprojects/puzzles.md): only a session tally.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board } from '@human-chess/board';
-import { inCheck, isPromotionMove, legalDests, turn, type SquareName } from '@human-chess/rules';
+import { inCheck, legalDests, roleToChar, turn, type Role, type SquareName } from '@human-chess/rules';
 import { Button, Field, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
 import { fetchNextPuzzle, fetchPuzzleById, type ParsedPuzzle } from './puzzle';
 import { attemptMove, currentFen, startSolve, type SolveState, type SolveStatus } from './solve';
@@ -98,24 +98,12 @@ export function Puzzles(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onMove = (from: SquareName, to: SquareName): void => {
+  const onMove = (from: SquareName, to: SquareName, promotion?: Role): void => {
     if (!solveState) return;
-    // No promotion picker in this UI. Default to auto-queen, the same convention as
-    // hand-and-brain and memory-trainer — except when the puzzle's own solution move for this
-    // exact from/to square pair is an underpromotion: the puzzle line is the only accepted
-    // answer here (attemptMove compares the full UCI string), so auto-queening in that one case
-    // would make the correct move permanently unplayable from this UI rather than merely reading
-    // as 'wrong' on a first attempt. Any other from/to (including a genuinely wrong guess) still
-    // auto-queens and, if it doesn't match the solution string, correctly reads as 'wrong'.
-    const promoting = isPromotionMove(solveState.pos, from, to);
-    let promotion = 'q';
-    if (promoting) {
-      const expected = solveState.solution[solveState.index];
-      if (expected && expected.length === 5 && expected.startsWith(`${from}${to}`)) {
-        promotion = expected[4]!;
-      }
-    }
-    const uci = promoting ? `${from}${to}${promotion}` : `${from}${to}`;
+    // The board's own picker now supplies the promotion (including an underpromotion, when
+    // that's the puzzle's solution — see solve.ts). attemptMove still compares the full UCI
+    // string, so whichever piece the solver picked either matches the solution or reads 'wrong'.
+    const uci = promotion ? `${from}${to}${roleToChar(promotion)}` : `${from}${to}`;
     let next: SolveState;
     try {
       next = attemptMove(solveState, uci);

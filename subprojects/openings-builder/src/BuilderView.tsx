@@ -5,7 +5,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
-import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
+import { inCheck, legalDests, playMove, positionFromFen, turn, uciSquares, type Role, type SquareName } from '@human-chess/rules';
 import { Button, Panel, Status, Toolbar, Workbench } from '@human-chess/ui';
 import { ExplorerPanel } from './ExplorerPanel';
 import { MultiPvPanel } from './MultiPvPanel';
@@ -76,8 +76,7 @@ export function BuilderView({ opening, onOpeningChange, engine, controls, status
     onOpeningChange(removeMove(opening, currentEpd, m.uci));
   };
 
-  const onBoardMove = (from: SquareName, to: SquareName): void => {
-    const promotion = isPromotionMove(pos, from, to) ? 'queen' : undefined;
+  const onBoardMove = (from: SquareName, to: SquareName, promotion?: Role): void => {
     const played = playMove(pos, from, to, promotion);
     playAndAdd(played.uci);
   };

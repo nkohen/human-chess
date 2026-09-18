@@ -70,3 +70,11 @@ chess.com at the route layer, screenshots every route at 1280x800, 1280x650 and 
 descriptor, and fails on overflow, a primary control below the fold, tap targets under 40px or
 console errors; docs/visual-testing.md has the human-eye checklist. Session-scratchpad CDP
 scripts are no longer the way to smoke a layout change.
+
+Promotion picker (2026-09-17): `packages/board`'s `Board` now detects a promotion itself
+(`isPromotionMove` on the pre-move fen) and shows a lichess-style queen/knight/rook/bishop picker
+over the destination square instead of auto-queening; `BoardProps.onMove` is now
+`(from, to, promotion?: Role) => void`, called only once a piece is picked (or never, if the
+picker is cancelled). All six former auto-queen call sites (play/react.ts, memory-trainer,
+hand-and-brain, puzzles, openings-builder's Drill/Builder views) now pass the picked role
+through instead of hard-coding `'queen'`.

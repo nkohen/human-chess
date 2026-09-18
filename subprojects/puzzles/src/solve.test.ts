@@ -82,4 +82,20 @@ describe('attemptMove', () => {
     expect(state.status).toBe('solved');
     expect(() => attemptMove(state, SOLUTION[0]!)).toThrow();
   });
+
+  it('matches an underpromotion solution move (full-UCI-string comparison, not piece-agnostic)', () => {
+    // A lone white pawn one move from promoting; the only solution is underpromoting to a
+    // knight (a rare but real puzzle shape the board's promotion picker now makes reachable).
+    const fen = '8/6P1/8/4k3/8/8/8/4K3 w - - 0 1';
+    const solution = ['g7g8n'];
+    let state = startSolve(fen, solution);
+
+    const wrongPiece = attemptMove(state, 'g7g8q');
+    expect(wrongPiece.status).toBe('wrong');
+    expect(currentFen(wrongPiece)).toBe(fen);
+
+    state = attemptMove(state, 'g7g8n');
+    expect(state.status).toBe('solved');
+    expect(isSolved(state)).toBe(true);
+  });
 });

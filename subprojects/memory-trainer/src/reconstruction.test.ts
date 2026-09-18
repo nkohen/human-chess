@@ -26,10 +26,10 @@ describe('reconstruction', () => {
     expect(lastReconstructedMove(r)).toEqual(['e7', 'e5']);
   });
 
-  it('auto-queens promotions', () => {
+  it('plays whichever promotion the board picker returned', () => {
     let r = startReconstruction('8/P7/8/4k3/8/8/8/4K3 w - - 0 1');
-    r = playReconstructionMove(r, 'a7', 'a8');
-    expect(reconstructedUcis(r)).toEqual(['a7a8q']);
-    expect(reconstructedSans(r)).toEqual(['a8=Q']);
+    r = playReconstructionMove(r, 'a7', 'a8', 'knight');
+    expect(reconstructedUcis(r)).toEqual(['a7a8n']);
+    expect(reconstructedSans(r)).toEqual(['a8=N']);
   });
 });

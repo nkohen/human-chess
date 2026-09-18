@@ -31,7 +31,7 @@ fullmove). Slice 10 (game reviewer + `packages/review`) landed last. A CDP brows
 routes passed (no exceptions; endgames move + engine reply, guess-the-eval reveal, puzzle fetch
 verified). All 11 slices reviewed by the code-reviewer agent and their findings fixed (last batch: restart-in-effect bugs in Chessitout and the bot-rating test, checkmate shown as "mate lost" in the reviewer, review cancellation, import screen lifted into `packages/import/react`). All bands and thresholds (draw band 30 cp, imbalance band 150 cp,
 classification cutoffs) are first guesses marked in code for the user to tune. (The imbalance band was retuned 2026-09-17 to 100-350 cp; see "Feedback pass 5" below and memory/subprojects/chessitout-variant.md.)
-Follow-up: memory-trainer/src/reconstruction.ts duplicates packages/play game state (no-playerColor mode); auto-queen idiom repeated in six files, wants one helper.
+Follow-up: memory-trainer/src/reconstruction.ts duplicates packages/play game state (no-playerColor mode). (The auto-queen idiom once repeated in six files was replaced 2026-09-17 by the board's promotion picker: `onMove(from, to, promotion?)`.)
 
 Feedback pass 1 (2026-09-16, after the user played guess-the-eval and visualization): nine
 comments, all built the same day by three Sonnet workers and reviewed. Shared: `MoveLine` in

@@ -54,3 +54,48 @@
   font-size: 1.2rem;
   color: #b00020;
 }
+
+/* Board.tsx's promotion picker. The backdrop covers the whole board (a click anywhere on it that
+   isn't a square button cancels, lichess-style) and sits above chessground's own element, which
+   Board.tsx makes room for by giving `.hc-board-wrap` `position: relative`. chessground's own
+   stacking (chessground.base.css, checked 2026-09-17) puts pieces and shapes at z-index 2,
+   animating pieces at 8, custom svgs at 9 and a dragging piece at 11 !important, so the backdrop
+   has to clear 11 or pieces render above it and keep taking pointer events. */
+.hc-promotion-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.hc-promotion-square {
+  position: absolute;
+  display: block;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: #f0f0f0;
+  cursor: pointer;
+}
+
+.hc-promotion-square:hover,
+.hc-promotion-square:focus-visible {
+  background: #dceaff;
+}
+
+/* Same override as the editor palette above: chessground's own `.cg-wrap piece` rule sizes a
+   piece as 12.5% of an 8x8 board, absolutely positioned, which is right for the real board but
+   needs overriding so the sprite instead fills this square button. */
+.hc-promotion-square .cg-wrap {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.hc-promotion-square .cg-wrap piece {
+  display: block;
+  position: static;
+  width: 100%;
+  height: 100%;
+}

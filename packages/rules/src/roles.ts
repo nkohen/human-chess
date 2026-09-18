@@ -1,8 +1,15 @@
 // Groups legal destinations by piece type: what "call a piece type before moving" needs
 // (Hand and Brain and anything similar). Built entirely from legalDests plus the board's own
 // piece at each origin square; no move generation or legality logic lives here.
+//
+// Also the role<->UCI-letter mapping (promotion picker callers): chessops already has this
+// (roleToChar/charToRole in chessops/util), so it's wrapped here rather than hand-mapped —
+// this package is the only chessops importer.
+import { roleToChar } from 'chessops/util';
 import type { Role, SquareName } from 'chessops/types';
 import { legalDests, pieceAt, type Position } from './index';
+
+export { roleToChar };
 
 /** The role of the piece on `square`, or undefined if the square is empty. Built on the one board read in `pieceAt`. */
 export function roleAt(pos: Position, square: SquareName): Role | undefined {

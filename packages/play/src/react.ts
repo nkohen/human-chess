@@ -2,7 +2,7 @@
 // package's main entry ("./react" subpath) so non-React consumers never pull in React.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
-import { isPromotionMove, type Color, type SquareName } from '@human-chess/rules';
+import type { Color, Role, SquareName } from '@human-chess/rules';
 import { applyMove, currentFen, isPlayersTurn, playPlayerMove, startGame, uciMoves, type Game } from './game';
 import { maximalResistance, type Opponent } from './opponent';
 
@@ -55,11 +55,10 @@ export function useEngineGame(options: UseEngineGameOptions) {
   const finished = Boolean(game.end) || plyLimitReached;
 
   const onPlayerMove = useCallback(
-    (from: SquareName, to: SquareName) => {
+    (from: SquareName, to: SquareName, promotion?: Role) => {
       const g = latest.current;
       const limited = maxPlies !== undefined && g.moves.length >= maxPlies;
       if (!isPlayersTurn(g) || limited) return;
-      const promotion = isPromotionMove(g.pos, from, to) ? 'queen' : undefined;
       setGame(playPlayerMove(g, from, to, promotion));
     },
     [maxPlies],

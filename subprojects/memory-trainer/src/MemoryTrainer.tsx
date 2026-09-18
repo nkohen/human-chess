@@ -3,7 +3,7 @@ import { Board } from '@human-chess/board';
 import { fetchLatestGameFrom, ImportScreen } from '@human-chess/import/react';
 import type { ImportedGame } from '@human-chess/import';
 import {
-  annotateLine, fullmove, inCheck, opposite, positionFromFen, turn, uciSquares, type Color, type SquareName,
+  annotateLine, fullmove, inCheck, opposite, positionFromFen, turn, uciSquares, type Color, type Role, type SquareName,
 } from '@human-chess/rules';
 import { Button, Toolbar, Workbench } from '@human-chess/ui';
 import { classifyCompleteAttempt, compareReconstruction, fenSequence, type ReconstructionOutcome } from './compare';
@@ -90,8 +90,8 @@ export function MemoryTrainer(): React.JSX.Element {
 
   if (screen.kind === 'reconstruct') {
     const { game, reconstruction } = screen;
-    const onMove = (from: SquareName, to: SquareName): void => {
-      setScreen({ kind: 'reconstruct', game, reconstruction: playReconstructionMove(reconstruction, from, to) });
+    const onMove = (from: SquareName, to: SquareName, promotion?: Role): void => {
+      setScreen({ kind: 'reconstruct', game, reconstruction: playReconstructionMove(reconstruction, from, to, promotion) });
     };
     // `claimedComplete` only records which button ended the attempt — it never reveals the real
     // game's length itself; ReviewScreen is the only place that compares against it.
@@ -264,7 +264,7 @@ function ReconstructScreen({
 }: {
   game: ImportedGame;
   reconstruction: Reconstruction;
-  onMove: (from: SquareName, to: SquareName) => void;
+  onMove: (from: SquareName, to: SquareName, promotion?: Role) => void;
   onDone: (claimedComplete: boolean) => void;
   refetching: boolean;
   refetchError: string | undefined;
@@ -281,8 +281,7 @@ function ReconstructScreen({
         <>
           <p className="memory-trainer-note">
             Enter both sides' moves as best you remember them. Wrong moves are accepted silently —
-            the board just keeps going from your version of the position. Promotions always become
-            a queen.
+            the board just keeps going from your version of the position.
           </p>
           <Button className="memory-trainer-claim-complete" variant="primary" onClick={() => onDone(true)}>
             That's the whole game

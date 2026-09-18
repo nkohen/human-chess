@@ -4,11 +4,10 @@
 // comes from @human-chess/rules (playUci throws RulesError on an illegal move; that should
 // never happen here since only solution moves and moves matched against them are ever played).
 //
-// Board callers (see Puzzles.tsx) have no promotion picker and always auto-queen, the same
-// convention as hand-and-brain and memory-trainer in this repo. That means a lichess solution
-// whose correct move is an underpromotion (rare) can never be matched from the UI; this module
-// still compares the full UCI string (including the promotion letter) so such a puzzle simply
-// reports 'wrong' for every queen attempt rather than silently accepting the wrong piece.
+// Comparing the full UCI string (including the promotion letter, when there is one) means an
+// underpromotion solution matches like any other move: Puzzles.tsx builds the attempted UCI from
+// whatever piece the board's picker returned, so a puzzle whose only solution is an
+// underpromotion (rare, but real) is reachable from the UI rather than permanently unplayable.
 import { fenOf, playUci, positionFromFen, uciSquares, type Position, type SquareName } from '@human-chess/rules';
 
 export type SolveStatus = 'thinking' | 'correct' | 'wrong' | 'solved' | 'failed-solved';
@@ -39,7 +38,7 @@ export function startSolve(startFen: string, solution: string[]): SolveState {
 }
 
 /**
- * The solver attempts `uci` (already auto-queened by the caller if it was a promotion) against
+ * The solver attempts `uci` (with the promotion letter the board's picker returned, if any) against
  * `solution[state.index]`. Wrong: status becomes 'wrong', the position does not change, and the
  * same index is retried. Correct: the move is played, then the reply (solution[index + 1]) is
  * auto-applied if one exists; status becomes 'solved'/'failed-solved' when that was the last

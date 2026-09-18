@@ -36,10 +36,10 @@ export function HandAndBrain(): React.JSX.Element {
       }
     });
   const onMove = useCallback(
-    (from: SquareName, to: SquareName) =>
+    (from: SquareName, to: SquareName, promotion?: Role) =>
       setGame(g => {
         try {
-          return move(g, from, to);
+          return move(g, from, to, promotion);
         } catch {
           return g;
         }

@@ -3,7 +3,7 @@
 // @human-chess/rules — this module never judges a move against the real game (that is
 // compare.ts, after the fact).
 import {
-  fenOf, isPromotionMove, legalDests, playMove, positionFromFen, turn, uciSquares,
+  fenOf, legalDests, playMove, positionFromFen, turn, uciSquares,
   type Color, type Position, type Role, type SquareName,
 } from '@human-chess/rules';
 
@@ -22,14 +22,10 @@ export function startReconstruction(startFen: string): Reconstruction {
   return { startFen, pos: positionFromFen(startFen), moves: [] };
 }
 
-/**
- * Plays a move for whichever colour is currently to move. Promotions always auto-queen —
- * there is no promotion picker in this slice, so a pawn reaching the last rank always
- * becomes a queen.
- */
-export function playReconstructionMove(r: Reconstruction, from: SquareName, to: SquareName): Reconstruction {
-  const promotion: Role | undefined = isPromotionMove(r.pos, from, to) ? 'queen' : undefined;
-  const played = promotion ? playMove(r.pos, from, to, promotion) : playMove(r.pos, from, to);
+/** Plays a move for whichever colour is currently to move. `promotion` is the piece the board's
+ * picker returned, if this move was a pawn reaching the last rank. */
+export function playReconstructionMove(r: Reconstruction, from: SquareName, to: SquareName, promotion?: Role): Reconstruction {
+  const played = playMove(r.pos, from, to, promotion);
   return { ...r, pos: played.pos, moves: [...r.moves, { uci: played.uci, san: played.san }] };
 }
 

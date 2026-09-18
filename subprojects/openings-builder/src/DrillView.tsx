@@ -8,7 +8,7 @@
 // claims; this is neither, it's a lookup).
 import { useEffect, useState, type ReactNode } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
-import { inCheck, isPromotionMove, legalDests, playMove, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
+import { inCheck, legalDests, playMove, positionFromFen, turn, uciSquares, type Role, type SquareName } from '@human-chess/rules';
 import { Button, Panel, Status, Workbench } from '@human-chess/ui';
 import { childrenOf, fenAt, repertoireMoves, type Opening } from './repertoire';
 
@@ -68,9 +68,8 @@ export function DrillView({ opening, controls, status }: DrillViewProps): React.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opening, epd, drillStatus, usersTurn]);
 
-  const onBoardMove = (from: SquareName, to: SquareName): void => {
+  const onBoardMove = (from: SquareName, to: SquareName, promotion?: Role): void => {
     if (!usersTurn || drillStatus !== 'playing') return;
-    const promotion = isPromotionMove(pos, from, to) ? 'queen' : undefined;
     const played = playMove(pos, from, to, promotion);
     const own = repertoireMoves(opening, epd);
     const match = own.find(m => m.uci === played.uci);

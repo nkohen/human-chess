@@ -4,7 +4,7 @@
 // type. Legality — both "does this role have a legal move" and "is this move legal" — comes
 // from chessops through @human-chess/rules; nothing here generates or judges moves itself.
 import {
-  fenOf, inCheck, isPromotionMove, legalDestsByRole, playMove, positionEnd, positionFromFen,
+  fenOf, inCheck, legalDestsByRole, playMove, positionEnd, positionFromFen,
   repetitionKey, roleAt, START_FEN, turn, uciSquares,
   type Color, type GameEnd, type Position, type Role, type SquareName,
 } from '@human-chess/rules';
@@ -53,13 +53,14 @@ export function handDests(game: HandAndBrainGame): Map<SquareName, SquareName[]>
   return legalDestsByRole(game.pos).get(game.calledRole) ?? new Map();
 }
 
-export function move(game: HandAndBrainGame, from: SquareName, to: SquareName): HandAndBrainGame {
+/** Moves the called piece. `promotion` is the hand's choice from the board's picker, if this
+ * move is a pawn reaching the last rank — the pawn is the called role, so the hand, not the
+ * brain, is the one who answers the picker. */
+export function move(game: HandAndBrainGame, from: SquareName, to: SquareName, promotion?: Role): HandAndBrainGame {
   if (game.end) throw new Error('the game is over');
   const role = game.calledRole;
   if (role === undefined) throw new Error('the brain has not called a piece yet');
   if (roleAt(game.pos, from) !== role) throw new Error(`that piece is not the called ${role}`);
-  // No promotion picker in this variant: every promotion auto-queens.
-  const promotion = isPromotionMove(game.pos, from, to) ? 'queen' : undefined;
   const color = turn(game.pos);
   const played = playMove(game.pos, from, to, promotion);
   const key = repetitionKey(played.pos);
