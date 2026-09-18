@@ -50,7 +50,8 @@ cd "$APP_REPO"
 
 # The source offer must describe the build that is actually published: refuse a dirty tree,
 # and, once a remote exists, an unpushed HEAD. The colophon links the exact revision.
-if git status --porcelain | grep -q .; then
+# observe/ and .almanac/ are hook-written telemetry, dirty in every session; they ship nothing.
+if git status --porcelain -- . ':!observe' ':!.almanac' | grep -q .; then
   echo "✗ Uncommitted changes in $APP_REPO; the published build must match a committed revision." >&2
   exit 1
 fi
