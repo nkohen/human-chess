@@ -20,6 +20,12 @@ Named subprojects from the project premise:
   lichess puzzle dump is the obvious CC0 source).
 - **Guess the eval** — judge a position, score against the real engine eval (added 2026-09-15).
 - **Hand and Brain** — the two-role team variant (added 2026-09-15; distinct from group chess).
+- **Lesson Builder** — a GUI for authoring lessons (a sequence of positions, prose, arrow/circle
+  annotations, and optional move-challenges) without touching code; saved in the browser and
+  exportable as JSON. Added by the user 2026-09-18 to author the curated beginner experience and
+  lessons generally. This reopens "study authoring" (previously declined, below): the user's
+  direct request is the new information. Schema in packages/lessons; tool in
+  subprojects/lesson-builder. See memory/subprojects/lesson-builder.md.
 - (and more, added as the project grows — the list above is the user's own from the init interview, 2026-09-15)
 
 Deferred, documented only (user, 2026-09-15): **player insights tooling** — aggregate weakness

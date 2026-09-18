@@ -60,6 +60,7 @@ errors. Run it after any layout change; a real phone on the LAN is still the fin
 - `packages/review` — per-move engine review of a game: evals, loss, classification, best move, all with provenance.
 - `packages/opening-tree` (built 2026-09-17) — folds a player's own imported games into a position-graph tree (EPD-keyed, transpositions merge) with per-move counts and W/D/L from that player's side, traceable back to the source games.
 - `packages/store` (built 2026-09-17) — persistence for the user's own data in the browser: games fetched from lichess and chess.com per linked account, in IndexedDB with an in-memory fallback.
+- `packages/lessons` (built 2026-09-18) — the lesson content schema (steps: a FEN position, prose, arrow/circle annotations, an optional move-challenge) with validation and JSON import/export; positions rebuild through the rules library and challenge answers are validated as legal moves. Authored by the Lesson Builder subproject.
 - `subprojects/<name>` — one self-standing tool each; consumes packages, never duplicates them.
 - `apps/web` — the Vite app hosting every subproject behind a hash route.
 - `scripts/` — repo scripts (copying the wasm engine into the web app's public folder).
