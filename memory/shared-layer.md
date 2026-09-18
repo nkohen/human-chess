@@ -161,3 +161,13 @@ v2 rewrite; v1 had it). `worstMoves`/`mostLostPositions` now build one BFS `came
 call and reuse it for every entry instead of re-running `lineTo`'s whole-tree BFS per entry;
 `mostLostPositions`' (and now `worstMoves`') `minGames` is clamped to at least 1 so `minGames: 0`
 can't let a 0-games node through into a 0/0 loss-rate comparison.
+
+## Reload survival (2026-09-18)
+
+`packages/ui/src/persisted.ts`: `usePersistedState(key, initial, {parse, storage?, serialize?})`
+plus `readPersisted`/`writePersisted`/`clearPersisted` and small validators; keys
+`human-chess.<tool>.<name>.v<n>`. `packages/play`: `resumeGame(startFen, color, ucis)` and
+`useEngineGame({initialMoves})` / `restart({moves})`. `packages/ui` `consumeHandoffParams()`
+reads a hand-off and strips it from the URL so a reload restores the screen's snapshot instead.
+Rule and the per-tool list: docs/design/2026-09-18-reload-survival.md. Test DOM: jsdom +
+Testing Library at the root (`// @vitest-environment jsdom` per file).

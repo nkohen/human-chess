@@ -93,6 +93,12 @@ responsibility here and in memory/shared-layer.md.
   named place with a one-line responsibility per top-level directory, written into memory
   before the second subproject starts; subprojects consume it and never duplicate it.
   Decompose that shared layer before parallelizing work across subprojects. (A2, R1)
+- Every screen survives a page reload where it was (user, 2026-09-18; the app is used from a
+  phone, where iOS reloads background tabs). User-facing progress (phase, the thing being worked
+  on, moves as UCI lists, cursors, scores, round settings) goes through `usePersistedState`
+  from packages/ui, seeded in the state initialiser and validated on read; positions are
+  rebuilt through the rules library, never stored as objects. Rule and per-tool snapshots:
+  docs/design/2026-09-18-reload-survival.md.
 - No feature ships on its author's own say-so: the code-reviewer agent, a deterministic
   check, or the user is the gate. Prose rule — nothing enforces it mechanically. (V5)
 - Licensing. **The project's license is AGPL-3.0-or-later (user, 2026-09-15; text in
