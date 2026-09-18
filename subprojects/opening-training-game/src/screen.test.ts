@@ -34,8 +34,21 @@ describe('opening training game screen snapshot', () => {
   });
 
   it('rejects a move list longer than the round\'s move cap', () => {
-    const ucis = ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5']; // 5 plies, cap is 2*2=4
-    const screen = { movesN: 2, colorChoice: 'white', elo: 1500, settings: { movesN: 2, playerColor: 'white', elo: 1500 }, ucis };
+    // A repeating knight shuffle (g1f3/g8f6/f3g1/f6g8) returns to the start position, White to
+    // move, every 4 plies — 6 full cycles (24 plies) plus one more move gives 25 legal plies,
+    // one over movesN 12's cap of 2*12=24.
+    const cycle = ['g1f3', 'g8f6', 'f3g1', 'f6g8'];
+    const ucis = [...Array(6).fill(cycle).flat(), 'g1f3'];
+    const screen = { movesN: 12, colorChoice: 'white', elo: 1500, settings: { movesN: 12, playerColor: 'white', elo: 1500 }, ucis };
     expect(parseScreen(screen)).toBeUndefined();
+  });
+
+  it('rejects a movesN or elo outside the offered range, top-level or in settings', () => {
+    expect(parseScreen({ ...defaultScreen(12, 1500), movesN: 13 })).toBeUndefined(); // not a preset
+    expect(parseScreen({ ...defaultScreen(12, 1500), elo: 50 })).toBeUndefined(); // below MIN_UCI_ELO
+    expect(parseScreen({ ...defaultScreen(12, 1500), elo: 9999 })).toBeUndefined(); // above MAX_UCI_ELO
+    expect(
+      parseScreen({ movesN: 12, colorChoice: 'white', elo: 1500, settings: { movesN: 13, playerColor: 'white', elo: 1500 }, ucis: [] }),
+    ).toBeUndefined();
   });
 });

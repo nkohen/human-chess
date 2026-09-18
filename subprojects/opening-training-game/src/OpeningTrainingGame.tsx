@@ -26,7 +26,7 @@ import {
 import { useEngineGame } from '@human-chess/play/react';
 import { START_FEN, type Color } from '@human-chess/rules';
 import { Button, Field, Page, SegmentedControl, Status, Toolbar, usePersistedState, Workbench, type StatusKind } from '@human-chess/ui';
-import { defaultScreen, SCREEN_KEY, SCREEN_OPTIONS, type ColorChoice, type Screen } from './screen';
+import { defaultScreen, MOVE_PRESETS, SCREEN_KEY, SCREEN_OPTIONS, type ColorChoice, type Screen } from './screen';
 import { verdict as computeVerdict, type Verdict } from './verdict';
 import './opening-training-game.css';
 
@@ -35,7 +35,6 @@ export interface OpeningTrainingGameProps {
   engine: UciEngine | Error | undefined;
 }
 
-const MOVE_PRESETS = [12, 20];
 const ELO_STEP = 100;
 // Stepped from MIN_UCI_ELO by ELO_STEP, always ending exactly at MAX_UCI_ELO (3190) so the true
 // ceiling is reachable even though the last step is shorter than ELO_STEP — otherwise a loop

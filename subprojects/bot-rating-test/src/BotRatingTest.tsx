@@ -129,6 +129,9 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
   // was routed in on, and strips it from the URL so a reload doesn't replay it. `handoffFen` is
   // kept around, not just consumed, so the "handed over" notice below can tell whether the user
   // has since changed it.
+  // This useState must stay textually above the usePersistedState call below: "a fresh hand-off
+  // wins over the snapshot" depends on this hook's clearPersisted running, in hook order, before
+  // usePersistedState's own initializer ever reads storage.
   const [handoff] = useState(() => {
     const params = consumeHandoffParams(window.location.hash);
     // A fresh hand-off wins over whatever this screen had persisted: clear the snapshot before
@@ -234,7 +237,12 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
   const { game, engineState, onPlayerMove, restart, fen, finished } = useEngineGame({
     startFen: active?.startFen ?? STANDARD_START_FEN,
     playerColor: active?.playerColor ?? 'white',
-    engine: active ? readyEngine : undefined,
+    // A resigned game is over for play purposes even when the position itself is not (the
+    // opponent may still have been "to move"): withholding the engine here, same as when there
+    // is no active game at all, stops useEngineGame's opponent-turn effect from asking the
+    // engine for — and playing — a reply into a game the player already quit, including right
+    // after a reload restores a resigned-but-not-yet-answered snapshot.
+    engine: active && !resigned ? readyEngine : undefined,
     initialMoves: screen.ucis,
     ...(opponent ? { opponent } : {}),
   });

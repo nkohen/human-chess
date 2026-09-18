@@ -4,14 +4,21 @@
 // + the existing effect) and is deliberately not stored. No chessops Position is ever stored —
 // only plain JSON, rebuilt through @human-chess/play's resumeGame.
 import { isFiniteNumber, isOneOf, isRecord, isStringArray, type PersistedStateOptions } from '@human-chess/ui';
-import { resumeGame } from '@human-chess/play';
+import { MAX_UCI_ELO, MIN_UCI_ELO, resumeGame } from '@human-chess/play';
 import { START_FEN, type Color } from '@human-chess/rules';
 
 export const SCREEN_KEY = 'human-chess.opening-training-game.screen.v1';
 
+/** The move-count presets the setup screen offers; the single source of truth so a persisted
+ * `movesN`/`settings.movesN` outside this set (like an elo outside range) is rejected rather
+ * than silently accepted. */
+export const MOVE_PRESETS = [12, 20] as const;
+
 export type ColorChoice = Color | 'random';
 const isColor = isOneOf(['white', 'black'] as const);
 const isColorChoice = isOneOf(['white', 'black', 'random'] as const);
+const isMovesN = (v: unknown): v is number => typeof v === 'number' && (MOVE_PRESETS as readonly number[]).includes(v);
+const isElo = (v: unknown): v is number => isFiniteNumber(v) && v >= MIN_UCI_ELO && v <= MAX_UCI_ELO;
 
 export interface Settings {
   movesN: number;
@@ -33,7 +40,7 @@ export function defaultScreen(movesN: number, elo: number): Screen {
 }
 
 function isSettings(v: unknown): v is Settings {
-  return isRecord(v) && isFiniteNumber(v['movesN']) && isColor(v['playerColor']) && isFiniteNumber(v['elo']);
+  return isRecord(v) && isMovesN(v['movesN']) && isColor(v['playerColor']) && isElo(v['elo']);
 }
 
 /** Validates a stored snapshot; rejects any shape that is not current, and — via resumeGame —
@@ -41,7 +48,7 @@ function isSettings(v: unknown): v is Settings {
 export function parseScreen(raw: unknown): Screen | undefined {
   if (!isRecord(raw)) return undefined;
   const { movesN, colorChoice, elo, settings, ucis } = raw;
-  if (!isFiniteNumber(movesN) || !isColorChoice(colorChoice) || !isFiniteNumber(elo) || !isStringArray(ucis)) return undefined;
+  if (!isMovesN(movesN) || !isColorChoice(colorChoice) || !isElo(elo) || !isStringArray(ucis)) return undefined;
   if (settings === undefined) {
     if (ucis.length > 0) return undefined; // moves with no round in progress: inconsistent, reject
     return { movesN, colorChoice, elo, settings: undefined, ucis };

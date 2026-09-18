@@ -7,7 +7,7 @@
 import { isBoolean, isFiniteNumber, isOneOf, isRecord, isString, isStringArray, type PersistedStateOptions } from '@human-chess/ui';
 import { resumeGame } from '@human-chess/play';
 import { START_FEN, type Color } from '@human-chess/rules';
-import { suggestedStartingElo } from './suggest';
+import { ELO_LEVELS, suggestedStartingElo } from './suggest';
 import { loadRecords } from './records';
 
 export const SCREEN_KEY = 'human-chess.bot-rating-test.screen.v1';
@@ -65,7 +65,7 @@ export function screenFromHandoff(handoff: URLSearchParams): Screen {
 }
 
 function isActiveGame(v: unknown): v is ActiveGame {
-  return isRecord(v) && isFiniteNumber(v['elo']) && isColor(v['playerColor']) && isString(v['startFen']);
+  return isRecord(v) && isFiniteNumber(v['elo']) && ELO_LEVELS.includes(v['elo'] as number) && isColor(v['playerColor']) && isString(v['startFen']);
 }
 
 /** Validates a stored snapshot; rejects any shape that is not current, and — via resumeGame —
@@ -75,6 +75,7 @@ export function parseScreen(raw: unknown): Screen | undefined {
   const { elo, colorChoice, fenText, boardMode, blindfold, active, ucis, resigned, recorded } = raw;
   if (
     !isFiniteNumber(elo) ||
+    !ELO_LEVELS.includes(elo) ||
     !isColorChoice(colorChoice) ||
     !isString(fenText) ||
     !isBoolean(boardMode) ||

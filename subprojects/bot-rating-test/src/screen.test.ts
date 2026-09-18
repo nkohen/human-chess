@@ -23,12 +23,12 @@ describe('bot-rating-test screen snapshot', () => {
   it('round-trips a game in progress, not yet recorded', () => {
     const g = resumeGame(START_FEN, 'black', ['e2e4']);
     const screen: Screen = {
-      elo: 1800,
+      elo: 1820,
       colorChoice: 'black',
       fenText: START_FEN,
       boardMode: false,
       blindfold: true,
-      active: { elo: 1800, playerColor: 'black', startFen: START_FEN },
+      active: { elo: 1820, playerColor: 'black', startFen: START_FEN },
       ucis: uciMoves(g),
       resigned: false,
       recorded: false,
@@ -40,12 +40,12 @@ describe('bot-rating-test screen snapshot', () => {
   it('round-trips a finished, already-recorded game (stays visible, never re-recorded)', () => {
     const g = resumeGame(START_FEN, 'white', ['f2f3', 'e7e5', 'g2g4', 'd8h4']); // fool's mate
     const screen: Screen = {
-      elo: 1800,
+      elo: 1820,
       colorChoice: 'white',
       fenText: START_FEN,
       boardMode: false,
       blindfold: false,
-      active: { elo: 1800, playerColor: 'white', startFen: START_FEN },
+      active: { elo: 1820, playerColor: 'white', startFen: START_FEN },
       ucis: uciMoves(g),
       resigned: false,
       recorded: true,
@@ -73,15 +73,24 @@ describe('bot-rating-test screen snapshot', () => {
     // moves with no active game: inconsistent
     expect(parseScreen({ ...defaultScreen(), ucis: ['e2e4'] })).toBeUndefined();
     // active missing a field
-    expect(parseScreen({ ...defaultScreen(), active: { elo: 1800, playerColor: 'white' } })).toBeUndefined();
+    expect(parseScreen({ ...defaultScreen(), active: { elo: 1820, playerColor: 'white' } })).toBeUndefined();
   });
 
   it('rejects an illegal move list as a whole, not just the bad move', () => {
     const screen = {
       ...defaultScreen(),
-      active: { elo: 1800, playerColor: 'white', startFen: START_FEN },
+      active: { elo: 1820, playerColor: 'white', startFen: START_FEN },
       ucis: ['e2e4', 'e2e4'], // second move replays an already-vacated square
     };
     expect(parseScreen(screen)).toBeUndefined();
+  });
+
+  it('rejects an elo outside the UI-offered levels, top-level or on an active game', () => {
+    expect(parseScreen({ ...defaultScreen(), elo: 1801 })).toBeUndefined(); // not a 100-step level
+    expect(parseScreen({ ...defaultScreen(), elo: 50 })).toBeUndefined(); // below MIN_UCI_ELO
+    expect(parseScreen({ ...defaultScreen(), elo: 9999 })).toBeUndefined(); // above MAX_UCI_ELO
+    expect(
+      parseScreen({ ...defaultScreen(), active: { elo: 1801, playerColor: 'white', startFen: START_FEN } }),
+    ).toBeUndefined();
   });
 });

@@ -14,7 +14,7 @@ import { resumeGame, uciMoves } from '@human-chess/play';
 import { START_FEN } from '@human-chess/rules';
 import { createElement } from 'react';
 import { cleanup, render, screen as dom } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BotRatingTest } from './BotRatingTest';
 import { SCREEN_KEY, type Screen } from './screen';
 
@@ -30,12 +30,12 @@ describe('BotRatingTest reload survival', () => {
   it('resumes a game in progress at the persisted moves, not yet recorded', () => {
     const g = resumeGame(START_FEN, 'black', ['e2e4']); // white played, black (the player) to move
     const snapshot: Screen = {
-      elo: 1800,
+      elo: 1820,
       colorChoice: 'black',
       fenText: START_FEN,
       boardMode: false,
       blindfold: false,
-      active: { elo: 1800, playerColor: 'black', startFen: START_FEN },
+      active: { elo: 1820, playerColor: 'black', startFen: START_FEN },
       ucis: uciMoves(g),
       resigned: false,
       recorded: false,
@@ -44,19 +44,19 @@ describe('BotRatingTest reload survival', () => {
 
     render(createElement(BotRatingTest, { engine: stubEngine }));
 
-    expect(dom.getByText(/Playing black against Stockfish, UCI_Elo 1800/i)).toBeTruthy();
+    expect(dom.getByText(/Playing black against Stockfish, UCI_Elo 1820/i)).toBeTruthy();
     expect(dom.getByText('e4')).toBeTruthy(); // the move list shows the already-played move
   });
 
   it('keeps a finished, already-recorded game visible and does not record it again', () => {
     const g = resumeGame(START_FEN, 'white', ['f2f3', 'e7e5', 'g2g4', 'd8h4']); // fool's mate
     const snapshot: Screen = {
-      elo: 1500,
+      elo: 1520,
       colorChoice: 'white',
       fenText: START_FEN,
       boardMode: false,
       blindfold: false,
-      active: { elo: 1500, playerColor: 'white', startFen: START_FEN },
+      active: { elo: 1520, playerColor: 'white', startFen: START_FEN },
       ucis: uciMoves(g),
       resigned: false,
       recorded: true,
@@ -95,16 +95,45 @@ describe('BotRatingTest reload survival', () => {
     expect(eloSelect.value).toBe('1820');
   });
 
+  it('never asks the engine for a move into a resigned game, even right after reload', () => {
+    // White (the player) has moved, resigned, and reloaded before the position updated any
+    // further — it is the opponent's (black's) turn, engine-wise, but the player quit.
+    const g = resumeGame(START_FEN, 'white', ['e2e4']);
+    const ucis = uciMoves(g);
+    const snapshot: Screen = {
+      elo: 1820,
+      colorChoice: 'white',
+      fenText: START_FEN,
+      boardMode: false,
+      blindfold: false,
+      active: { elo: 1820, playerColor: 'white', startFen: START_FEN },
+      ucis,
+      resigned: true,
+      recorded: true,
+    };
+    localStorage.setItem(SCREEN_KEY, JSON.stringify(snapshot));
+
+    const bestMove = vi.fn();
+    const countingEngine = { stop: () => {}, bestMove } as unknown as UciEngine;
+
+    render(createElement(BotRatingTest, { engine: countingEngine }));
+
+    expect(dom.getByText(/You resigned\./i)).toBeTruthy();
+    expect(bestMove).not.toHaveBeenCalled();
+    const stored = JSON.parse(localStorage.getItem(SCREEN_KEY) ?? 'null') as Screen | null;
+    expect(stored?.ucis).toEqual(ucis); // unchanged: no engine reply was ever appended
+  });
+
   it('a fresh hand-off overrides an existing persisted snapshot and strips the URL query', () => {
     // A game-in-progress snapshot is already persisted from a previous visit...
     const g = resumeGame(START_FEN, 'black', ['e2e4']);
     const staleSnapshot: Screen = {
-      elo: 1800,
+      elo: 1820,
       colorChoice: 'black',
       fenText: START_FEN,
       boardMode: false,
       blindfold: false,
-      active: { elo: 1800, playerColor: 'black', startFen: START_FEN },
+      active: { elo: 1820, playerColor: 'black', startFen: START_FEN },
       ucis: uciMoves(g),
       resigned: false,
       recorded: false,

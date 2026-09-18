@@ -4,7 +4,7 @@
 // a corrupt or illegal snapshot throws partway through and is rejected as a whole; the screen
 // never half-restores a game (A1). No chessops Position is ever stored — only plain JSON.
 import { isOneOf, isRecord, isStringArray, type PersistedStateOptions } from '@human-chess/ui';
-import { roleAt, uciSquares, type Role } from '@human-chess/rules';
+import { parseUciMove, roleAt, type Role } from '@human-chess/rules';
 import { call, move, startGame, type HandAndBrainGame } from './game';
 
 export const SCREEN_KEY = 'human-chess.hand-and-brain.screen.v1';
@@ -23,10 +23,6 @@ export function defaultScreen(): Screen {
 const ROLES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
 const isRole = isOneOf(ROLES);
 
-/** UCI's one-letter promotion suffix ("e7e8q") to a Role; only the four pieces a pawn may
- * become, matching @human-chess/rules' own roleToChar mapping. */
-const PROMOTION_ROLE: Record<string, Role> = { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' };
-
 /**
  * Replays a snapshot from startGame() through call()/move(), inferring each turn's called role
  * from the piece actually standing on the move's "from" square (the same role the brain must
@@ -37,13 +33,10 @@ const PROMOTION_ROLE: Record<string, Role> = { q: 'queen', r: 'rook', b: 'bishop
 export function replayGame(screen: Screen): HandAndBrainGame {
   let game = startGame();
   for (const uci of screen.ucis) {
-    const [from, to] = uciSquares(uci);
+    const { from, to, promotion } = parseUciMove(uci);
     const role = roleAt(game.pos, from);
     if (!role) throw new Error(`no piece on ${from} to move`);
-    game = call(game, role);
-    const promoChar = uci.length > 4 ? uci.slice(4) : undefined;
-    const promotion = promoChar ? PROMOTION_ROLE[promoChar] : undefined;
-    game = promotion ? move(game, from, to, promotion) : move(game, from, to);
+    game = move(call(game, role), from, to, promotion);
   }
   if (screen.calledRole !== undefined) game = call(game, screen.calledRole);
   return game;
