@@ -1,0 +1,193 @@
+/* Genuinely lesson-builder's own (docs/design/2026-09-17-ui.md, adoption rule 5): the library
+   list/cards, the export textarea, the steps list, and the editor's setup/annotate/challenge
+   sub-sections. Everything reads its colour and spacing from --hc-* tokens; nothing here
+   redefines the button, panel or field styling packages/ui already provides. */
+
+.lb-board-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--hc-border);
+  border-radius: var(--hc-radius);
+  background: var(--hc-surface);
+}
+
+/* --- library --------------------------------------------------------------------------- */
+
+.lb-library-list {
+  list-style: none;
+  margin: 0 0 var(--hc-space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-3);
+}
+
+.lb-library-item__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--hc-space-2);
+}
+
+.lb-library-item__title {
+  margin: 0;
+  font-size: var(--hc-text-lg);
+}
+
+.lb-library-item__meta {
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+  white-space: nowrap;
+}
+
+.lb-library-item__desc {
+  color: var(--hc-text-muted);
+  margin: var(--hc-space-1) 0 0;
+}
+
+.lb-library-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hc-space-2);
+  margin-top: var(--hc-space-3);
+}
+
+.lb-export {
+  margin-top: var(--hc-space-3);
+  padding-top: var(--hc-space-3);
+  border-top: 1px solid var(--hc-border);
+}
+
+.lb-export__text {
+  width: 100%;
+  font-family: var(--hc-mono);
+  font-size: var(--hc-text-sm);
+  box-sizing: border-box;
+}
+
+.lb-export__actions {
+  display: flex;
+  gap: var(--hc-space-2);
+  margin-top: var(--hc-space-2);
+}
+
+/* --- editor ------------------------------------------------------------------------------ */
+
+.lb-setup,
+.lb-annotate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-2);
+  margin-top: var(--hc-space-2);
+}
+
+.lb-challenge-block {
+  margin: var(--hc-space-3) 0 0;
+  padding: var(--hc-space-3);
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+}
+
+.lb-challenge-block legend {
+  padding: 0 var(--hc-space-1);
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lb-challenge-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--hc-space-2);
+}
+
+.lb-challenge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-2);
+  margin-top: var(--hc-space-2);
+}
+
+.lb-challenge-answers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-1);
+}
+
+.lb-challenge-answers li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hc-space-2);
+}
+
+.lb-challenge-recording {
+  display: flex;
+  align-items: center;
+  gap: var(--hc-space-2);
+}
+
+.lb-steps {
+  list-style: none;
+  margin: 0 0 var(--hc-space-2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-1);
+}
+
+.lb-steps__item {
+  display: flex;
+  align-items: center;
+  gap: var(--hc-space-1);
+}
+
+.lb-steps__item--selected .lb-steps__select {
+  color: var(--hc-accent);
+  font-weight: 600;
+}
+
+.lb-steps__select {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  padding: var(--hc-space-1) var(--hc-space-2);
+  cursor: pointer;
+  border-radius: var(--hc-radius);
+  min-height: var(--hc-tap-min);
+}
+
+.lb-steps__select:hover {
+  background: var(--hc-surface-2);
+}
+
+.lb-steps__actions {
+  display: flex;
+  gap: var(--hc-space-1);
+}
+
+/* --- player -------------------------------------------------------------------------------- */
+
+.lb-player-step-count {
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+}
+
+.lb-player-prompt {
+  font-weight: 600;
+  margin: 0 0 var(--hc-space-2);
+}
+
+.lb-player-text {
+  white-space: pre-wrap;
+  margin: 0 0 var(--hc-space-2);
+}
