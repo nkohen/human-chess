@@ -52,6 +52,37 @@ a square; material points by the 1/3/3/5/9 convention), check answers, reveal th
 next. Not built: best-move and who-is-better questions (engine-graded), the player's own line with
 claims, back-and-forth correction dialogue, coordinate drills, blindfold hand-off, time element.
 
+**Built 2026-09-17: position memorizer.** The first of the two "Extra modes" above: a mode
+switch (SegmentedControl, guarded localStorage) at the top of the route, "Lines" (the trainer
+above, unchanged) and "Memorize". Five positions per session: settings (study time 5/10/20s,
+default 10s as a first guess; source random-play or the curated pool from `packages/positions`,
+default random), then per position a view-only board with a study countdown, then an empty
+`BoardEditor` (chessground free mode) with a count-up rebuild clock, "Done" to submit. Scoring
+is pure board-state comparison in the new `subprojects/visualization-trainer/src/memorize.ts`
+(no engine call in this mode at all): the original position's pieces (`occupiedSquares`/
+`pieceAt`, always legal) are compared square by square against the rebuild's pieces, read via a
+new `packages/rules` export, `piecesOfPlacement`, added because the rebuild may be an illegal
+placement mid-edit (missing/doubled king) and the usual `positionFromFen` path requires
+legality; `piecesOfPlacement` reads chessops' own board parser directly, so it is still a
+rules-library read, never hand-parsed FEN (A1). Score = correct / pieces in the original;
+missing/extra/wrong-piece squares are listed in plain language, colour and role both ("h1:
+white rook missing", "e5: you put a black knight, it was a white knight"). After each position,
+the original and rebuilt boards show side by side above a size threshold and stacked below it
+(the phone case gets the full slot width each, so the pair stops fitting one row and flex-wrap
+actually wraps; halving unconditionally never would); a session summary shows a score bar per
+position plus the average. Both modes are five rounds (`MEMORIZE_ROUNDS = 5`, matching Lines'
+`ROUNDS`); orientation is always white for both boards (not built: orienting by side to move, or
+per-curated-position orientation). Not built: the obscuration ladder and blindfold mode (the
+other "Extra modes" entry), any position source beyond random-play and the curated pool, and
+tuning the study-time default against real usage (10s is a first guess). Switching mode
+mid-session (Lines <-> Memorize) silently abandons whatever session is in progress, no
+confirmation — accepted as a first guess, not a deliberate UX call. Diffing and scoring logic
+(`memorize.ts`) and the new `piecesOfPlacement` rules export are unit-tested; `npx pnpm@10 check`
+passes. The `screenshots.mjs visualization` harness only covers the route's default first-paint
+state (Lines mode, since that is the persisted default), so it verifies the mode switch is the
+first control on screen on the phone but does not itself exercise Memorize mode; Memorize's
+phases were checked manually instead.
+
 **User feedback on the first slice (2026-09-16), all addressed in the second pass:**
 - Asking what is on a square the line never touched, with the board visible, is silly (→ the
   piece-on square is always one the line touched or changed).

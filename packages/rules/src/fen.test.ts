@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { castlingRightsFor, composeFen, EMPTY_PLACEMENT_FEN, positionFromFen, RulesError, START_FEN } from './index';
+import { castlingRightsFor, composeFen, EMPTY_PLACEMENT_FEN, piecesOfPlacement, positionFromFen, RulesError, START_FEN } from './index';
 
 const START_PLACEMENT = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
 
@@ -47,5 +47,29 @@ describe('castlingRightsFor', () => {
 
   it('drops both rights for a side whose king has moved', () => {
     expect(castlingRightsFor('r3k2r/8/8/8/8/4K3/8/R6R')).toBe('kq');
+  });
+});
+
+describe('piecesOfPlacement', () => {
+  it('reads every occupied square of the starting position', () => {
+    const pieces = piecesOfPlacement(START_PLACEMENT);
+    expect(pieces.size).toBe(32);
+    expect(pieces.get('e1')).toEqual({ color: 'white', role: 'king' });
+    expect(pieces.get('e8')).toEqual({ color: 'black', role: 'king' });
+    expect(pieces.get('e4')).toBeUndefined();
+  });
+
+  it('reads an empty board as no pieces', () => {
+    expect(piecesOfPlacement(EMPTY_PLACEMENT_FEN).size).toBe(0);
+  });
+
+  it('reads a placement with no king at all, unlike positionFromFen which would reject it', () => {
+    const placement = '8/8/8/4Q3/8/8/8/8';
+    expect(piecesOfPlacement(placement).get('e5')).toEqual({ color: 'white', role: 'queen' });
+    expect(() => positionFromFen(`${placement} w - - 0 1`)).toThrow(RulesError);
+  });
+
+  it('rejects an unparseable placement', () => {
+    expect(() => piecesOfPlacement('not a placement')).toThrow(RulesError);
   });
 });

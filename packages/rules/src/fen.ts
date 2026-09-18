@@ -4,9 +4,9 @@
 // hand-assembles or hand-parses a FEN string beyond splitting the placement field chessops itself
 // already accepts alone.
 import { makeFen, parseBoardFen, parseCastlingFen } from 'chessops/fen';
-import { parseSquare } from 'chessops/util';
+import { makeSquare, parseSquare } from 'chessops/util';
 import type { Setup } from 'chessops/setup';
-import type { Color, Square, SquareName } from 'chessops/types';
+import type { Color, Role, Square, SquareName } from 'chessops/types';
 import { RulesError } from './index.js';
 
 /** An empty board's piece-placement field — the starting point for "Clear board". */
@@ -83,4 +83,21 @@ export function castlingRightsFor(placement: string): string {
     if (isPiece(home.queenRook, color, 'rook')) rights += home.queenSide;
   }
   return rights;
+}
+
+/**
+ * Every occupied square in a piece-placement field, read straight off chessops' own board
+ * parser (`parseBoardFen`) rather than `positionFromFen`/`occupiedSquares`. Those two require a
+ * *legal* chess position (exactly one king per side, no pawns on the back rank, ...), which a
+ * board editor's in-progress placement is not guaranteed to be — the visualization trainer's
+ * memorizer needs to score a rebuild square by square while the learner may still be missing a
+ * king or have doubled one. Still a real rules-library read, never hand-parsed FEN (A1): this is
+ * the same `parseBoardFen` `composeFen`/`castlingRightsFor` above already use.
+ */
+export function piecesOfPlacement(placement: string): Map<SquareName, { color: Color; role: Role }> {
+  const board = parseBoardFen(placement);
+  if (board.isErr) throw new RulesError(`invalid piece placement "${placement}": ${board.error.message}`);
+  const pieces = new Map<SquareName, { color: Color; role: Role }>();
+  for (const [square, piece] of board.value) pieces.set(makeSquare(square), { color: piece.color, role: piece.role });
+  return pieces;
 }

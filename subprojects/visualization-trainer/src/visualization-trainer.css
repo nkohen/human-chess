@@ -2,6 +2,41 @@
  * the small end-position board shown after a reveal. Spacing, colour, buttons, fields and the
  * board-left/actions-right layout all come from @human-chess/ui (docs/design/2026-09-17-ui.md). */
 
+/* ---------- Mode switch (VisualizationTrainer.tsx) ----------
+ * The switch sits above whichever mode's own Page or Workbench renders below it. Both need a
+ * defined height to fill (Workbench sets height:100% of its parent; Page just flows), so this
+ * wrapper carries the full AppShell-main height itself and gives the switch bar a fixed row,
+ * leaving the rest to the mode's own layout — the same fixed-row/flexible-remainder split
+ * Workbench itself uses internally for title+status+primary vs children. */
+.viz-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.viz-mode-bar {
+  flex: 0 0 auto;
+  padding: var(--hc-space-3) var(--hc-space-4) 0;
+}
+
+.viz-mode-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Workbench already sets its own height:100%, which as a flex child would claim the whole
+ * .viz-mode-content box (ignoring that the mode bar above it took some of the space); flex's
+ * default shrink still resolves this correctly since Workbench is by far the larger flex basis,
+ * but min-height:0 is needed for its internal `minmax(0,1fr)` grid row to actually shrink.
+ * Scoped to base.css's own desktop range (min-width just above its 60rem mobile breakpoint) so
+ * this never outranks base.css's mobile `.hc-workbench { min-height: 100% }`, which needs to win
+ * on the phone. */
+@media (min-width: 60.01rem) {
+  .viz-mode-content .hc-workbench {
+    min-height: 0;
+  }
+}
+
 .viz-summary {
   text-align: center;
 }
@@ -60,4 +95,92 @@
 .viz-board-end {
   max-width: 14rem;
   margin: var(--hc-space-2) 0;
+}
+
+/* ---------- Memorize mode (MemorizeTrainer.tsx) ---------- */
+
+.viz-mem-clock {
+  font-size: var(--hc-text-lg);
+  font-weight: bold;
+  margin: 0 0 var(--hc-space-3);
+}
+
+.viz-mem-score {
+  font-size: var(--hc-text-lg);
+  font-weight: bold;
+  margin: 0 0 var(--hc-space-1);
+}
+
+.viz-mem-times {
+  color: var(--hc-text-muted);
+  margin: 0 0 var(--hc-space-3);
+}
+
+.viz-mem-diffs {
+  margin: 0;
+  padding-left: var(--hc-space-4);
+}
+
+.viz-mem-diffs li {
+  margin-bottom: var(--hc-space-1);
+}
+
+/* The two comparison boards (original vs rebuilt): side by side above the pairSize threshold in
+ * MemorizeTrainer.tsx, stacked below it (the phone case) because each box is then given the
+ * full slot width, so the pair no longer fits one row and flex-wrap actually stacks them — no
+ * media query needed here, the sizing that makes wrapping trigger lives in the component. */
+.viz-mem-boards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hc-space-3);
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.viz-mem-board {
+  text-align: center;
+}
+
+.viz-mem-board-label {
+  margin: 0 0 var(--hc-space-1);
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+}
+
+.viz-mem-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-2);
+}
+
+.viz-mem-bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--hc-space-2);
+}
+
+.viz-mem-bar-label {
+  flex: 0 0 6rem;
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+}
+
+.viz-mem-bar-track {
+  flex: 1 1 auto;
+  height: var(--hc-space-3);
+  background: var(--hc-surface-2);
+  border-radius: var(--hc-radius);
+  overflow: hidden;
+}
+
+.viz-mem-bar-fill {
+  height: 100%;
+  background: var(--hc-accent);
+}
+
+.viz-mem-bar-pct {
+  flex: 0 0 3rem;
+  text-align: right;
+  font-size: var(--hc-text-sm);
 }
