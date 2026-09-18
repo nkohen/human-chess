@@ -78,3 +78,34 @@ describe('EndgamesIntro reload restore', () => {
     expect(screen.queryByRole('dialog')).toBeTruthy();
   });
 });
+
+describe('EndgamesIntro fresh-mount persistence', () => {
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
+
+  it('persists the freshly-rolled colour on mount so a reload before the first move keeps the same attempt', () => {
+    // No snapshot in storage: the very first open of the tool. The initial learner colour is a
+    // random roll (lessonAdapt.randomColor), not a reproducible default, so it MUST be written on
+    // mount — otherwise a reload before the first move re-rolls it and the board comes back
+    // mirrored (caught by scripts/reload-smoke.mjs against the deployed build, 2026-09-18).
+    localStorage.clear();
+    render(createElement(EndgamesIntro, { engine: undefined }));
+
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    expect(raw).not.toBeNull();
+    const stored = JSON.parse(raw!) as { lessonId: string; startColor: string; moves: string[] };
+    expect(stored.moves).toEqual([]);
+    expect(['white', 'black']).toContain(stored.startColor);
+
+    // A second mount reading that same snapshot (what a reload does) restores the identical
+    // colour rather than rolling a new one — the whole point of writing it on mount.
+    cleanup();
+    render(createElement(EndgamesIntro, { engine: undefined }));
+    const rawAgain = localStorage.getItem(SNAPSHOT_KEY);
+    const storedAgain = JSON.parse(rawAgain!) as { startColor: string };
+    expect(storedAgain.startColor).toBe(stored.startColor);
+    expect(screen.getByText(new RegExp(`You play ${stored.startColor}\\.`))).toBeTruthy();
+  });
+});

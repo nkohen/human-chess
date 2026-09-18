@@ -60,18 +60,21 @@ export function EndgamesIntro({ engine }: EndgamesIntroProps): React.JSX.Element
   useEffect(() => saveConfident(confident), [confident]);
 
   // Page-reload survival for the current lesson/curated attempt (docs/design/2026-09-18-
-  // reload-survival.md). `wroteOnce` skips the write on mount, same reasoning as
-  // usePersistedState: the value on mount either came from `restored` itself or is the ordinary
-  // default, and writing it back immediately would be a no-op at best and could clobber a
-  // differently-shaped stored entry at worst. `startColor` always reflects the lesson hook's own
-  // roll (game.playerColor), whether or not lesson mode is the one currently on screen, so
-  // switching back to it later never re-rolls the colour. `moves` is only ever taken from the
-  // active mode's game — the other one is a background attempt the learner has not seen yet.
+  // reload-survival.md). On mount the write is skipped ONLY when a snapshot was restored — its
+  // value is already in storage, and rewriting it would clobber a differently-shaped stored
+  // entry at worst. When nothing was restored the mount write must happen (same as
+  // usePersistedState's write-on-mount-when-nothing-restored): the initial `startColor` is a
+  // fresh random roll (lessonAdapt.randomColor), not a reproducible default, so a reload before
+  // the learner's first move would otherwise re-roll the colour and hand back a mirrored board.
+  // `startColor` always reflects the lesson hook's own roll (game.playerColor), whether or not
+  // lesson mode is the one currently on screen, so switching back to it later never re-rolls the
+  // colour. `moves` is only ever taken from the active mode's game — the other one is a
+  // background attempt the learner has not seen yet.
   const wroteOnce = useRef(false);
   useEffect(() => {
     if (!wroteOnce.current) {
       wroteOnce.current = true;
-      return;
+      if (restored) return;
     }
     writePersisted(SNAPSHOT_KEY, {
       mode,
