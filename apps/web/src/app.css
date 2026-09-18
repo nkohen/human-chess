@@ -1,0 +1,14 @@
+/* App-level styles that belong to no subproject and no shared primitive. */
+
+/* Home-page colophon: the source offer and the GPL pieces (App.tsx). Quiet, under the cards. */
+.app-colophon {
+  margin: 1.5rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--hc-text-muted);
+  text-align: center;
+}
+.app-colophon a {
+  color: inherit;
+  text-decoration: underline;
+}

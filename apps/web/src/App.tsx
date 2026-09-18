@@ -14,6 +14,14 @@ import { Puzzles } from '@human-chess/puzzles';
 import { Chessitout } from '@human-chess/chessitout';
 import { GameReviewer } from '@human-chess/game-reviewer';
 import { loadBrowserEngine } from './engine';
+import './app.css';
+
+/** Public source repository and the deployed revision, injected at build time by
+ * scripts/deploy-web.sh; both undefined in dev. The link points at the exact commit so the source
+ * offer matches the build. */
+const SOURCE_URL: string | undefined = import.meta.env.VITE_SOURCE_URL || undefined;
+const SOURCE_REV: string | undefined = import.meta.env.VITE_SOURCE_REV || undefined;
+const SOURCE_LINK = SOURCE_URL && (SOURCE_REV ? `${SOURCE_URL.replace(/\/$/, '')}/tree/${SOURCE_REV}` : SOURCE_URL);
 
 const routes: { hash: string; title: string; blurb: string }[] = [
   { hash: '#/endgames', title: 'Endgames first', blurb: 'Learn chess by winning already-won endgames.' },
@@ -122,6 +130,23 @@ export function App(): React.JSX.Element {
               <Card key={r.hash} title={r.title} blurb={r.blurb} href={r.hash} />
             ))}
           </CardGrid>
+          {/* The source offer the licences require once the site is published (AGPL-3.0 §13 for
+              the app, GPL-3.0 for the shipped Stockfish wasm — memory/reuse-library.md):
+              VITE_SOURCE_URL is set by scripts/deploy-web.sh from HC_SOURCE_URL and left unset in
+              dev, where the line simply names the pieces. */}
+          <p className="app-colophon">
+            {SOURCE_LINK ? (
+              <>
+                <a href={SOURCE_LINK}>Source code</a>
+                {SOURCE_REV ? ` (revision ${SOURCE_REV}, AGPL-3.0-or-later).` : ' (AGPL-3.0-or-later).'}{' '}
+              </>
+            ) : (
+              <>human-chess is AGPL-3.0-or-later. </>
+            )}
+            Rules by <a href="https://github.com/niklasf/chessops">chessops</a>, board by{' '}
+            <a href="https://github.com/lichess-org/chessground">chessground</a>, engine{' '}
+            <a href="https://github.com/nmrugg/stockfish.js">Stockfish 19 (stockfish.js 19.0.0)</a>, all GPL-3.0.
+          </p>
         </Page>
       )}
     </AppShell>
