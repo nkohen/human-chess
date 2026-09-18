@@ -31,8 +31,8 @@ numbers; focus on concepts applied in practice rather than comparison to expert 
 ## Directory decomposition (2026-09-16, first slice built)
 
 One line per top-level directory, as CLAUDE.md requires. Built: rules, board, engine, play,
-positions, facts, import, lichess, site-client, chesscom, eleven subprojects, apps/web.
-Reserved (named, not created): the rest.
+positions, facts, import, review, lichess, site-client, chesscom, opening-tree, eleven
+subprojects, apps/web. Reserved (named, not created): the rest.
 
 | Directory | Responsibility | Interview pieces it will absorb |
 |---|---|---|
@@ -53,7 +53,7 @@ Reserved (named, not created): the rest.
 | `packages/review` | per-move engine review (eval before/after, loss from the mover's side, classification by first-guess cutoffs, best move) with provenance; report prose, what-if and findability still to come | standard review shape |
 | `packages/rooms` (reserved) | rooms, clocks, sealed votes, matchmaking | multiplayer |
 | `packages/srs` (reserved) | spaced-repetition scheduler | SRS |
-| `packages/opening-tree` (reserved) | played-games tree + explorer stats | opening tree, explorer |
+| `packages/opening-tree` (built 2026-09-17) | folds `ImportedGame[]` into a position-graph tree from one username+colour's perspective, keyed by `repetitionKey` (EPD) so transpositions merge; each edge carries a move count, W/D/L from the tracked player's side, and traceable game refs (url, playedAt, opponent); caps folding depth per game (`maxPliesPerSide`, default 20); `mostPlayed`/`moveScore` helpers; own implementation, not a port of openingtree's GPL code (explicit instruction, separate from the interview's reuse directive) | opening tree half of the row above; explorer stats (the other half) still not built |
 | `subprojects/<name>` | one tool each; consumes packages | the 13 subprojects |
 | `apps/web` | Vite + React host, hash routes, owns the browser engine instance | — |
 

@@ -176,3 +176,67 @@
 .ob-explorer-wdl-black {
   background: #333;
 }
+
+/* ---------- GamesTreeView ---------- */
+
+.ob-tree-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--hc-space-2) var(--hc-space-3);
+}
+
+.ob-tree-form .hc-field {
+  margin-bottom: 0;
+}
+
+.ob-tree-moves {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ob-tree-moves li {
+  display: flex;
+  align-items: center;
+  gap: var(--hc-space-2);
+  margin-bottom: var(--hc-space-1);
+}
+
+.ob-tree-move-button {
+  flex: 1;
+  text-align: left;
+}
+
+/* Own win/draw/loss bar, same literal-colour choice as the explorer's white/draw/black bar
+ * above (tokens.css has no per-outcome colours) — green/grey/red here since this is the
+ * tracked player's own result, not White's/Black's. */
+.ob-tree-wdl {
+  display: flex;
+  width: 5rem;
+  height: 0.6rem;
+  overflow: hidden;
+  border-radius: var(--hc-radius);
+  flex-shrink: 0;
+}
+
+.ob-tree-wdl-win {
+  background: var(--hc-success);
+}
+
+.ob-tree-wdl-draw {
+  background: #8888;
+}
+
+.ob-tree-wdl-loss {
+  background: var(--hc-danger);
+}
+
+.ob-tree-gamerefs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: var(--hc-text-sm);
+  max-height: 10rem;
+  overflow-y: auto;
+}

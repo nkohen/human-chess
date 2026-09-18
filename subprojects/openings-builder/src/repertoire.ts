@@ -55,10 +55,13 @@ export function fenAt(epd: string): string {
 /**
  * Adds a move from `fromEpd`, playing it through the rules library to get its SAN and the EPD
  * it lands on. Idempotent: adding the same UCI at the same node twice is a no-op. Throws if the
- * move is illegal at that position (via `playUci`) or the node doesn't exist yet.
+ * move is illegal at that position (via `playUci`) or if `fromEpd` is not a node this opening
+ * already has (matching this doc comment: a bug here should be loud, not a silently-persisted
+ * orphan node nothing in the opening's own tree can ever reach from its root).
  */
 export function addMove(opening: Opening, fromEpd: string, uci: string): Opening {
-  const node = opening.nodes[fromEpd] ?? { moves: [] };
+  const node = opening.nodes[fromEpd];
+  if (!node) throw new Error(`addMove: "${fromEpd}" is not a node in "${opening.name}"`);
   if (node.moves.some(m => m.uci === uci)) return opening;
   const played = playUci(positionAt(fromEpd), uci);
   const to = repetitionKey(played.pos);

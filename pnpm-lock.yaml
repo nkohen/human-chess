@@ -157,6 +157,15 @@ importers:
         specifier: ^19.0.0
         version: 19.3.0
 
+  packages/opening-tree:
+    dependencies:
+      '@human-chess/import':
+        specifier: workspace:*
+        version: link:../import
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../rules
+
   packages/play:
     dependencies:
       '@human-chess/engine':
@@ -377,9 +386,15 @@ importers:
       '@human-chess/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@human-chess/import':
+        specifier: workspace:*
+        version: link:../../packages/import
       '@human-chess/lichess':
         specifier: workspace:*
         version: link:../../packages/lichess
+      '@human-chess/opening-tree':
+        specifier: workspace:*
+        version: link:../../packages/opening-tree
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules

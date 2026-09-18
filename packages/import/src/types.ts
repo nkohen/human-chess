@@ -26,3 +26,16 @@ export interface ImportedGame {
    * rather than a parsed header pair). Undefined when neither is available — never fabricated. */
   playedAt: string | undefined;
 }
+
+/**
+ * Shared result shape for both `fetchRecentLichessGames` and `fetchRecentChesscomGames` (M1,
+ * 2026-09-17): `games` is every game that parsed cleanly; `skipped` is how many the fetch found
+ * but could not turn into an ImportedGame (an illegal move, an unsupported PGN variant) — caught
+ * and counted rather than letting one bad game blank the whole batch. A caller reporting "folded
+ * N of M games" needs `games.length + skipped` for M, not just `games.length`, or that count
+ * quietly stops including games the fetch actually saw.
+ */
+export interface RecentGamesResult {
+  games: ImportedGame[];
+  skipped: number;
+}

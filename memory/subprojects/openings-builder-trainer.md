@@ -106,9 +106,54 @@ every live opening stops the drill. `DrillView.tsx` shows which openings are sti
 muted line and names the accepted openings next to each move in the wrong-move message when more
 than one is in scope. Still not built: the SRS queue that picks positions instead of a fixed
 scope, and weighting opponent replies by real-opponent frequency instead of uniform random.
+**Built 2026-09-17: opening tree over own games (priority 2).** New package
+`packages/opening-tree` folds `ImportedGame[]` into a position-graph tree from a given
+username+colour's perspective (EPD-keyed via `repetitionKey`, so transpositions merge); each
+node's outgoing edges carry a move count, W/D/L from the tracked player's own side, and
+traceable game refs (url, playedAt, opponent). Games are replayed with `playUci`
+(`@human-chess/rules`) and capped at `maxPliesPerSide` (first guess: 20, i.e. 40 plies total,
+a parameter); games where the user didn't play that colour, or the result is undecided, are
+skipped and counted separately. `mostPlayed`/`moveScore` (points/games) helpers included.
+`packages/import` gained `fetchRecentLichessGames` (lichess's `GET
+/api/games/user/{username}?max=N` export, one request for up to 300 games) and
+`fetchRecentChesscomGames` (walks monthly chess.com archives newest-first, one request per
+month, first guess default 100 games / max 300). Both take `fetchImpl` for tests, which use
+only fake fetches (no live-site probes; see memory/no-live-lichess-probing.md). UI: a third
+"Your games" mode in `subprojects/openings-builder/src/GamesTreeView.tsx`, alongside build and
+drill — site/username/colour/count form (reusing `useLastUsername`), a workbench with board,
+move list with a W/D/L bar per move, breadcrumb path, and "Add to `<opening>`" when a same
+colour opening is selected in the builder, wired to `repertoire.ts`'s `addMove`. Fetched games
+are cached in memory per site+username+count for the session, with a "Fetch again" button.
+
+Not built: openingtree.com's own code was deliberately not reused here (explicit instruction
+for this slice, distinct from the interview's reuse directive above) — this is an independent
+implementation. No cross-site consolidation: lichess and chess.com games are loaded into
+separate trees per Load, not merged into one combined tree. No merge with the existing
+explorer statistics (`ExplorerPanel`'s lichess rating-band data) — the two stay side by side,
+not combined into one display.
+
+**Code-review fixes, same day:** a "From Position" game (chess960 setups, a lichess study
+continued as a game) was crashing the whole route — `buildGamesTree` now compares each game's
+own start position against the tree's root via `repetitionKey` and skips a mismatch rather than
+folding its moves from the standard start; a fold that still throws (any other RulesError) is
+now caught per game and counted as skipped too, never blanking the tree. `addMove` on an
+opening now throws on an unknown `fromEpd` instead of silently creating an orphan node (matching
+its own doc comment); "Add to `<opening>`" now hands the target opening a whole line of ucis
+(`GamesTreeTarget.addLine`) that OpeningsBuilder folds from the opening's own root, since a
+games-tree EPD is not guaranteed to be a node the target opening has ever reached. A malformed
+game inside a multi-game fetch (lichess's export, one chess.com month) is now skipped
+individually rather than discarding every other game in the same batch — `fetchRecentLichessGames`/
+`fetchRecentChesscomGames` return `{ games, skipped }` so "folded N of M" stays honest about games
+that never parsed at all, not just ones the tree itself excluded. `MAX_RECENT_ARCHIVE_MONTHS`
+(chess.com) lowered from 36 to 12 (still a first guess) since each month is its own serialized
+request. The games-tree's tree is now built from the username captured at load time, not the
+live username input, so editing the field after a load no longer rebuilds against a half-typed
+name.
 
 ## Open questions (not yet asked)
-- How the user's played games are pulled in (openingtree's importer is the candidate).
+- How the user's played games are pulled in: answered 2026-09-17 — `packages/opening-tree` folds
+  `fetchRecentLichessGames`/`fetchRecentChesscomGames` results, own implementation rather than
+  openingtree's importer (see "Code-review fixes" above).
 - Whether repertoires are shared between users.
 - Other (non-drill) modes' deviation handling, e.g. free play against the repertoire.
 - SRS scheduling scheme (Chessable's 8 fixed levels is the only documented one; SM-2/FSRS are

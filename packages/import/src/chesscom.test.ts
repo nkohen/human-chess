@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ChesscomRateLimited, configureChesscomFetch, type ChesscomFetchImpl, type ChesscomGame } from '@human-chess/chesscom';
 import { jsonResponse } from '@human-chess/site-client/testing';
-import { fetchLatestChesscomGame } from './chesscom';
+import { fetchLatestChesscomGame, fetchRecentChesscomGames } from './chesscom';
 
 const ARCHIVES_URL = 'https://api.chess.com/pub/player/nadavk/games/archives';
 const month = (y: number, m: number): string => `https://api.chess.com/pub/player/nadavk/games/${y}/${String(m).padStart(2, '0')}`;
@@ -234,5 +234,88 @@ describe('fetchLatestChesscomGame', () => {
     await expect(fetchLatestChesscomGame('nadavk', fetchImpl)).rejects.toThrow(
       /nadavk's latest game on chess\.com has no moves/,
     );
+  });
+});
+
+describe('fetchRecentChesscomGames', () => {
+  it('walks archives newest-first, returning games newest-first within and across months', async () => {
+    const fetchImpl = fakeFetch({
+      [ARCHIVES_URL]: { status: 200, body: { archives: [month(2026, 1), month(2026, 2)] } },
+      [month(2026, 2)]: {
+        status: 200,
+        // chess.com's own order is oldest-first within a month.
+        body: { games: [game({ end_time: 100, pgn: taggedPgn('feb-older') }), game({ end_time: 200, pgn: taggedPgn('feb-newer') })] },
+      },
+      [month(2026, 1)]: { status: 200, body: { games: [game({ end_time: 50, pgn: taggedPgn('jan-only') })] } },
+    });
+
+    const { games, skipped } = await fetchRecentChesscomGames('nadavk', { maxGames: 10, fetchImpl });
+    expect(games).toHaveLength(3);
+    expect(skipped).toBe(0);
+    expect(games[0]!.pgn).toContain('feb-newer');
+    expect(games[1]!.pgn).toContain('feb-older');
+    expect(games[2]!.pgn).toContain('jan-only');
+  });
+
+  it('stops requesting further months once maxGames is reached', async () => {
+    const fetchedUrls: string[] = [];
+    const routes: Record<string, { status: number; body: unknown }> = {
+      [ARCHIVES_URL]: { status: 200, body: { archives: [month(2026, 1), month(2026, 2)] } },
+      [month(2026, 2)]: { status: 200, body: { games: [game({ pgn: taggedPgn('a') }), game({ pgn: taggedPgn('b') })] } },
+      [month(2026, 1)]: { status: 200, body: { games: [game({ pgn: taggedPgn('c') })] } },
+    };
+    const trackingFetch: ChesscomFetchImpl = async (url: string) => {
+      fetchedUrls.push(url);
+      const route = routes[url];
+      if (!route) return jsonResponse(404, {});
+      return jsonResponse(route.status, route.body);
+    };
+
+    const { games } = await fetchRecentChesscomGames('nadavk', { maxGames: 1, fetchImpl: trackingFetch });
+    expect(games).toHaveLength(1);
+    expect(fetchedUrls).not.toContain(month(2026, 1));
+  });
+
+  it('clamps maxGames into [1, 300]', async () => {
+    const fetchImpl = fakeFetch({
+      [ARCHIVES_URL]: { status: 200, body: { archives: [month(2026, 1)] } },
+      [month(2026, 1)]: {
+        status: 200,
+        body: { games: Array.from({ length: 5 }, (_, i) => game({ end_time: i, pgn: taggedPgn(`g${i}`) })) },
+      },
+    });
+    const { games } = await fetchRecentChesscomGames('nadavk', { maxGames: -5, fetchImpl });
+    expect(games).toHaveLength(1);
+  });
+
+  it('returns an empty result when the user has no archives', async () => {
+    const fetchImpl = fakeFetch({ [ARCHIVES_URL]: { status: 200, body: { archives: [] } } });
+    await expect(fetchRecentChesscomGames('nadavk', { maxGames: 100, fetchImpl })).resolves.toEqual({ games: [], skipped: 0 });
+  });
+
+  it('skips a malformed game in a month instead of dropping the whole fetch (M1)', async () => {
+    const fetchImpl = fakeFetch({
+      [ARCHIVES_URL]: { status: 200, body: { archives: [month(2026, 3)] } },
+      [month(2026, 3)]: {
+        status: 200,
+        body: {
+          // chess.com returns a month's games oldest-first (see other tests in this file), so
+          // this array is ordered end_time 100 < 200 < 300.
+          games: [
+            game({ end_time: 100, pgn: taggedPgn('good-older') }),
+            // An illegal second move (no knight can reach f6 from the start position after
+            // 1.e4 e5) — parseSan fails inside parsedFromChessopsGame, throwing RulesError.
+            game({ end_time: 200, pgn: '1. e4 e5 2. Nf6 *' }),
+            game({ end_time: 300, pgn: taggedPgn('good-newer') }),
+          ],
+        },
+      },
+    });
+
+    const { games, skipped } = await fetchRecentChesscomGames('nadavk', { maxGames: 10, fetchImpl });
+    expect(games).toHaveLength(2);
+    expect(skipped).toBe(1);
+    expect(games[0]!.pgn).toContain('good-newer');
+    expect(games[1]!.pgn).toContain('good-older');
   });
 });

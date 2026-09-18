@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePgnGame, RulesError } from './index';
+import { parsePgnGame, parsePgnGames, RulesError } from './index';
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -54,5 +54,70 @@ describe('parsePgnGame', () => {
 1. e4 e5 *`;
     expect(() => parsePgnGame(pgn)).toThrow(RulesError);
     expect(() => parsePgnGame(pgn)).toThrow(/[Cc]razyhouse/);
+  });
+});
+
+describe('parsePgnGames', () => {
+  it('parses every game in a multi-game PGN (lichess export format), each with its own reconstructed pgn text', () => {
+    const pgn = `[Event "Game 1"]
+[White "A"]
+[Black "B"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 1-0
+
+[Event "Game 2"]
+[White "C"]
+[Black "D"]
+[Result "0-1"]
+
+1. d4 d5 0-1
+`;
+    const { games, skipped } = parsePgnGames(pgn);
+    expect(games).toHaveLength(2);
+    expect(skipped).toBe(0);
+    expect(games[0]!.headers.White).toBe('A');
+    expect(games[0]!.ucis).toEqual(['e2e4', 'e7e5', 'g1f3']);
+    expect(games[1]!.headers.White).toBe('C');
+    expect(games[1]!.ucis).toEqual(['d2d4', 'd7d5']);
+
+    // Each game's own `pgn` text round-trips through parsePgnGame to the same moves.
+    expect(games[0]!.pgn).toBeDefined();
+    expect(parsePgnGame(games[0]!.pgn!).ucis).toEqual(games[0]!.ucis);
+    expect(parsePgnGame(games[1]!.pgn!).ucis).toEqual(games[1]!.ucis);
+  });
+
+  it('returns an empty result for text with no games, and does not set pgn on parsePgnGame', () => {
+    expect(parsePgnGames('')).toEqual({ games: [], skipped: 0 });
+    expect(parsePgnGame('1. e4 e5 *').pgn).toBeUndefined();
+  });
+
+  it('skips one malformed game without discarding the good games around it (M1)', () => {
+    const pgn = `[Event "Game 1"]
+[White "A"]
+[Black "B"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 1-0
+
+[Event "Game 2 (illegal move)"]
+[White "C"]
+[Black "D"]
+[Result "0-1"]
+
+1. e4 e5 2. Nf6 0-1
+
+[Event "Game 3"]
+[White "E"]
+[Black "F"]
+[Result "1/2-1/2"]
+
+1. d4 d5 1/2-1/2
+`;
+    const { games, skipped } = parsePgnGames(pgn);
+    expect(games).toHaveLength(2);
+    expect(skipped).toBe(1);
+    expect(games[0]!.headers.White).toBe('A');
+    expect(games[1]!.headers.White).toBe('E');
   });
 });

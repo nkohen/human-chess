@@ -12,7 +12,9 @@
   "dependencies": {
     "@human-chess/board": "workspace:*",
     "@human-chess/engine": "workspace:*",
+    "@human-chess/import": "workspace:*",
     "@human-chess/lichess": "workspace:*",
+    "@human-chess/opening-tree": "workspace:*",
     "@human-chess/rules": "workspace:*",
     "@human-chess/ui": "workspace:*",
     "react": "^19.0.0"

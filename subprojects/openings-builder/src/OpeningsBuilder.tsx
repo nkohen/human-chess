@@ -9,7 +9,8 @@ import { Board } from '@human-chess/board';
 import { Button, Field, SegmentedControl, Status, Workbench } from '@human-chess/ui';
 import { BuilderView } from './BuilderView';
 import { DrillView } from './DrillView';
-import { createOpening, START_FEN, type Opening } from './repertoire';
+import { GamesTreeView } from './GamesTreeView';
+import { addMove, childrenOf, createOpening, START_FEN, type Opening } from './repertoire';
 import { loadDrillScope, loadRepertoire, saveDrillScope, saveRepertoire, type DrillScope } from './storage';
 import './openings-builder.css';
 
@@ -18,7 +19,7 @@ export interface OpeningsBuilderProps {
   engine: UciEngine | Error | undefined;
 }
 
-type Mode = 'build' | 'drill';
+type Mode = 'build' | 'drill' | 'games';
 
 const NO_DESTS = new Map<SquareName, SquareName[]>();
 
@@ -128,19 +129,25 @@ export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Ele
       <Button variant={selected ? 'secondary' : 'primary'} onClick={create} disabled={!newName.trim()}>
         Create
       </Button>
-      {selected && (
-        <Field label="Mode">
-          <SegmentedControl
-            ariaLabel="Build or drill"
-            options={[
-              { value: 'build', label: 'Build' },
-              { value: 'drill', label: 'Drill' },
-            ]}
-            value={mode}
-            onChange={setMode}
-          />
-        </Field>
-      )}
+      {/* Not gated on `selected`: "Your games" (diagnosis over played games) is useful before
+       * any opening exists yet, unlike Build/Drill which need one to act on. Ideally Build and
+       * Drill would be disabled (not hidden) when no opening is selected, but `SegmentedControl`
+       * / `SegmentedControlOption` (packages/ui/src/components.tsx) has no per-option `disabled`
+       * field today — only a whole-control one — so that's left for a follow-up to the shared
+       * primitive rather than a one-off workaround here (reviewer, M6). Build/Drill already
+       * render their own "select or create an opening" prompt when clicked with none selected. */}
+      <Field label="Mode">
+        <SegmentedControl
+          ariaLabel="Build, drill, or your games"
+          options={[
+            { value: 'build', label: 'Build' },
+            { value: 'drill', label: 'Drill' },
+            { value: 'games', label: 'Your games' },
+          ]}
+          value={mode}
+          onChange={setMode}
+        />
+      </Field>
       {selected && mode === 'drill' && (
         <Field label="Drill scope">
           <SegmentedControl
@@ -193,6 +200,35 @@ export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Ele
   }
   if (selected && mode === 'drill') {
     return <DrillView openings={drillOpenings} controls={controls} status={engineStatus} />;
+  }
+  if (mode === 'games') {
+    // "Add to <opening>" only when the selected opening's own colour matches the tree being
+    // viewed — GamesTreeView itself checks that (it owns the colour picker). GamesTreeView
+    // hands back a whole line of ucis (from the opening's own root), not a single (epd, uci)
+    // pair: its EPDs live in the games tree, not necessarily a node `selected` has ever reached,
+    // and addMove now throws on an unknown fromEpd (repertoire.ts, B2) rather than silently
+    // creating an orphan node. So this walks `selected`'s own tree from its root, adding each
+    // move of the line in turn — each addMove call is idempotent, and each one's own `to` EPD
+    // (read back via childrenOf, not re-derived) is guaranteed to exist by the time the next
+    // move needs it as its fromEpd.
+    const targetOpening = selected
+      ? {
+          name: selected.name,
+          color: selected.color,
+          addLine: (ucis: string[]): void => {
+            let opening = selected;
+            let fromEpd = selected.root;
+            for (const uci of ucis) {
+              opening = addMove(opening, fromEpd, uci);
+              const edge = childrenOf(opening, fromEpd).find(m => m.uci === uci);
+              if (!edge) break; // addMove always adds (or already has) this exact edge
+              fromEpd = edge.to;
+            }
+            updateOpening(opening);
+          },
+        }
+      : undefined;
+    return <GamesTreeView controls={controls} status={engineStatus} targetOpening={targetOpening} />;
   }
 
   return (

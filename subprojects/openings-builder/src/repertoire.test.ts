@@ -10,6 +10,11 @@ describe('repertoire', () => {
     expect(kids[0]).toMatchObject({ uci: 'e2e4', san: 'e4' });
   });
 
+  it('throws on a fromEpd the opening does not have, rather than silently creating an orphan node (B2)', () => {
+    const opening = createOpening('Italian', 'white');
+    expect(() => addMove(opening, 'not-a-real-epd', 'e2e4')).toThrow(/not a node/);
+  });
+
   it('is idempotent: adding the same move twice does not duplicate the edge', () => {
     let opening = createOpening('Italian', 'white');
     opening = addMove(opening, opening.root, 'e2e4');

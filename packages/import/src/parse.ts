@@ -1,6 +1,7 @@
 // Builds an ImportedGame from raw PGN text, whatever its source. PGN parsing is delegated to
-// @human-chess/rules (parsePgnGame), which is the only package allowed to import chessops.
-import { parsePgnGame } from '@human-chess/rules';
+// @human-chess/rules (parsePgnGame/parsePgnGames), which is the only package allowed to import
+// chessops.
+import { parsePgnGame, parsePgnGames, type ParsedPgnGame } from '@human-chess/rules';
 import type { ImportedGame } from './types';
 
 /** A fetcher's own more-authoritative values for `url`/`playedAt`, when it has them (e.g.
@@ -19,7 +20,39 @@ export function toImportedGame(
   username?: string,
   overrides: ImportedGameOverrides = {},
 ): ImportedGame {
-  const { headers, startFen, ucis, sans } = parsePgnGame(pgn);
+  return fromParsed(source, parsePgnGame(pgn), pgn, username, overrides);
+}
+
+export interface ImportedGamesResult {
+  games: ImportedGame[];
+  /** Games in the multi-game text that failed to parse (an illegal move, an unsupported
+   * variant) and were skipped, per `@human-chess/rules`'s `parsePgnGames` — never thrown, so one
+   * bad game in a fetched batch doesn't blank a caller's whole result. A caller reporting "N of
+   * M games used" needs this alongside `games.length` for that count to stay honest: M is
+   * `games.length + skipped`, not just however many games the site said it sent. */
+  skipped: number;
+}
+
+/**
+ * Every game in a multi-game PGN (e.g. lichess's `?max=N` export, which returns several games
+ * separated by blank lines) as its own ImportedGame. There is no per-game JSON override here
+ * (unlike chess.com's Published-Data API, lichess's multi-game export is PGN only) — each
+ * game's url/playedAt come from its own headers, same as the single-game lichess path.
+ */
+export function toImportedGames(source: ImportedGame['source'], pgn: string, username?: string): ImportedGamesResult {
+  const { games: parsed, skipped } = parsePgnGames(pgn);
+  const games = parsed.map(p => fromParsed(source, p, p.pgn ?? pgn, username, {}));
+  return { games, skipped };
+}
+
+function fromParsed(
+  source: ImportedGame['source'],
+  parsed: ParsedPgnGame,
+  pgn: string,
+  username: string | undefined,
+  overrides: ImportedGameOverrides,
+): ImportedGame {
+  const { headers, startFen, ucis, sans } = parsed;
   const white = headers.White;
   const black = headers.Black;
   const result = headers.Result;

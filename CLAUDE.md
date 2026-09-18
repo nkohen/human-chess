@@ -56,12 +56,13 @@ errors. Run it after any layout change; a real phone on the LAN is still the fin
 - `packages/chesscom` — the one client for chess.com's Published-Data API (api.chess.com): same one-at-a-time/429-cooldown/cache policy as lichess, no login needed.
 - `packages/import` — games from lichess (public export API), chess.com (Published-Data API), or pasted PGN into one ImportedGame shape; parsing via rules.
 - `packages/review` — per-move engine review of a game: evals, loss, classification, best move, all with provenance.
+- `packages/opening-tree` (built 2026-09-17) — folds a player's own imported games into a position-graph tree (EPD-keyed, transpositions merge) with per-move counts and W/D/L from that player's side, traceable back to the source games.
 - `subprojects/<name>` — one self-standing tool each; consumes packages, never duplicates them.
 - `apps/web` — the Vite app hosting every subproject behind a hash route.
 - `scripts/` — repo scripts (copying the wasm engine into the web app's public folder).
 
 Reserved package names for pieces not yet built: `tablebase`, `store`,
-`concepts`, `rooms`, `srs`, `opening-tree`. Add a package only with a one-line
+`concepts`, `rooms`, `srs`. Add a package only with a one-line
 responsibility here and in memory/shared-layer.md.
 
 ## Conventions

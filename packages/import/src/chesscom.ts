@@ -11,11 +11,25 @@ import {
   type ChesscomFetchImpl,
   type ChesscomGame,
 } from '@human-chess/chesscom';
+import { RulesError } from '@human-chess/rules';
 import { toImportedGame } from './parse';
-import type { ImportedGame } from './types';
+import type { ImportedGame, RecentGamesResult } from './types';
 
 const TIMEOUT_MS = 15_000;
 const MAX_ARCHIVE_MONTHS = 12;
+// fetchRecentChesscomGames pages by month (chess.com has no "give me N games" endpoint), so a
+// cap keeps a sparse or new account from walking years of empty months while a caller asks for
+// 300 games — each month is its own serialized request (packages/site-client's one-at-a-time
+// queue), so the cap is also the fetch's worst-case request count (1 archives call + this many
+// month calls). Lowered from 36 to 12 (reviewer, 2026-09-17): a year of monthly archive requests
+// is already a lot of serialized round-trips for one "Load" click, and a player inactive for
+// over a year on a given site is a much rarer case than the request-count cost of covering them
+// by default. First guess either way, not derived from real usage data; still not measured.
+const MAX_RECENT_ARCHIVE_MONTHS = 12;
+/** Matches the openings builder's games-tree form
+ * (subprojects/openings-builder/src/GamesTreeView.tsx) — one archive request per month either
+ * way, this just bounds how many games a single fetchRecentChesscomGames call can return. */
+export const MAX_RECENT_CHESSCOM_GAMES = 300;
 
 /** Runs one archives/monthly-games call with a 15 s timeout, surfacing a clear message on
  * timeout and passing a rate-limit error through as-is (same shape as fetchLatestLichessGame). */
@@ -83,4 +97,60 @@ export async function fetchLatestChesscomGame(
   }
 
   throw new Error(`${username} has no standard chess games in the last 12 months of play on chess.com`);
+}
+
+export interface FetchRecentChesscomGamesOpts {
+  /** Clamped to [1, MAX_RECENT_CHESSCOM_GAMES]. */
+  maxGames: number;
+  fetchImpl?: ChesscomFetchImpl;
+}
+
+/**
+ * `username`'s most recent standard games on chess.com, newest first, walking monthly archives
+ * newest-first (one request per month) until `maxGames` is reached or MAX_RECENT_ARCHIVE_MONTHS
+ * months have been walked with nothing left to find. Non-standard games (chess960, bughouse,
+ * ...) are skipped, same filter as fetchLatestChesscomGame.
+ *
+ * Returns `RecentGamesResult` (games + a parse-skipped count, M1): each month's games are
+ * converted one at a time, catching RulesError individually, so one malformed game does not
+ * abort the whole fetch (and drop every other month already collected) the way an unhandled
+ * throw from `toImportedGame` would.
+ */
+export async function fetchRecentChesscomGames(
+  username: string,
+  { maxGames, fetchImpl = chesscomFetch }: FetchRecentChesscomGamesOpts,
+): Promise<RecentGamesResult> {
+  const max = Math.max(1, Math.min(MAX_RECENT_CHESSCOM_GAMES, Math.round(maxGames)));
+  const archives = await withTimeout(signal => chesscomArchives(username, { signal, fetchImpl }));
+  if (archives.length === 0) return { games: [], skipped: 0 };
+
+  const newestFirst = [...archives].reverse().slice(0, MAX_RECENT_ARCHIVE_MONTHS);
+  const games: ImportedGame[] = [];
+  let skipped = 0;
+
+  for (const [i, archiveUrl] of newestFirst.entries()) {
+    if (games.length >= max) break;
+    const monthGames = await withTimeout(signal =>
+      chesscomMonthlyGames(archiveUrl, { signal, fetchImpl, newest: i === 0 }),
+    );
+    // chess.com returns a month's games oldest-first; reverse so this month's games are also
+    // walked newest-first, matching the newest-first contract across the whole result.
+    const standardNewestFirst = monthGames.filter(g => g.rules === 'chess').reverse();
+    for (const g of standardNewestFirst) {
+      if (games.length >= max) break;
+      try {
+        games.push(
+          toImportedGame('chess.com', g.pgn, username, {
+            url: g.url,
+            playedAt: new Date(g.end_time * 1000).toISOString(),
+          }),
+        );
+      } catch (err) {
+        if (!(err instanceof RulesError)) throw err;
+        skipped += 1;
+      }
+    }
+  }
+
+  return { games, skipped };
 }
