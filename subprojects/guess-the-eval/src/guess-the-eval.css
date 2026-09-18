@@ -16,6 +16,9 @@
    darker-shaded "dominating". The band hues are a bespoke gradient with no equivalent in the
    shared token set, so they stay literal; spacing and the two marker colours read from tokens. */
 .gte-scale { width: 100%; margin-top: var(--hc-space-5); }
+/* PvP's reveal shows two guess markers; the second's label sits further above the bar (see
+   .gte-scale-marker-guess2 below), so this variant needs extra clearance above it. */
+.gte-scale-dual { margin-top: var(--hc-space-6); }
 .gte-scale-bar { position: relative; display: flex; width: 100%; height: 1.25rem; border-radius: 3px; overflow: visible; }
 .gte-scale-seg { height: 100%; }
 .gte-seg-black-dominating { background: #2a0d0d; }
@@ -31,9 +34,13 @@
 .gte-scale-marker { position: absolute; top: 0; width: 0; height: 100%; transform: translateX(-50%); }
 .gte-scale-marker::before { content: ''; position: absolute; left: -1px; top: -0.3rem; width: 2px; height: calc(100% + 0.6rem); }
 .gte-scale-marker-guess::before { background: var(--hc-accent); }
+.gte-scale-marker-guess2::before { background: var(--hc-success); }
 .gte-scale-marker-truth::before { background: var(--hc-warning); }
 .gte-scale-marker-label { position: absolute; left: 50%; transform: translateX(-50%); font-size: 0.68rem; white-space: nowrap; font-weight: bold; }
 .gte-scale-marker-guess .gte-scale-marker-label { top: -1.15rem; color: var(--hc-accent); }
+/* Pushed further out than the primary guess's label (PvP reveal, two guesses close together on
+   the same scale) so the two labels stack instead of overlapping when the guesses are close. */
+.gte-scale-marker-guess2 .gte-scale-marker-label { top: -2.5rem; color: var(--hc-success); }
 .gte-scale-marker-truth .gte-scale-marker-label { bottom: -1.15rem; color: var(--hc-warning); }
 
 .gte-scale-legend { display: flex; flex-wrap: wrap; gap: var(--hc-space-1) var(--hc-space-3); margin-top: 1.6rem; font-size: 0.72rem; color: var(--hc-text-muted); }
@@ -61,3 +68,28 @@
 .gte-summary-row { padding: var(--hc-space-2) 0; border-top: 1px solid var(--hc-border); cursor: default; }
 .gte-summary-row:first-child { border-top: none; }
 .gte-summary-row-values { font-size: 0.78rem; color: var(--hc-text-muted); white-space: nowrap; }
+
+/* Timed guesses (item 1/2, PvE optional / PvP always-on clock): text + a thin bar, both reading
+   from tokens; "running low" swaps to the danger colour on both. */
+.gte-countdown { margin-top: var(--hc-space-2); }
+.gte-countdown-text { font-size: var(--hc-text-sm); color: var(--hc-text-muted); font-weight: 600; }
+.gte-countdown-bar { height: 6px; border-radius: 3px; background: var(--hc-surface-2); overflow: hidden; margin-top: var(--hc-space-1); }
+.gte-countdown-bar-fill { height: 100%; background: var(--hc-accent); border-radius: 3px 0 0 3px; transition: width 0.1s linear; }
+.gte-countdown--low .gte-countdown-text { color: var(--hc-danger); }
+.gte-countdown--low .gte-countdown-bar-fill { background: var(--hc-danger); }
+
+/* PvP's hand-over screen (item 2): no board content, just the pass-the-device message and one
+   button — the slider-hiding mechanism pass-and-play needs since there is no per-player screen. */
+.gte-handover-message { font-size: var(--hc-text-lg); font-weight: 600; margin: 0 0 var(--hc-space-3); text-align: center; }
+
+/* AnalysisPanel's top-3 lines (item 3): same list shape as openings-builder's MultiPV lines,
+   kept local since this subproject has no "add to tree" action to share a component around. */
+.gte-analysis-lines { list-style: none; padding: 0; margin: var(--hc-space-2) 0 0; display: flex; flex-direction: column; gap: var(--hc-space-2); }
+
+/* PvP's results screen (item 2): two players' bars per position, plus a compact eval scale with
+   both guesses and the truth. */
+.gte-pvp-scores { display: flex; flex-direction: column; gap: var(--hc-space-1); }
+.gte-pvp-scores .gte-bar-value { min-width: 8rem; }
+.gte-bar-fill--p2 { background: var(--hc-success); }
+.gte-pvp-row-header { display: flex; justify-content: space-between; align-items: baseline; gap: var(--hc-space-2); margin-bottom: var(--hc-space-1); }
+.gte-pvp-winner { font-size: var(--hc-text-lg); font-weight: 600; margin: var(--hc-space-2) 0 var(--hc-space-4); text-align: center; }

@@ -40,17 +40,23 @@ export interface EvalScaleProps {
   /** White's perspective. */
   truth: Score;
   /** Short (~10px) with no legend and no marker text labels — just the coloured bands and the
-   * two marker ticks. Used for the per-round rows on the summary screen (item 5, user feedback
+   * marker ticks. Used for the per-round rows on the summary screen (item 5, user feedback
    * 2026-09-16), where the eval/guess values are printed as text alongside the row instead. */
   compact?: boolean;
+  /** Prefix for the primary guess marker's label, e.g. a PvP player's name. Defaults to "Guess". */
+  guessLabel?: string;
+  /** A second marker (PvP's reveal: the other player's guess) in a distinct colour, so the two
+   * guesses and the truth are never confused with each other. */
+  secondGuess?: { cp: number; label: string };
 }
 
-export function EvalScale({ guessCp, truth, compact = false }: EvalScaleProps): React.JSX.Element {
+export function EvalScale({ guessCp, truth, compact = false, guessLabel = 'Guess', secondGuess }: EvalScaleProps): React.JSX.Element {
   const truthPct = truth.type === 'mate' ? (mateSide(truth) === 'white' ? 100 : 0) : pct(truth.value);
   const guessPct = pct(guessCp);
+  const secondGuessPct = secondGuess ? pct(secondGuess.cp) : undefined;
 
   return (
-    <div className={`gte-scale${compact ? ' gte-scale-compact' : ''}`}>
+    <div className={`gte-scale${compact ? ' gte-scale-compact' : ''}${secondGuess && !compact ? ' gte-scale-dual' : ''}`}>
       <div className="gte-scale-bar">
         {SEGMENTS.map(seg => (
           <div
@@ -61,8 +67,21 @@ export function EvalScale({ guessCp, truth, compact = false }: EvalScaleProps): 
           />
         ))}
         <div className="gte-scale-marker gte-scale-marker-guess" style={{ left: `${guessPct}%` }}>
-          {!compact && <span className="gte-scale-marker-label">Guess {formatPawns(guessCp)}</span>}
+          {!compact && (
+            <span className="gte-scale-marker-label">
+              {guessLabel} {formatPawns(guessCp)}
+            </span>
+          )}
         </div>
+        {secondGuess && (
+          <div className="gte-scale-marker gte-scale-marker-guess2" style={{ left: `${secondGuessPct}%` }}>
+            {!compact && (
+              <span className="gte-scale-marker-label">
+                {secondGuess.label} {formatPawns(secondGuess.cp)}
+              </span>
+            )}
+          </div>
+        )}
         <div className="gte-scale-marker gte-scale-marker-truth" style={{ left: `${truthPct}%` }}>
           {!compact && <span className="gte-scale-marker-label">{formatScore(truth)}</span>}
         </div>

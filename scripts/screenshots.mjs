@@ -51,7 +51,11 @@ const ROUTES = [
   // don't apply to it; every other route has at least one real button.
   { name: 'home', hash: '', noPrimaryControl: true },
   { name: 'endgames', hash: 'endgames', hasBoardOnLoad: true },
-  { name: 'guess-the-eval', hash: 'guess-the-eval', hasBoardOnLoad: true },
+  // Guess the eval now opens on a settings Page (mode + time limit, 2026-09-17) rather than
+  // straight onto a board, so it's a `extra` route like memory/opening-game: first paint is
+  // checked as a Page, then `driveGuessTheEvalStart` starts a solo round to reach the board
+  // screen and check that too.
+  { name: 'guess-the-eval', hash: 'guess-the-eval', extra: 'guess-the-eval-start' },
   { name: 'visualization', hash: 'visualization', hasBoardOnLoad: true },
   { name: 'hand-and-brain', hash: 'hand-and-brain', hasBoardOnLoad: true },
   { name: 'openings', hash: 'openings', hasBoardOnLoad: true },
@@ -394,6 +398,17 @@ async function driveOpeningGameSetup(page) {
   await page.waitForSelector('cg-board', { timeout: 20_000 });
 }
 
+// ---------- the guess-the-eval settings-then-round extra state ----------
+
+/** Starts a solo round (the settings screen's defaults: Solo mode, no time limit) so there is a
+ * board screen to check in addition to the settings Page checked at first paint. */
+async function driveGuessTheEvalStart(page) {
+  await page.waitForSelector('.hc-page', { timeout: 20_000 });
+  await waitForEnabledButton(page, 'Start round');
+  await page.locator('button', { hasText: /^Start round$/ }).click();
+  await page.waitForSelector('cg-board', { timeout: 20_000 });
+}
+
 async function performTouchMove(page, viewportName) {
   const { e2, e4 } = await computeSquareCenters(page);
   if (viewportName === 'mobile') {
@@ -554,6 +569,12 @@ async function main() {
             await driveOpeningGameSetup(page);
             await performTouchMove(page, viewport.name);
             await capture('touchmove');
+          }
+
+          if (route.extra === 'guess-the-eval-start') {
+            await driveGuessTheEvalStart(page);
+            await waitForNotBusy(page);
+            await capture('started');
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

@@ -73,6 +73,29 @@ curated positions, saving results. Reviewed by the code-reviewer agent 2026-09-1
 - The results page should be visual: bars, not text (→ total bar, per-position points bars and
   compact eval scales).
 
+**Built 2026-09-17** (PvP, time limits, analyse-after-guessing): a settings screen (`Page`)
+before the round picks solo vs pass-and-play PvP, and the time limit; the round itself stays a
+`Workbench`. **PvE time limit**: none (default) / 15s / 30s / 60s per position, a plain-text
+countdown plus a thin bar near the slider; on expiry the current slider value locks in as the
+guess and the reveal says the time ran out. **PvP**: same-device pass-and-play only (no rooms;
+`packages/rooms` is still reserved and unbuilt) — two named players (defaults "Player 1"/"Player
+2", editable, both persisted), both see the same five positions, a hand-over screen ("Pass to
+&lt;name&gt;") hides the slider from the other player between guesses, reveal shows both guesses
+and the answer on one eval scale plus per-player points, running score, and a results screen with
+both totals, per-position points side by side, and a winner line. PvP is always timed; default
+30s, options 15/30/60s (first guess, same three options as PvE). The interview's GeoGuessr rule
+("once one player locks in, the other gets a short countdown") needs simultaneous play and isn't
+buildable pass-and-play, so it's replaced with a recorded decision: **player 2's limit is
+min(chosen limit, the time player 1 actually used + 10s)**, first guess, pure function in
+`timing.ts` (`pvpSecondPlayerLimitMs`), tested. **Analyse after guessing**: PvE gets an "Analyse
+this position" button on the reveal that turns the board movable for both sides (legal moves via
+`@human-chess/rules`) with undo and a top-three-lines MultiPV panel (depth 16, engine name and
+depth on screen, streamed like openings-builder's `MultiPvPanel`) and a "Back to the round" exit;
+PvP only offers analysis on the results screen, for any of the five positions, per the interview
+("any position at the end, not mid-match"). Scoring stayed in `scoring.ts`, unchanged. Not built:
+real-time/networked PvP (still pass-and-play only), saving results (still in-memory per round),
+a shared/multiplayer analysis board (each analyse session is local to the viewer).
+
 ## Open questions (not yet asked)
 - Adaptive difficulty.
 - Eval presentation: centipawns vs win probability.
