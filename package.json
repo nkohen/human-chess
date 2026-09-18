@@ -11,6 +11,7 @@
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm test",
     "screenshots": "node scripts/screenshots.mjs",
+    "reload-smoke": "node scripts/reload-smoke.mjs",
     "deploy-web": "bash scripts/deploy-web.sh"
   },
   "devDependencies": {

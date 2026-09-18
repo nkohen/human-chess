@@ -33,6 +33,7 @@ npx pnpm@10 check        # tsc --noEmit over the workspace, then vitest
 npx pnpm@10 dev          # web app on http://localhost:5173 (copies the wasm engine first)
 npx pnpm@10 build        # production build into apps/web/dist
 npx pnpm@10 screenshots  # every route at desktop, short-desktop and iPhone 13 sizes, with layout checks (docs/visual-testing.md)
+npx pnpm@10 reload-smoke # every route reloaded in real Chromium and required to come back unchanged (docs/visual-testing.md; LIVE_BASE=<url> runs it against a deployed build)
 HC_SOURCE_URL=<public repo url> npx pnpm@10 deploy  # check, build, publish to nkohen.github.io/human-chess/ (memory/deployment.md; refuses without the source URL the AGPL/GPL source offer needs)
 ```
 

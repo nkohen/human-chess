@@ -126,6 +126,24 @@ if the "blocked" count is ever 0 across a full run, something changed in a way t
 exercising this path and is worth a second look, and if it's mysteriously large, something may
 be retrying against the real host instead of accepting the fixture.
 
+## Reload survival in a real browser
+
+`scripts/reload-smoke.mjs` (2026-09-18) is the live complement to the per-subproject jsdom
+reload tests. It starts its own Vite (port 5198, `RELOAD_SMOKE_PORT` to change it) under the
+same network allowlist as the screenshot harness, and for every route loads the screen, waits
+for it to settle, captures every piece on the board, the heading and the `human-chess.*`
+localStorage keys, reloads, and requires all three unchanged with no console error. Two
+targeted flows follow: a 60-second guess-the-eval solo round must keep its position with a
+clock that never counts up across the reload, and the opening training game must keep its
+board after 1.e4 and the engine's reply.
+
+```
+npx pnpm@10 reload-smoke                                               # dev server
+LIVE_BASE=https://nkohen.github.io/human-chess/ npx pnpm@10 reload-smoke   # a deployed build
+```
+
+Against `LIVE_BASE` only that host is allowed through; everything else is still aborted.
+
 ## The one thing headless can't catch
 
 Headless Chromium uses a fixed viewport, so it **cannot reproduce iOS Safari's dynamic address
