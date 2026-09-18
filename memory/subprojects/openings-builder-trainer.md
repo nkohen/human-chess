@@ -226,6 +226,28 @@ the rules library; a parse failure drops the whole snapshot. Render tests
 (`OpeningsBuilder.render.test.ts`, `MoveTree.render.test.ts`, jsdom) seed storage, mount, assert.
 Rule and per-tool table: docs/design/2026-09-18-reload-survival.md.
 
+**Built 2026-09-18: own-games stats inside Build mode (user request: "add opening-tree
+functionality to the opening builder"; asked which shape, the user chose merging into the Build
+view over extending the separate mode).** BuilderView's aside now has a "Your games" panel
+between "Engine lines" and "Lichess explorer", shown on both turns: the node summary ("N of your
+games reached this position · W/D/L" from the tracked player's side), then one row per own-game
+move in count order — SAN, count, own-side W/D/L bar, score %, last played — with "Add" (user's
+turn: adds and moves along it via `playAndAdd`; opponent's turn: `addReplies`, no navigation), a
+check mark plus "Go" for moves already in the repertoire, and a "not in repertoire" badge on the
+user's turn for a move they played that the repertoire lacks (pure set membership against
+`childrenOf(opening, currentEpd)`; that badge is the point: where own games leave the line).
+The tree is built with the *opening's* colour and the persisted Your-games filter (read once at
+mount), so the two modes agree; BuilderView lists linked accounts once on mount
+(`getGamesStore().listSources()`) and never syncs. The sources → selected sources (persisted
+`sourceKeys`, removed accounts dropped) → games → GameFilter → `buildTree` chain moved into
+`ownGamesTree.ts` (`useOwnGamesTree`, `rowsForPosition`, unit-tested) and GamesTreeView uses the
+same hook; `WdlBar.tsx` is the one W/D/L bar (MoveTree, Diagnostics, the panel). Panel state
+precedence: load error → loading → no accounts → content. Files: `OwnGamesPanel.tsx`,
+`ownGamesTree.ts` (+test), `WdlBar.tsx`, `BuilderView.render.test.ts` (jsdom, seeds the
+in-memory games store). Not built: editing filters from Build mode (change them in Your games
+mode), a link that jumps to Your games mode, per-source colouring, merging with the lichess
+explorer numbers (still side by side).
+
 ## Open questions (not yet asked)
 - How the user's played games are pulled in: answered 2026-09-17 — `packages/opening-tree` folds
   `fetchRecentLichessGames`/`fetchRecentChesscomGames` results, own implementation rather than
