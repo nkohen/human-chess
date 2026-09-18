@@ -46,9 +46,9 @@ Most are probably fine to defer, but they should either be built or written down
 | Subproject | Unrecorded cut |
 |---|---|
 | Openings builder | Priority #2 of the interview: opening-tree analysis over your own played games (v) |
-| Openings builder | Drilling several openings with the union-of-graphs acceptance rule |
+| Openings builder | ~~Drilling several openings with the union-of-graphs acceptance rule~~ Built 2026-09-17: drill scope This opening / Several / All (colour); an opening stays live while its own graph matches every move played; replies drawn from the union |
 | Openings builder | Two-colour system linked by name; merge two openings at a position; the "split" override; design notes on a repertoire; spaced-repetition queue; drill replies weighted by real-opponent stats (code comment says "later", no user date) (v) |
-| Guess the eval | PvP GeoGuessr mode and its always-timed countdown; optional PvE time limit; "analyse the position after guessing" |
+| Guess the eval | ~~PvP GeoGuessr mode and its always-timed countdown; optional PvE time limit; "analyse the position after guessing"~~ Built 2026-09-17 as same-device pass-and-play (rooms are still unbuilt): PvP always timed with player 2's limit = min(limit, player 1's time + 10 s) in place of the GeoGuessr countdown; PvE limit none/15/30/60 s; analysis board with top-3 engine lines after the reveal (PvE) or from the results screen (PvP) |
 | Visualization trainer | Position sources (puzzles, own games, pedagogical pool); the progression ladder (longer lines, more pieces, obscuration); the timed position-memorizer minigame |
 | Puzzles | Cross-references to the other tools; own-game puzzle generation from the reviewer |
 | Bot-rating test | Goal 3: showing which suboptimal lines get punished at what rating; repertoire lines as a start position |
@@ -65,7 +65,7 @@ Most are probably fine to defer, but they should either be built or written down
 | Opening game | Colour choice white/black/random | Not asked for |
 | Bot-rating test | Provenance records live in the subproject's own localStorage | Provenance tagging was meant as a shared account-layer concern |
 | Memory trainer | One static "you played X, the game went Y" sentence per divergence | A situational discussion of each divergence |
-| Memory trainer, Hand and Brain, puzzles and others | Auto-queen on every promotion, no picker | Never discussed; six files repeat the idiom |
+| Memory trainer, Hand and Brain, puzzles and others | ~~Auto-queen on every promotion, no picker~~ Fixed 2026-09-17: the board shows a queen/knight/rook/bishop picker on every promotion, cancel by clicking elsewhere or Escape; every caller takes the chosen piece | Never discussed; six files repeated the idiom |
 | Game reviewer | Movetime cap, default 5 s (1 to 60 s) | Not asked for; added to fix engine timeouts |
 
 ## 4. Numbers that are first guesses waiting for you
