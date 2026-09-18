@@ -114,7 +114,6 @@ export function BuilderView({ opening, onOpeningChange, engine, controls, status
     };
     // Runs once on mount only — this view never adds/removes/syncs an account itself, so there is
     // nothing else that would need to re-list sources.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [ownGamesFilter] = useState(() => loadGamesTreeFilter());
   // Built with the opening's own colour, not the persisted Your-games colour (docs: the two
@@ -124,8 +123,19 @@ export function BuilderView({ opening, onOpeningChange, engine, controls, status
   const ownGamesTree = useOwnGamesTree({ sources: ownGamesSources, color: opening.color, filter: ownGamesFilter });
   const ownGamesTurnIsOwn = turn(pos) === opening.color;
   const onAddOwnGamesMove = (move: TreeMove): void => {
-    if (ownGamesTurnIsOwn) playAndAdd(move.uci);
-    else addReplies([move.uci]);
+    if (ownGamesTurnIsOwn) {
+      // Same try/catch-into-setReplyError symmetry as addReplies (opponent's-turn branch, just
+      // above): a rules-library rejection here (an own-games move that isn't legal at this exact
+      // position, however that ever happened) is reported, not left to throw past this handler.
+      try {
+        playAndAdd(move.uci);
+        setReplyError(undefined);
+      } catch (err) {
+        setReplyError(`Could not add: ${move.uci} (${err instanceof Error ? err.message : String(err)})`);
+      }
+    } else {
+      addReplies([move.uci]);
+    }
   };
   const onGoOwnGamesMove = (move: TreeMove): void => {
     const edge = children.find(m => m.uci === move.uci);

@@ -8,7 +8,8 @@
 import { useMemo, useState } from 'react';
 import { childrenOf, mostLostPositions, openingSummary, worstMoves, type GamesTree, type TreeMove } from '@human-chess/opening-tree';
 import { Button, Field, Panel } from '@human-chess/ui';
-import { pathFromSanLine, wdlPercents, wdlTitle } from './treeHelpers';
+import { pathFromSanLine } from './treeHelpers';
+import { WdlBar } from './WdlBar';
 
 export interface DiagnosticsProps {
   tree: GamesTree;
@@ -87,32 +88,24 @@ export function Diagnostics({ tree, minGames, onMinGamesChange, onShow }: Diagno
             </tr>
           </thead>
           <tbody>
-            {worst.map((entry, i) => {
-              const pct = wdlPercents(entry.move.results);
-              return (
-                <tr key={i}>
-                  <td>
-                    {entry.line.join(' ')}
-                    {entry.line.length > 0 ? ' ' : ''}
-                    {entry.move.san}
-                  </td>
-                  <td>{entry.move.count}</td>
-                  <td>
-                    <span className="ob-tree-wdl" title={wdlTitle(pct, entry.move.count)}>
-                      <span className="ob-tree-wdl-win" style={{ width: `${pct.win}%` }} />
-                      <span className="ob-tree-wdl-draw" style={{ width: `${pct.draw}%` }} />
-                      <span className="ob-tree-wdl-loss" style={{ width: `${pct.loss}%` }} />
-                    </span>{' '}
-                    {(entry.move.score * 100).toFixed(0)}%
-                  </td>
-                  <td>
-                    <Button variant="quiet" size="sm" onClick={() => onShow(pathToEntry(tree, entry.line, entry.move))}>
-                      Show
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
+            {worst.map((entry, i) => (
+              <tr key={i}>
+                <td>
+                  {entry.line.join(' ')}
+                  {entry.line.length > 0 ? ' ' : ''}
+                  {entry.move.san}
+                </td>
+                <td>{entry.move.count}</td>
+                <td>
+                  <WdlBar results={entry.move.results} count={entry.move.count} /> {(entry.move.score * 100).toFixed(0)}%
+                </td>
+                <td>
+                  <Button variant="quiet" size="sm" onClick={() => onShow(pathToEntry(tree, entry.line, entry.move))}>
+                    Show
+                  </Button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
         </div>

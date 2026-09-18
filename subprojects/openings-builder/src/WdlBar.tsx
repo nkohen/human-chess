@@ -1,8 +1,8 @@
 // The own-side win/draw/loss bar (green/grey/red, `.ob-tree-wdl*` — openings-builder.css), shared
-// by MoveTree.tsx and BuilderView's "Your games" panel (OwnGamesPanel.tsx) so the same markup
-// isn't hand-copied a second time. Own-side semantics throughout (the tracked player's own
-// result), never White's/Black's literally — see treeHelpers' `wdlPercents`/`wdlTitle`, which
-// this only renders.
+// by MoveTree.tsx, Diagnostics.tsx, and BuilderView's "Your games" panel (OwnGamesPanel.tsx) so
+// the same markup isn't hand-copied more than once. Own-side semantics throughout (the tracked
+// player's own result), never White's/Black's literally — see treeHelpers'
+// `wdlPercents`/`wdlTitle`, which this only renders.
 import type { WDL } from '@human-chess/opening-tree';
 import { cx } from '@human-chess/ui';
 import { wdlPercents, wdlTitle } from './treeHelpers';

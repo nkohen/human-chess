@@ -92,8 +92,10 @@ export interface UseOwnGamesTreeResult {
   tree: GamesTree;
   selectedSources: GameSource[];
   selectedGames: StoredImportedGame[];
-  /** True while the games-loading effect's promise for the current `sources` is in flight; false
-   * once it settles, success or failure. */
+  /** True until the games-loading effect's promise for the current `sources` has *successfully*
+   * resolved (derived as `loaded?.for !== sources` — see `useOwnGamesTree`'s own comment); a
+   * caller that also reads `loadError` should check that first, since a failed load leaves
+   * `loading` true rather than flipping it back to false. */
   loading: boolean;
   loadError: string | undefined;
 }
@@ -112,31 +114,40 @@ function errMessage(err: unknown): string {
  * requirement: the tree is not rebuilt on every move).
  */
 export function useOwnGamesTree({ sources, color, filter }: UseOwnGamesTreeArgs): UseOwnGamesTreeResult {
-  const [gamesBySource, setGamesBySource] = useState<SourceGames[]>([]);
-  const [loading, setLoading] = useState(false);
+  // `loaded` is set only once the effect's promise for the *current* `sources` has actually
+  // resolved — `loading`/`gamesBySource` below are then derived from whether `loaded.for` is
+  // still reference-equal to `sources`, rather than tracked as their own independently-set state.
+  // A pair of separately-set `useState`s (the previous shape here) left a one-render window where
+  // `sources` had already changed but `loading` hadn't been flipped back to `true` yet (its
+  // initial value is `false`, and `setLoading(true)` only lands once the effect runs) — that
+  // window is what let OwnGamesPanel paint "0 of your 0 games" between the sources changing and
+  // the loading state catching up (review finding, 2026-09-18). Deriving both from one `loaded`
+  // state makes that window impossible: `loading` is true for every render before `loaded.for ===
+  // sources`, with no gap.
+  const [loaded, setLoaded] = useState<{ for: GameSource[]; gamesBySource: SourceGames[] } | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     (async () => {
       try {
         const store = getGamesStore();
         const lists = await Promise.all(sources.map(async source => ({ source, games: await store.listGames(source) })));
         if (!cancelled) {
-          setGamesBySource(lists);
+          setLoaded({ for: sources, gamesBySource: lists });
           setLoadError(undefined);
         }
       } catch (err: unknown) {
         if (!cancelled) setLoadError(errMessage(err));
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [sources]);
+
+  const loading = loaded?.for !== sources;
+  const gamesBySource = loaded?.gamesBySource ?? [];
 
   const selectedSources = useMemo(() => selectSources(sources, filter.sourceKeys), [sources, filter.sourceKeys]);
   const selectedGames = useMemo(() => gamesForSources(gamesBySource, selectedSources), [gamesBySource, selectedSources]);

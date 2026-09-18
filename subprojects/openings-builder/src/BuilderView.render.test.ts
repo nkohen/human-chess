@@ -10,8 +10,10 @@
 // empty state shows when no account is linked at all.
 //
 // `getGamesStore()` is a module-level singleton (gamesStore.ts), so its state persists across
-// every test in this file — the no-accounts test runs first, before anything seeds a source, so
-// it never has to explicitly clear one.
+// every test in this file unless cleared — the afterEach below clears every source after each
+// test so no test's outcome depends on running before or after another (verified with
+// `--sequence.shuffle`; review finding, 2026-09-18 — the no-accounts test used to pass only
+// because it happened to run first).
 //
 // Authored as `.ts` (this repo's vitest config only picks up `*.test.ts`) using `createElement`
 // directly instead of JSX syntax.
@@ -30,10 +32,11 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   localStorage.clear();
   vi.unstubAllGlobals();
+  for (const s of await getGamesStore().listSources()) await getGamesStore().clearSource(s);
 });
 
 /** Same helper as tree.test.ts/MoveTree.render.test.ts/ownGamesTree.test.ts: a hand-written PGN
@@ -50,9 +53,13 @@ describe('BuilderView: "Your games" panel', () => {
 
     const { container } = render(createElement(BuilderView, { opening, onOpeningChange: () => {}, engine: undefined, controls: null }));
 
-    await waitFor(() => {
-      expect(container.textContent).toContain('Link a lichess or chess.com account in Your games mode to see your own games here.');
-    });
+    // The panel paints loadError -> loading -> !hasSources -> content in that order (OwnGamesPanel.tsx),
+    // so the "no accounts" info text is only the settled state once the one-shot listSources() (and
+    // the hook's own loading) has resolved — waiting for the busy status to clear first, rather than
+    // relying on this test happening to run before any source is seeded, is what makes this
+    // assertion order-independent (verified with `--sequence.shuffle`).
+    await waitFor(() => expect(container.querySelector('.hc-status--busy')).toBeNull());
+    expect(container.textContent).toContain('Link a lichess or chess.com account in Your games mode to see your own games here.');
   });
 
   it('shows the seeded move with its count, flags it as not in repertoire, and Add wires into the repertoire', async () => {

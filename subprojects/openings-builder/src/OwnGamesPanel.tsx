@@ -56,11 +56,11 @@ export function OwnGamesPanel({
   if (loadError) {
     return <Status kind="error">Couldn't load your synced games: {loadError}</Status>;
   }
-  if (!hasSources) {
-    return <Status kind="info">Link a lichess or chess.com account in Your games mode to see your own games here.</Status>;
-  }
   if (loading) {
     return <Status kind="busy">Loading your games…</Status>;
+  }
+  if (!hasSources) {
+    return <Status kind="info">Link a lichess or chess.com account in Your games mode to see your own games here.</Status>;
   }
 
   const node = tree.nodes.get(epd);
@@ -106,7 +106,7 @@ export function OwnGamesPanel({
         </ul>
       )}
       <p className="ob-own-games-provenance">
-        From {tree.gamesFolded} of your {selectedGamesCount} synced game{selectedGamesCount === 1 ? '' : 's'} (Your games filters apply).
+        From {tree.gamesFolded} of your {selectedGamesCount} selected game{selectedGamesCount === 1 ? '' : 's'} (Your games filters apply).
       </p>
     </div>
   );
