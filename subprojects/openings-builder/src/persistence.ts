@@ -203,6 +203,11 @@ export function serializeMoveTreeKeySet(keys: Set<string>): string[] {
  * resolves, and a blind reset there would silently undo a just-restored snapshot before the
  * user ever saw it. The root key (`''`) always survives — it names the tree's own root, not a
  * walk through it, so it's never invalidated by a tree change.
+ *
+ * Returns `keys` itself, not a copy, when nothing was dropped — an unchanged rebuild (the common
+ * case: most tree changes don't invalidate anything) is then `Object.is`-equal to the previous
+ * state, so `usePersistedState`'s effect sees no change and skips the storage write entirely,
+ * same as any other no-op React state update.
  */
 export function reconcileMoveTreeKeys(tree: GamesTree, keys: ReadonlySet<string>): Set<string> {
   const kept = new Set<string>();
@@ -224,5 +229,5 @@ export function reconcileMoveTreeKeys(tree: GamesTree, keys: ReadonlySet<string>
     }
     if (ok) kept.add(key);
   }
-  return kept;
+  return kept.size === keys.size ? (keys as Set<string>) : kept;
 }

@@ -196,4 +196,20 @@ describe('MoveTree state: parseMoveTreeKeySet / serializeMoveTreeKeySet / reconc
     const tree = buildGamesTree([], 'nadavk', 'white');
     expect(reconcileMoveTreeKeys(tree, new Set(['', 'e2e4']))).toEqual(new Set(['']));
   });
+
+  it('returns the same Set reference when nothing was dropped, so an unchanged rebuild triggers no write', () => {
+    const games = [pgn('nadavk', 'opp', '1-0', '1. e4 e5')];
+    const tree = buildGamesTree(games, 'nadavk', 'white');
+    const keys = new Set(['', 'e2e4', 'e2e4 e7e5']);
+    expect(reconcileMoveTreeKeys(tree, keys)).toBe(keys);
+  });
+
+  it('returns a new Set when something was dropped', () => {
+    const games = [pgn('nadavk', 'opp', '1-0', '1. e4 e5')];
+    const tree = buildGamesTree(games, 'nadavk', 'white');
+    const keys = new Set(['', 'e2e4', 'd2d4']);
+    const kept = reconcileMoveTreeKeys(tree, keys);
+    expect(kept).not.toBe(keys);
+    expect(kept).toEqual(new Set(['', 'e2e4']));
+  });
 });

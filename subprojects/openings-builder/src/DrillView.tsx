@@ -62,6 +62,12 @@ export function DrillView({ openings, controls, status }: DrillViewProps): React
         const parsed = parseDrillSnapshot(raw);
         if (!parsed || parsed.scopeKey !== scopeKey(openings)) return undefined;
         if (replayTrail(root, parsed.trail) === undefined) return undefined; // corrupt/illegal trail: reject the whole snapshot
+        // A trail that's legal but has fallen out of every selected opening's tree (e.g. the
+        // user drilled to a move, switched to Build, deleted it, switched back to Drill) must
+        // not restore as "complete": nextMoveOptions/acceptedMoves would both be empty for a
+        // dead trail exactly the way they are for a genuinely finished line, so a stale snapshot
+        // like that would silently show "Line complete." instead of the reset it actually needs.
+        if (parsed.trail.length > 0 && liveOpenings(openings, parsed.trail).length === 0) return undefined;
         return parsed;
       },
     },

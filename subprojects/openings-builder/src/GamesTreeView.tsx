@@ -179,7 +179,11 @@ export function GamesTreeView({ controls, status, targetOpening }: GamesTreeView
           <Button variant="quiet" onClick={() => setPathUcis([])} disabled={path.length === 0}>
             Back to start
           </Button>
-          <Button variant="quiet" onClick={() => setPathUcis(u => u.slice(0, -1))} disabled={path.length === 0}>
+          {/* Trims the resolved `path`, not the raw stored `pathUcis`: when the stored list is
+           * longer than what currently resolves (a colour/filter change, a fresh sync), `path`
+           * is already truncated and slicing the raw list would drop the wrong (still-valid)
+           * entry, or no entry at all if `pathUcis` briefly out-ran `path` altogether. */}
+          <Button variant="quiet" onClick={() => setPathUcis(pathToUcis(path).slice(0, -1))} disabled={path.length === 0}>
             Back
           </Button>
         </Toolbar>

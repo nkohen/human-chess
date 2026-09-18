@@ -207,12 +207,21 @@ export function MoveTree({ tree, path, onNavigate, targetOpening, color, expandR
   // rather than resets: each expanded/shown path is kept only if its uci sequence still resolves
   // against the new tree (reconcileMoveTreeKeys, same truncate-on-validity idea as a path
   // snapshot). A blind reset here would otherwise wipe a just-restored snapshot the instant the
-  // real tree replaces that placeholder, before the user ever saw it.
+  // real tree replaces that placeholder, before the user ever saw it. Reconciling is itself
+  // skipped while `tree` has no root children at all: that's the transient empty placeholder
+  // tree every mount starts from before the async games load resolves (or, briefly, a filter/sync
+  // change in flight), and reconciling against it would read as "the real tree came back and
+  // dropped every path" — wiping a just-restored snapshot the same way a blind reset would,
+  // just one render later. Nothing renders from `expanded`/`showAll` while the tree is empty
+  // anyway, so leaving them untouched here is free; the next tree with real content reconciles
+  // them for real.
   const [treeForState, setTreeForState] = useState(tree);
   if (treeForState !== tree) {
     setTreeForState(tree);
-    setExpanded(prev => reconcileMoveTreeKeys(tree, prev));
-    setShowAll(prev => reconcileMoveTreeKeys(tree, prev));
+    if (childrenOf(tree, tree.root).length > 0) {
+      setExpanded(prev => reconcileMoveTreeKeys(tree, prev));
+      setShowAll(prev => reconcileMoveTreeKeys(tree, prev));
+    }
   }
 
   // Applies a Diagnostics "Show" request at most once per token — same "compare during render,

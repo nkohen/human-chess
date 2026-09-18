@@ -45,9 +45,21 @@ export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Ele
   // A selectedId that no longer names a loaded opening (deleted since the snapshot was saved)
   // falls back to the first opening, same as a fresh session always has — "compare during
   // render, reset if changed", so the very next render already has a valid id instead of one
-  // extra render showing nothing selected.
+  // extra render showing nothing selected. severalIds gets the same treatment (an id it named
+  // can be just as stale as selectedId), and the picker's own colour invariant — 'several'
+  // always has at least one checked id of the current opening's colour, same as the select's
+  // onChange keeps below — is restored the same way the picker restores it: reseed to just the
+  // fallback opening when nothing of its colour survived.
   if (builderState.selectedId !== null && !openings.some(o => o.id === builderState.selectedId)) {
-    setBuilderState(prev => ({ ...prev, selectedId: openings[0]?.id ?? null }));
+    setBuilderState(prev => {
+      const fallback = openings[0];
+      const survivingSeveralIds = prev.severalIds.filter(id => openings.some(o => o.id === id));
+      const severalIds =
+        fallback && drillScope === 'several' && !survivingSeveralIds.some(id => openings.find(o => o.id === id)?.color === fallback.color)
+          ? [fallback.id]
+          : survivingSeveralIds;
+      return { ...prev, selectedId: fallback?.id ?? null, severalIds };
+    });
   }
 
   const selectedId = builderState.selectedId ?? undefined;
