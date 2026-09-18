@@ -56,11 +56,16 @@ export function LessonBuilder(): React.JSX.Element {
   }
   if (view.view === 'player' && currentLesson) {
     const stepIndex = Math.min(view.stepIndex, Math.max(currentLesson.steps.length - 1, 0));
+    // If a reload (or a lesson edited/re-imported to fewer steps) clamps the index onto a
+    // *different* step than was saved, the persisted `solved` belonged to the old step — carrying
+    // it over would show an unsolved challenge as already solved. Only trust it when the index
+    // didn't move.
+    const solved = stepIndex === view.stepIndex && view.solved;
     return (
       <PlayerView
         lesson={currentLesson}
         stepIndex={stepIndex}
-        solved={view.solved}
+        solved={solved}
         onStepChange={(i, solved) => setView(v => ({ ...v, stepIndex: i, solved }))}
         onBack={goLibrary}
       />

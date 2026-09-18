@@ -55,6 +55,25 @@ describe('LessonBuilder reload restore', () => {
     expect(next.disabled).toBe(false);
   });
 
+  it('does not carry a saved solved flag onto a different step when the index is clamped', () => {
+    // The lesson was edited/re-imported down to fewer steps (or a corrupt index was stored): the
+    // saved player snapshot points past the end with solved:true. The clamp lands on the last
+    // step, whose challenge was NOT solved, so it must show as unsolved — not "Correct!".
+    const lesson = twoStepLesson();
+    const second = lesson.steps[1]!;
+    lesson.steps[1] = { ...second, challenge: { answers: ['e2e4'] } };
+    localStorage.setItem(LESSONS_STORAGE_KEY, JSON.stringify([lesson]));
+    localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify({ view: 'player', lessonId: 'l1', stepIndex: 5, solved: true }));
+
+    render(createElement(LessonBuilder));
+
+    expect(screen.getByText('Step 2 of 2')).toBeTruthy();
+    expect(screen.queryByText('Correct!')).toBeNull();
+    expect(screen.getByText(/Play the move to continue/)).toBeTruthy();
+    const next = screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement;
+    expect(next.disabled).toBe(true); // still gated: the clamped step's challenge is unsolved
+  });
+
   it('rejects a corrupt view snapshot and falls back to the library', () => {
     localStorage.setItem(LESSONS_STORAGE_KEY, JSON.stringify([twoStepLesson()]));
     localStorage.setItem(VIEW_STORAGE_KEY, '{not json');

@@ -11,7 +11,7 @@
 import { useState, type ReactNode } from 'react';
 import type { Lesson } from '@human-chess/lessons';
 import { Board } from '@human-chess/board';
-import { inCheck, legalDests, playMove, positionFromFen, turn, type Role, type SquareName } from '@human-chess/rules';
+import { fenOf, inCheck, legalDests, parseUciMove, playMove, positionFromFen, turn, uciSquares, type Role, type SquareName } from '@human-chess/rules';
 import { Button, Panel, Status, Toolbar, Workbench } from '@human-chess/ui';
 import { checkChallengeAnswer } from './challenge';
 
@@ -67,22 +67,41 @@ export function PlayerView({ lesson, stepIndex, solved, onStepChange, onBack }: 
     }
     // Recomputed fresh on every render (not memoised on the position) so a wrong-but-legal
     // attempt — which chessground has already moved the piece for, optimistically — is undone:
-    // a changed `dests` reference makes Board's own update effect re-push `fen: step.fen`
-    // (the position from before the attempt), and chessground resets its pieces from that fen
-    // every time a `fen` is present in the config it's given (packages/board's Board.tsx;
-    // chessground's own configure() replaces `state.pieces` from `config.fen` unconditionally).
-    const pos = positionFromFen(step.fen);
+    // a changed `dests` reference makes Board's own update effect re-push `fen` (the position from
+    // before the attempt), and chessground resets its pieces from that fen every time a `fen` is
+    // present in the config it's given (packages/board's Board.tsx; chessground's own configure()
+    // replaces `state.pieces` from `config.fen` unconditionally).
+    //
+    // Once the challenge is solved, show the position *after* the solving move (with it
+    // highlighted) instead of snapping back to the pre-move position: prefer the move the learner
+    // just played, and fall back to the first accepted answer after a reload (when the transient
+    // `attempt` is gone). The saved annotations were drawn for the pre-move position, so they are
+    // dropped on the solved board. Everything goes through the rules library (playMove/fenOf).
     const playable = hasChallenge && !solved;
+    const solvingUci = hasChallenge && solved ? ((attempt?.correct ? attempt.uci : undefined) ?? step.challenge?.answers[0]) : undefined;
+    let boardFen = step.fen;
+    let lastMove: [SquareName, SquareName] | undefined;
+    if (solvingUci) {
+      try {
+        const [from, to] = uciSquares(solvingUci);
+        boardFen = fenOf(playMove(positionFromFen(step.fen), from, to, parseUciMove(solvingUci).promotion).pos);
+        lastMove = [from, to];
+      } catch {
+        boardFen = step.fen; // a stored answer that no longer parses/plays: just show the position
+      }
+    }
+    const pos = positionFromFen(boardFen);
     return (
       <Board
-        fen={step.fen}
+        fen={boardFen}
         orientation={step.orientation}
         turnColor={turn(pos)}
         dests={playable ? legalDests(pos) : new Map()}
         movableColor={playable ? turn(pos) : undefined}
+        lastMove={lastMove}
         check={inCheck(pos)}
         onMove={handleMove}
-        shapes={step.shapes}
+        shapes={solvingUci ? [] : step.shapes}
         size={`${sizePx}px`}
       />
     );

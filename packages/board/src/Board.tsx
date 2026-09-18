@@ -188,6 +188,13 @@ export function Board(props: BoardProps): React.JSX.Element {
   // person drew survives. `setShapes` is the user-shapes API; `setAutoShapes` is for
   // computer-drawn annotations and is not used here.
   const shownFen = useRef(props.fen);
+  // The last `shapes` prop we pushed into chessground's editable user shapes, so we can tell a
+  // real change of the prop (a new step, or the author's own drawing echoed back) apart from an
+  // unrelated re-render. In editor mode `shapes` is a *controlled* prop — the caller must feed
+  // `onShapesChange` back into it — so any change to it, even on an unchanged fen, must reseed;
+  // two lesson steps commonly share one fen, and keying the reseed on the fen alone would show
+  // (and then persist) the previous step's arrows on the new step.
+  const seededShapesKey = useRef(shapesKey);
   useEffect(() => {
     if (!api.current) return;
     // While a picker is up, the caller hasn't been told the move happened yet, so nothing about
@@ -203,11 +210,16 @@ export function Board(props: BoardProps): React.JSX.Element {
       setPending(null);
     }
     const cfg = config();
-    // Same fen: keep whatever shapes are live (a user drawing survives an unrelated re-render, and
-    // player autoShapes are reapplied from cfg anyway). New fen: seed the editor's user shapes from
-    // this step's saved annotations (player mode carries them as autoShapes via cfg, so []).
-    const keep = shownFen.current === props.fen ? api.current.state.drawable.shapes : editShapes ? toCgShapes(props.shapes ?? []) : [];
+    // Editor mode: `shapes` is a controlled prop, so reseed the editable user shapes from it
+    // whenever the position or the prop itself changes — a new step (even one sharing the previous
+    // step's fen), or the author's own edit echoed back through onShapesChange. Any other board
+    // (with or without a `shapes` prop for autoShapes) keeps the original behaviour: preserve the
+    // user's own right-click drawings across an unrelated re-render, clear them when the fen
+    // changes since they belonged to the old position.
+    const reseedEditor = editShapes && (shownFen.current !== props.fen || seededShapesKey.current !== shapesKey);
+    const keep = reseedEditor ? toCgShapes(props.shapes ?? []) : shownFen.current === props.fen ? api.current.state.drawable.shapes : [];
     shownFen.current = props.fen;
+    seededShapesKey.current = shapesKey;
     api.current.set({ ...cfg, drawable: { ...cfg.drawable, shapes: keep } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.fen, props.orientation, props.turnColor, props.check, props.lastMove, props.dests, props.movableColor, props.drawable, shapesKey]);
