@@ -3,7 +3,7 @@
 // board already offered as a legal destination, or validated with @human-chess/lessons'
 // isLegalMoveFrom before being stored), and is careful about exactOptionalPropertyTypes — an
 // absent `prompt` is an omitted key, never an explicit `prompt: undefined`.
-import type { LessonChallenge, LessonStep } from '@human-chess/lessons';
+import { isLegalMoveFrom, type LessonChallenge, type LessonStep } from '@human-chess/lessons';
 
 /** True when `uci` is one of the challenge's accepted answers — what the player uses to judge a
  * played move. */
@@ -43,4 +43,17 @@ export function withChallenge(step: LessonStep, challenge: LessonChallenge): Les
 export function withoutChallenge(step: LessonStep): LessonStep {
   const { challenge: _drop, ...rest } = step;
   return rest;
+}
+
+/** Sets the step's position to `fen`, dropping any challenge answers that are no longer legal from
+ * it (and the whole challenge if none survive). Every place the editor changes a step's position
+ * goes through this: a challenge answer recorded from the old position would otherwise fail
+ * validation on reload, and a single invalid step makes the whole lesson unreadable — so the author
+ * would "accidentally refresh" and find the lesson gone. Pruning here keeps stored lessons always
+ * valid and shows the author immediately which answers no longer apply. */
+export function withStepFen(step: LessonStep, fen: string): LessonStep {
+  if (!step.challenge) return { ...step, fen };
+  const answers = step.challenge.answers.filter(uci => isLegalMoveFrom(fen, uci));
+  if (answers.length === 0) return withoutChallenge({ ...step, fen });
+  return { ...step, fen, challenge: { ...step.challenge, answers } };
 }

@@ -73,9 +73,10 @@ const ROUTES = [
   { name: 'review', hash: 'review', extra: 'import' },
   // Lesson Builder opens on its library Page (a list of saved lessons plus New/Import actions),
   // not a board and not a single-CTA flow — like the home page, there is no one primary control
-  // to keep above the fold, so noPrimaryControl. The editor/player (both Workbench board screens)
-  // are only reachable after creating a lesson, which this static first-paint pass doesn't do.
-  { name: 'lesson-builder', hash: 'lesson-builder', noPrimaryControl: true },
+  // to keep above the fold, so noPrimaryControl. The `lesson-edit` extra then creates a lesson and
+  // adds a step to reach the editor (a Workbench board screen), which is the dense screen an
+  // author actually spends their time in and where layout must hold.
+  { name: 'lesson-builder', hash: 'lesson-builder', noPrimaryControl: true, extra: 'lesson-edit' },
 ];
 
 const VIEWPORTS = [
@@ -414,6 +415,18 @@ async function driveGuessTheEvalStart(page) {
   await page.waitForSelector('cg-board', { timeout: 20_000 });
 }
 
+// ---------- the lesson-builder editor extra state ----------
+
+/** From the library, create a lesson and add a step so the editor (a Workbench board screen with
+ * the steps list and the full step panel — orientation, mode, challenge fieldset) is on screen.
+ * This is the densest screen in the subproject and the one an author lives in. */
+async function driveLessonBuilderEdit(page) {
+  await page.locator('button', { hasText: /^New lesson$/ }).click();
+  await page.waitForSelector('.hc-workbench', { timeout: 20_000 });
+  await page.locator('button', { hasText: /^Add step$/ }).click();
+  await page.waitForSelector('cg-board', { timeout: 20_000 });
+}
+
 async function performTouchMove(page, viewportName) {
   const { e2, e4 } = await computeSquareCenters(page);
   if (viewportName === 'mobile') {
@@ -580,6 +593,11 @@ async function main() {
             await driveGuessTheEvalStart(page);
             await waitForNotBusy(page);
             await capture('started');
+          }
+
+          if (route.extra === 'lesson-edit') {
+            await driveLessonBuilderEdit(page);
+            await capture('edit');
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

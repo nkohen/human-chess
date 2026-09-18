@@ -120,12 +120,17 @@ export function parseLessonShape(raw: unknown): LessonShape | undefined {
 
 function parseChallenge(raw: unknown, fen: string): LessonChallenge | undefined {
   if (!isRecord(raw)) return undefined;
-  if (!Array.isArray(raw.answers) || raw.answers.length === 0) return undefined;
+  if (!Array.isArray(raw.answers)) return undefined;
+  // A1/V3: keep only answers the rules library confirms are legal from this position, and *drop*
+  // the ones that aren't rather than failing — an answer recorded before the step's position was
+  // edited can legitimately become illegal, and losing the whole step/lesson over a stale answer
+  // (see parseLessonStep) is far worse than dropping the challenge. We never keep an unvalidated
+  // move, so this stays honest.
   const answers: string[] = [];
   for (const a of raw.answers) {
-    if (typeof a !== 'string' || !isLegalMoveFrom(fen, a)) return undefined; // A1/V3: only real legal moves
-    answers.push(a);
+    if (typeof a === 'string' && isLegalMoveFrom(fen, a)) answers.push(a);
   }
+  if (answers.length === 0) return undefined;
   const challenge: LessonChallenge = { answers };
   if (typeof raw.prompt === 'string') challenge.prompt = raw.prompt;
   return challenge;
@@ -150,9 +155,13 @@ export function parseLessonStep(raw: unknown): LessonStep | undefined {
   }
   const step: LessonStep = { id: raw.id, fen: raw.fen, orientation: raw.orientation as Color, text: raw.text, shapes };
   if (raw.challenge !== undefined) {
+    // A challenge that can no longer be validated (its answers aren't legal from an edited
+    // position, or the object is malformed) is dropped, not fatal: the step's position and prose
+    // are independently valid, so we keep the step challenge-less rather than discarding the whole
+    // step — and, since a step's only fatal problems are now genuine structural corruption, a
+    // realistic edit can never make an author's saved lesson vanish on reload.
     const challenge = parseChallenge(raw.challenge, raw.fen);
-    if (!challenge) return undefined;
-    step.challenge = challenge;
+    if (challenge) step.challenge = challenge;
   }
   return step;
 }

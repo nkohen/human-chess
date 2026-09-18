@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { LessonChallenge, LessonStep } from '@human-chess/lessons';
-import { addChallengeAnswer, checkChallengeAnswer, removeChallengeAnswer, withChallenge, withChallengePrompt, withoutChallenge } from './challenge';
+import { addChallengeAnswer, checkChallengeAnswer, removeChallengeAnswer, withChallenge, withChallengePrompt, withoutChallenge, withStepFen } from './challenge';
 
-const STEP: LessonStep = { id: 's1', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', orientation: 'white', text: '', shapes: [] };
+const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const STEP: LessonStep = { id: 's1', fen: START, orientation: 'white', text: '', shapes: [] };
 
 describe('checkChallengeAnswer', () => {
   it('matches one of several accepted answers', () => {
@@ -45,5 +46,36 @@ describe('withChallenge / withoutChallenge', () => {
     expect(withC.challenge?.answers).toEqual(['e2e4']);
     const withoutC = withoutChallenge(withC);
     expect('challenge' in withoutC).toBe(false);
+  });
+});
+
+describe('withStepFen', () => {
+  const KINGS = '4k3/8/8/8/8/8/8/4K3 w - - 0 1';
+
+  it('sets the fen and keeps a challenge whose answers are still legal', () => {
+    const step = withChallenge(STEP, { answers: ['e2e4', 'd2d4'], prompt: 'Open up' });
+    // A different but legal position where both pawn moves still exist (add a black piece).
+    const next = withStepFen(step, 'rnbqkbnr/pppppppp/8/8/8/7p/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+    expect(next.challenge?.answers).toEqual(['e2e4', 'd2d4']);
+    expect(next.challenge?.prompt).toBe('Open up');
+  });
+
+  it('drops only the answers that are no longer legal from the new position', () => {
+    const step = withChallenge(STEP, { answers: ['e2e4', 'e7e5'] }); // e7e5 is Black's move, illegal for White
+    const next = withStepFen(step, START);
+    expect(next.challenge?.answers).toEqual(['e2e4']);
+  });
+
+  it('removes the whole challenge (key omitted) when no answer survives the new position', () => {
+    const step = withChallenge(STEP, { answers: ['e2e4', 'd2d4'] });
+    const next = withStepFen(step, KINGS); // neither pawn exists anymore
+    expect('challenge' in next).toBe(false);
+    expect(next.fen).toBe(KINGS);
+  });
+
+  it('leaves a challenge-less step untouched but for the fen', () => {
+    const next = withStepFen(STEP, KINGS);
+    expect(next.fen).toBe(KINGS);
+    expect('challenge' in next).toBe(false);
   });
 });

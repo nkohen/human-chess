@@ -238,6 +238,7 @@ button.hc-quiet:hover:not(:disabled) {
 .hc-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--hc-space-2);
 }
 

@@ -23,7 +23,7 @@ import { Board, BoardEditor } from '@human-chess/board';
 import { composeFen, emptyStep, isLegalFen, sanOfMove, type Lesson, type LessonStep } from '@human-chess/lessons';
 import { inCheck, legalDests, playMove, positionFromFen, START_FEN, turn, type Color, type Role, type SquareName } from '@human-chess/rules';
 import { Button, Field, Panel, SegmentedControl, Status, Toolbar, Workbench } from '@human-chess/ui';
-import { addChallengeAnswer, removeChallengeAnswer, withChallenge, withChallengePrompt, withoutChallenge } from './challenge';
+import { addChallengeAnswer, removeChallengeAnswer, withChallenge, withChallengePrompt, withoutChallenge, withStepFen } from './challenge';
 import { genStepId } from './ids';
 import { insertStep, moveStep, removeStep } from './steps';
 
@@ -106,7 +106,7 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
     try {
       const fen = composeFen(placement, toMoveColor);
       setDraftError(undefined);
-      updateStep({ ...step, fen });
+      updateStep(withStepFen(step, fen));
     } catch {
       setDraftError('Not a legal position yet.');
     }
@@ -120,14 +120,14 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
       return;
     }
     setPasteError(undefined);
-    updateStep({ ...step, fen: candidate });
+    updateStep(withStepFen(step, candidate));
     setDraftPlacement(candidate.split(' ')[0]!);
     setToMove(turn(positionFromFen(candidate)));
   };
 
   const useStartingPosition = (): void => {
     if (!step) return;
-    updateStep({ ...step, fen: START_FEN });
+    updateStep(withStepFen(step, START_FEN));
     setDraftPlacement(START_PLACEMENT);
     setToMove('white');
     setDraftError(undefined);

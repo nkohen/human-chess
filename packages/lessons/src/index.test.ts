@@ -59,9 +59,21 @@ describe('step validation', () => {
     expect(parseLessonStep({ id: 's', fen: 'not-a-fen', orientation: 'white', text: '', shapes: [] })).toBeUndefined();
   });
 
-  it('rejects a challenge whose answer is not a legal move (A1/V3)', () => {
-    const bad = { id: 's', fen: TWO_ROOKS, orientation: 'white', text: '', shapes: [], challenge: { answers: ['a1h8'] } };
-    expect(parseLessonStep(bad)).toBeUndefined();
+  it('keeps only the legal answers of a challenge, dropping ones no longer legal (A1/V3)', () => {
+    // 'a1h8' is not a legal move from TWO_ROOKS; 'h1h5' is. The illegal one is dropped, the legal
+    // one survives — we never keep an unvalidated move, but a stale answer must not fail the step.
+    const step = parseLessonStep({ id: 's', fen: TWO_ROOKS, orientation: 'white', text: '', shapes: [], challenge: { answers: ['a1h8', 'h1h5'] } });
+    expect(step?.challenge?.answers).toEqual(['h1h5']);
+  });
+
+  it('keeps the step (challenge-less) when no challenge answer is legal, rather than dropping it', () => {
+    // The realistic data-loss path: the author edited the step's position after recording a
+    // challenge, so every stored answer is now illegal. The step's position and prose are valid,
+    // so the step survives without its challenge — the whole lesson must not vanish on reload.
+    const step = parseLessonStep({ id: 's', fen: TWO_ROOKS, orientation: 'white', text: 'keep me', shapes: [], challenge: { answers: ['a1h8'] } });
+    expect(step).toBeDefined();
+    expect(step?.challenge).toBeUndefined();
+    expect(step?.text).toBe('keep me');
   });
 
   it('rejects a shape with a bad square or brush', () => {
@@ -87,10 +99,21 @@ describe('lesson validation and round-trip', () => {
     expect(parseLessonFile(JSON.stringify({ version: 1, lesson: { id: 'x' } }))).toBeUndefined();
   });
 
-  it('a single bad step rejects the whole lesson', () => {
+  it('a single structurally-corrupt step rejects the whole lesson', () => {
     const lesson = sampleLesson();
     (lesson.steps[0] as { fen: string }).fen = 'bogus';
     expect(parseLesson(lesson)).toBeUndefined();
+  });
+
+  it('does not lose a lesson on reload when a challenge answer is stale after a position edit', () => {
+    // Regression: the author recorded a challenge answer, then edited that step's position so the
+    // move is no longer legal. Before the fix this made parseLessonStep -> parseLesson ->
+    // parseLessonList drop the entire lesson, so an accidental refresh wiped it.
+    const lesson = sampleLesson();
+    (lesson.steps[1] as { fen: string }).fen = '4k3/8/8/8/8/8/8/4K3 w - - 0 1'; // 'h1h5' now illegal
+    const list = parseLessonList([lesson]);
+    expect(list?.map(l => l.id)).toEqual(['l1']); // lesson survives...
+    expect(list?.[0]?.steps[1]?.challenge).toBeUndefined(); // ...minus the stale challenge
   });
 
   it('parseLessonList drops invalid lessons but keeps valid ones', () => {

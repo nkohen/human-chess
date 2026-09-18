@@ -344,7 +344,7 @@ function ReviewScreen({
               navigateWithHandoff('#/bot-rating', { fen, color: game.playedAs ?? turn(positionFromFen(fen)) })
             }
           >
-            Play from this position against the engine
+            Play vs engine from here
           </Button>
           {showAnotherGame && (
             <Button variant="secondary" onClick={onAnotherGame}>

@@ -327,88 +327,125 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
   }
 
   if (!active) {
+    // These setup controls are the same whether the position is typed as a FEN or set up on a
+    // board; they're declared once and placed differently by the two layouts below.
+    const levelField = (
+      <Field label="Bot level (UCI_Elo)" htmlFor="brt-elo">
+        <select id="brt-elo" value={elo} onChange={e => updateScreen({ elo: Number(e.target.value) })}>
+          {ELO_LEVELS.map(l => (
+            <option key={l} value={l}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </Field>
+    );
+    const startButton = (
+      <Button variant="primary" onClick={handleStart}>
+        Start
+      </Button>
+    );
+    const colourField = (
+      <Field label="Your colour">
+        <SegmentedControl options={COLOR_CHOICES} value={colorChoice} onChange={c => updateScreen({ colorChoice: c })} ariaLabel="Your colour" />
+      </Field>
+    );
+    const fenField = (
+      <Field label="Start position (FEN)" htmlFor="brt-fen">
+        <input id="brt-fen" type="text" value={fenText} onChange={e => updateScreen({ fenText: e.target.value })} />
+      </Field>
+    );
+    const boardToggle = (
+      <label className="brt-board-toggle">
+        <input type="checkbox" checked={boardMode} onChange={e => updateScreen({ boardMode: e.target.checked })} />
+        Set up on a board
+      </label>
+    );
+    const blindfoldToggle = (
+      <label className="brt-board-toggle">
+        <input type="checkbox" checked={blindfold} onChange={e => updateScreen({ blindfold: e.target.checked })} />
+        Blindfold (pieces hidden)
+      </label>
+    );
+    const handoffNotice = handoffNoticeVisible ? <Status kind="info">Position handed over from another human-chess tool.</Status> : undefined;
+    const errorNotice = fenError ? <Status kind="error">{fenError}</Status> : undefined;
+
+    // No board to show (the position is typed as a FEN): a plain single-column setup Page, like
+    // every other setup screen. Rendering a Workbench here reserved a full board-sized square that
+    // is empty — a big blank block above the controls on a phone, and a wasted empty half on
+    // desktop. The Workbench is only for when a board is actually on screen (boardMode below).
+    if (!boardMode) {
+      return (
+        <Page title="Bot rating test">
+          {handoffNotice}
+          {levelField}
+          {colourField}
+          {fenField}
+          {boardToggle}
+          {blindfoldToggle}
+          {errorNotice}
+          {startButton}
+          <SummaryTable records={records} />
+        </Page>
+      );
+    }
+
     return (
       <Workbench
         title="Bot rating test"
-        board={(sizePx: number) =>
-          boardMode ? (
-            <BoardEditor
-              fen={placement}
-              orientation={colorChoice === 'black' ? 'black' : 'white'}
-              onChange={handleEditorChange}
-              size={`${Math.max(0, sizePx - EDITOR_PALETTE_RESERVE_PX)}px`}
-            />
-          ) : null
-        }
+        board={(sizePx: number) => (
+          <BoardEditor
+            fen={placement}
+            orientation={colorChoice === 'black' ? 'black' : 'white'}
+            onChange={handleEditorChange}
+            size={`${Math.max(0, sizePx - EDITOR_PALETTE_RESERVE_PX)}px`}
+          />
+        )}
         primary={
           <>
-            <Field label="Bot level (UCI_Elo)" htmlFor="brt-elo">
-              <select id="brt-elo" value={elo} onChange={e => updateScreen({ elo: Number(e.target.value) })}>
-                {ELO_LEVELS.map(l => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Button variant="primary" onClick={handleStart}>
-              Start
-            </Button>
+            {levelField}
+            {startButton}
           </>
         }
         aside={
           <>
-            {handoffNoticeVisible && <Status kind="info">Position handed over from another human-chess tool.</Status>}
-            <Field label="Your colour">
-              <SegmentedControl options={COLOR_CHOICES} value={colorChoice} onChange={c => updateScreen({ colorChoice: c })} ariaLabel="Your colour" />
-            </Field>
-            <Field label="Start position (FEN)" htmlFor="brt-fen">
-              <input id="brt-fen" type="text" value={fenText} onChange={e => updateScreen({ fenText: e.target.value })} />
-            </Field>
-            <label className="brt-board-toggle">
-              <input type="checkbox" checked={boardMode} onChange={e => updateScreen({ boardMode: e.target.checked })} />
-              Set up on a board
-            </label>
-            <label className="brt-board-toggle">
-              <input type="checkbox" checked={blindfold} onChange={e => updateScreen({ blindfold: e.target.checked })} />
-              Blindfold (pieces hidden)
-            </label>
-            {boardMode && (
-              <div className="brt-board-editor-controls">
-                <Field label="Side to move">
-                  <SegmentedControl
-                    options={[
-                      { value: 'white' as Color, label: 'White' },
-                      { value: 'black' as Color, label: 'Black' },
-                    ]}
-                    value={turnField}
-                    onChange={handleTurnChange}
-                    ariaLabel="Side to move"
-                  />
-                </Field>
-                <Field label="Castling rights">
-                  <div className="brt-castling-row">
-                    {CASTLING_LETTERS.filter(c => allowedCastling.includes(c)).map(c => (
-                      <label key={c}>
-                        <input type="checkbox" checked={castlingField.includes(c)} onChange={() => toggleCastling(c)} />
-                        {CASTLING_LABEL[c]}
-                      </label>
-                    ))}
-                    {allowedCastling.length === 0 && <p className="brt-castling-none">No castling rights possible from this placement.</p>}
-                  </div>
-                </Field>
-              </div>
-            )}
-            {fenError && <Status kind="error">{fenError}</Status>}
+            {handoffNotice}
+            {colourField}
+            {fenField}
+            {boardToggle}
+            {blindfoldToggle}
+            <div className="brt-board-editor-controls">
+              <Field label="Side to move">
+                <SegmentedControl
+                  options={[
+                    { value: 'white' as Color, label: 'White' },
+                    { value: 'black' as Color, label: 'Black' },
+                  ]}
+                  value={turnField}
+                  onChange={handleTurnChange}
+                  ariaLabel="Side to move"
+                />
+              </Field>
+              <Field label="Castling rights">
+                <div className="brt-castling-row">
+                  {CASTLING_LETTERS.filter(c => allowedCastling.includes(c)).map(c => (
+                    <label key={c}>
+                      <input type="checkbox" checked={castlingField.includes(c)} onChange={() => toggleCastling(c)} />
+                      {CASTLING_LABEL[c]}
+                    </label>
+                  ))}
+                  {allowedCastling.length === 0 && <p className="brt-castling-none">No castling rights possible from this placement.</p>}
+                </div>
+              </Field>
+            </div>
+            {errorNotice}
           </>
         }
         footer={
-          boardMode ? (
-            <Toolbar>
-              <Button onClick={handleClearBoard}>Clear board</Button>
-              <Button onClick={handleResetBoard}>Start position</Button>
-            </Toolbar>
-          ) : undefined
+          <Toolbar>
+            <Button onClick={handleClearBoard}>Clear board</Button>
+            <Button onClick={handleResetBoard}>Start position</Button>
+          </Toolbar>
         }
       >
         <SummaryTable records={records} />
