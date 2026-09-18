@@ -12,14 +12,15 @@ import {
   MAX_ABS_EVAL_CP, MIN_ABS_EVAL_CP, type CuratedPosition, type ImbalancedPosition,
 } from '@human-chess/positions';
 import {
-  currentFen, describeEnd, isInCheck, isPlayersTurn, lastMove, limitedStrength, playerDests, sideToMove,
+  currentFen, describeEnd, isInCheck, isPlayersTurn, lastMove, limitedStrength, playerDests, sideToMove, uciMoves,
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
 import { inCheck, pieceCounts, positionFromFen, turn, uciSquares, START_FEN, type Color, type SquareName } from '@human-chess/rules';
-import { Button, Field, Panel, SegmentedControl, Status, Toolbar, Workbench } from '@human-chess/ui';
+import { Button, Field, Panel, readPersisted, SegmentedControl, Status, Toolbar, Workbench, writePersisted } from '@human-chess/ui';
 import { pickUnshownCuratedMidgame } from './curatedPick';
 import { describeMaterialDifference } from './material';
 import { loadPositionSource, savePositionSource, type PositionSource } from './positionSource';
+import { parseChessitoutSnapshot, SNAPSHOT_KEY } from './snapshot';
 import { judgeVote, type Vote } from './vote';
 import './chessitout.css';
 
@@ -63,37 +64,55 @@ const ELO_OPTIONS = [1320, 1500, 1800, 2100, 2400, 2700, 3000];
 export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
 
+  // Read once, synchronously, in these initialisers (never an effect — see
+  // docs/design/2026-09-18-reload-survival.md): a restore done in an effect is wiped on the
+  // first render since several pieces of this screen's render logic branch on state read here.
+  const [restored] = useState(() => readPersisted(SNAPSHOT_KEY, parseChessitoutSnapshot));
+
   const [generation, setGeneration] = useState(0);
-  const [phase, setPhase] = useState<Phase>('mining');
-  const [position, setPosition] = useState<ImbalancedPosition | undefined>(undefined);
+  const [phase, setPhase] = useState<Phase>(restored?.phase ?? 'mining');
+  const [position, setPosition] = useState<ImbalancedPosition | undefined>(
+    restored?.position?.kind === 'mined' ? restored.position.value : undefined,
+  );
   const [positionSource, setPositionSource] = useState<PositionSource>(() => loadPositionSource());
   // The curated entry (opponent name, date, url) behind the current `position`, when its source
   // is 'curated-user-game' — undefined for a mined position. Kept separately from `position`
   // because ImbalancedPosition itself carries no game metadata, only the fen/eval/source A1
-  // shape shared with the mined path.
-  const [curatedEntry, setCuratedEntry] = useState<CuratedPosition | undefined>(undefined);
+  // shape shared with the mined path. On a restore of a curated attempt the entry (and its fen)
+  // is already known, but `position` (which carries the eval) is deliberately left unset here —
+  // that eval is cheap to recompute and was not stored (see snapshot.ts); the effect below fills
+  // it back in without disturbing the restored phase.
+  const [curatedEntry, setCuratedEntry] = useState<CuratedPosition | undefined>(
+    restored?.position?.kind === 'curated' ? restored.position.entry : undefined,
+  );
   // Which curated midgame ids have already come up this session (see curatedPick.ts) — a ref,
   // not state, since nothing renders it and updating it must not retrigger the mining effect.
   const shownCuratedIds = useRef<Set<string>>(new Set());
   const [miningError, setMiningError] = useState<string | undefined>(undefined);
   const [miningProgress, setMiningProgress] = useState<{ attempt: number; maxAttempts: number } | undefined>(undefined);
-  const [vote, setVote] = useState<Vote | undefined>(undefined);
-  const [playerColor, setPlayerColor] = useState<Color | undefined>(undefined);
+  const [vote, setVote] = useState<Vote | undefined>(restored?.vote);
+  const [playerColor, setPlayerColor] = useState<Color | undefined>(restored?.playerColor);
   // Which side the board is seen from while deciding who stands better; a flip is a viewing aid
   // only and is reset for every new position (user, 2026-09-16).
-  const [viewFrom, setViewFrom] = useState<Color>('white');
-  const [elo, setElo] = useState(DEFAULT_ELO);
-  const [tally, setTally] = useState({ right: 0, wrong: 0 });
+  const [viewFrom, setViewFrom] = useState<Color>(restored?.viewFrom ?? 'white');
+  const [elo, setElo] = useState(restored?.elo ?? DEFAULT_ELO);
+  const [tally, setTally] = useState(restored?.tally ?? { right: 0, wrong: 0 });
   const [finalAnalysis, setFinalAnalysis] = useState<Analysis | undefined>(undefined);
   const [finalAnalysisError, setFinalAnalysisError] = useState<string | undefined>(undefined);
-  const judgedGeneration = useRef<number | undefined>(undefined);
+  // Seeded from the snapshot's `judged` flag so a finished attempt already tallied before the
+  // reload is never counted a second time by the judging effect below. `generation` itself
+  // always restarts at 0 on mount (it only needs to be unique per attempt within one page
+  // load, to tell attempts apart from each other — not across a reload), so 0 is the matching
+  // sentinel here too.
+  const judgedGeneration = useRef<number | undefined>(restored?.judged ? 0 : undefined);
 
   const opponent = useMemo(() => limitedStrength(elo), [elo]);
   const { game, engineState, onPlayerMove, restart, fen, finished } = useEngineGame({
-    startFen: position?.fen ?? START_FEN,
+    startFen: position?.fen ?? curatedEntry?.fen ?? START_FEN,
     playerColor: playerColor ?? 'white',
     engine: readyEngine,
     opponent,
+    ...(restored?.moves ? { initialMoves: restored.moves } : {}),
   });
 
   const next = useCallback(() => {
@@ -165,6 +184,38 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
       readyEngine.stop();
     };
   }, [readyEngine, phase, generation, positionSource]);
+
+  // Restoring a curated attempt across a reload: `curatedEntry` (and so its fen) is already
+  // known from the snapshot, but its eval was deliberately not stored (cheap to recompute,
+  // unlike the mined position's up-to-MAX_ATTEMPTS self-play search — see snapshot.ts), so
+  // `position` starts undefined. This fills it in without touching `phase`, mirroring the
+  // mining effect's curated branch above but skipping straight to the evaluate call with the
+  // entry already chosen, and without the `setPhase('voting')` step (phase already reflects
+  // where the user actually was — voting, playing or looking at the result). Guarded so it
+  // never fires during a real 'mining' attempt (the effect above owns that case) and only ever
+  // runs once per restore, since it stops once `position` is set.
+  useEffect(() => {
+    if (!readyEngine || phase === 'mining' || position || !curatedEntry) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    evaluateCuratedMidgame(readyEngine, curatedEntry, { signal: controller.signal })
+      .then(evaluated => {
+        if (!cancelled) setPosition(evaluated);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        // No phase shows `miningError` outside 'mining' — fall back to that familiar error
+        // screen (with its "Try again" button, which starts a fresh attempt) rather than
+        // leaving the restored screen stuck on "Mining a position…" forever.
+        setMiningError(err instanceof Error ? err.message : String(err));
+        setPhase('mining');
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+      readyEngine.stop();
+    };
+  }, [readyEngine, phase, position, curatedEntry]);
 
   // Both handlers below call restart(...) synchronously, in the same event-handler batch as the
   // setPhase('playing')/setPlayerColor calls, rather than in a separate effect keyed on `phase`.
@@ -239,6 +290,38 @@ export function Chessitout({ engine }: ChessitoutProps): React.JSX.Element {
     const outcome = judgeVote(vote, position.eval.score);
     setTally(t => (outcome === 'right' ? { ...t, right: t.right + 1 } : { ...t, wrong: t.wrong + 1 }));
   }, [phase, position, vote, generation]);
+
+  // Page-reload survival (docs/design/2026-09-18-reload-survival.md): one snapshot object,
+  // written back whenever anything user-facing changes. Skips the write on mount (the value
+  // just came from storage or the defaults, matching usePersistedState's own convention in
+  // packages/ui/src/persisted.ts). `finalAnalysis` is deliberately not part of the snapshot —
+  // it is cheap to recompute and the effect above already does so on every mount.
+  const wroteOnce = useRef(false);
+  useEffect(() => {
+    if (!wroteOnce.current) {
+      wroteOnce.current = true;
+      return;
+    }
+    const storedPosition =
+      !position ? undefined
+      : position.source === 'curated-user-game' && curatedEntry ? { kind: 'curated' as const, entryId: curatedEntry.id }
+      : { kind: 'mined' as const, value: position };
+    writePersisted(SNAPSHOT_KEY, {
+      phase,
+      position: storedPosition,
+      vote,
+      playerColor,
+      viewFrom,
+      elo,
+      tally,
+      judged: judgedGeneration.current === generation,
+      // `game` only reflects the current attempt from 'playing' onward — `restart()` is not
+      // called until `onVote`, so during 'mining'/'voting' it can still hold the previous,
+      // already-finished attempt's moves; persist none for those phases rather than that stale
+      // list (there genuinely are no moves yet for the attempt now being set up).
+      moves: phase === 'playing' || phase === 'result' ? uciMoves(game) : [],
+    });
+  }, [phase, position, curatedEntry, vote, playerColor, viewFrom, elo, tally, generation, game]);
 
   // A non-interactive starting-position board, used while there is no mined/curated position to
   // show yet (engine still loading, engine failed, or mining in flight) so the two-column layout

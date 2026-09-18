@@ -13,8 +13,13 @@ import { LESSON_OPPONENT } from './useLessonGame';
  * turn it is, so when the FEN's side to move is the *other* side, the engine simply moves first
  * with no special-casing needed here. Plays against the same opponent the lessons use
  * (LESSON_OPPONENT), so it is genuinely reused, not a second full-strength instance.
+ *
+ * `initial`, when given, seeds the very first attempt's played moves from a restored snapshot.
+ * Like useLessonGame.ts, this must be read once in the state initialiser above together with
+ * `entry`'s id (`lastEntryId`'s initial value) so the restart-on-id-change effect below does not
+ * see the restored entry as "new" and wipe the replay.
  */
-export function useCuratedGame(entry: CuratedPosition | undefined, engine: UciEngine | undefined) {
+export function useCuratedGame(entry: CuratedPosition | undefined, engine: UciEngine | undefined, initial?: { moves?: readonly string[] }) {
   const lastEntryId = useRef<string | undefined>(entry?.id);
 
   const hook = useEngineGame({
@@ -22,6 +27,7 @@ export function useCuratedGame(entry: CuratedPosition | undefined, engine: UciEn
     playerColor: entry?.playAs ?? 'white',
     engine,
     opponent: LESSON_OPPONENT,
+    ...(initial?.moves ? { initialMoves: initial.moves } : {}),
   });
   const hookRestart = hook.restart;
 

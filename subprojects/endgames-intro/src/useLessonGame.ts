@@ -16,13 +16,31 @@ export const LESSON_OPPONENT = maximalResistance();
  * Drives one attempt at a lesson on top of the generic `useEngineGame`: picks the learner's
  * colour, mirrors the lesson FEN for Black, and restarts (with a freshly rolled colour)
  * whenever the lesson itself changes.
+ *
+ * `initial`, when given, seeds the very first attempt from a restored snapshot instead of
+ * rolling a fresh colour: the colour useLessonGame would otherwise roll in the ref below, plus
+ * any moves already played. It is read once, in the state initialisers above (never an effect),
+ * together with `lesson` — the id and the moves must land in the same render as each other and
+ * as `lastLessonId`'s initial value, or the restart-on-id-change effect just below would see the
+ * restored id as "new" and immediately wipe the replay it was meant to preserve.
  */
-export function useLessonGame(lesson: EndgameLesson, engine: UciEngine | undefined, opponent: Opponent = LESSON_OPPONENT) {
+export function useLessonGame(
+  lesson: EndgameLesson,
+  engine: UciEngine | undefined,
+  opponent: Opponent = LESSON_OPPONENT,
+  initial?: { color: Color; moves?: readonly string[] },
+) {
   const startColor = useRef<Color | undefined>(undefined);
-  if (startColor.current === undefined) startColor.current = randomColor();
+  if (startColor.current === undefined) startColor.current = initial?.color ?? randomColor();
   const lastLessonId = useRef(lesson.id);
 
-  const hook = useEngineGame({ startFen: fenFor(lesson, startColor.current), playerColor: startColor.current, engine, opponent });
+  const hook = useEngineGame({
+    startFen: fenFor(lesson, startColor.current),
+    playerColor: startColor.current,
+    engine,
+    opponent,
+    ...(initial?.moves ? { initialMoves: initial.moves } : {}),
+  });
   const hookRestart = hook.restart;
 
   const restart = useCallback(

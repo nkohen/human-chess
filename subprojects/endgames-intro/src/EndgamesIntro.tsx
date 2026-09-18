@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { formatScore, whitePerspective, type Analysis, type UciEngine } from '@human-chess/engine';
-import { describeEnd, isInCheck, isPlayersTurn, lastMove, playerDests, result, sideToMove } from '@human-chess/play';
+import { describeEnd, isInCheck, isPlayersTurn, lastMove, playerDests, result, sideToMove, uciMoves } from '@human-chess/play';
 import { curatedEndgames, curatedGameDate, curatedOpponent, endgameLadder, EVAL_DEPTH, type CuratedPosition, type EndgameLesson } from '@human-chess/positions';
 import { positionFromFen, turn } from '@human-chess/rules';
-import { Button, navigateWithHandoff, Panel, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
+import { Button, navigateWithHandoff, Panel, readPersisted, Status, Toolbar, Workbench, writePersisted, type StatusKind } from '@human-chess/ui';
 import { lessonOutcome } from './lessonAdapt';
 import { loadConfident, loadMetaHandoffDismissed, saveConfident, saveMetaHandoffDismissed } from './progress';
+import { parseEndgamesSnapshot, SNAPSHOT_KEY } from './snapshot';
 import { useCuratedGame } from './useCuratedGame';
 import { useLessonGame } from './useLessonGame';
 import './endgames-intro.css';
@@ -20,27 +21,67 @@ type Mode = 'lesson' | 'curated';
 
 export function EndgamesIntro({ engine }: EndgamesIntroProps): React.JSX.Element {
   const [confident, setConfident] = useState<Set<string>>(() => loadConfident());
+
+  // Read once, at mount, and never in an effect (design doc: "seed in the initialiser") — every
+  // piece of state below that can be restored reads from this same snapshot so a reload lands
+  // exactly where the learner left off, or (on any rejection) falls back to the ordinary
+  // first-open-lesson default with nothing half-restored.
+  const [restored] = useState(() => readPersisted(SNAPSHOT_KEY, parseEndgamesSnapshot));
+
   const firstOpen = endgameLadder.find(l => !confident.has(l.id)) ?? endgameLadder[endgameLadder.length - 1]!;
-  const [lesson, setLesson] = useState<EndgameLesson>(firstOpen);
-  const [mode, setMode] = useState<Mode>('lesson');
-  const [curatedEntry, setCuratedEntry] = useState<CuratedPosition | undefined>(undefined);
-  const [showIntro, setShowIntro] = useState(true);
+  const [lesson, setLesson] = useState<EndgameLesson>(restored?.lesson ?? firstOpen);
+  const [mode, setMode] = useState<Mode>(restored?.mode ?? 'lesson');
+  const [curatedEntry, setCuratedEntry] = useState<CuratedPosition | undefined>(restored?.curatedEntry);
+  const [showIntro, setShowIntro] = useState(restored?.showIntro ?? true);
   const [confirmSkip, setConfirmSkip] = useState(false);
   const readyEngine = engine instanceof Error ? undefined : engine;
 
   // Only the active mode's hook is ever given a real engine — the inactive one gets `undefined`,
   // which is useEngineGame's own signal not to run its auto-move effect, so switching modes never
   // leaves a background game quietly playing itself out against the shared engine.
-  const { game, engineState, onPlayerMove, restart, fen } = useLessonGame(lesson, mode === 'lesson' ? readyEngine : undefined);
+  const { game, engineState, onPlayerMove, restart, fen } = useLessonGame(
+    lesson,
+    mode === 'lesson' ? readyEngine : undefined,
+    undefined,
+    restored ? { color: restored.startColor, ...(restored.mode === 'lesson' ? { moves: restored.moves } : {}) } : undefined,
+  );
   const {
     game: curatedGame,
     engineState: curatedEngineState,
     onPlayerMove: onCuratedMove,
     restart: restartCurated,
     fen: curatedFen,
-  } = useCuratedGame(curatedEntry, mode === 'curated' ? readyEngine : undefined);
+  } = useCuratedGame(
+    curatedEntry,
+    mode === 'curated' ? readyEngine : undefined,
+    restored?.curatedEntry && restored.mode === 'curated' ? { moves: restored.moves } : undefined,
+  );
 
   useEffect(() => saveConfident(confident), [confident]);
+
+  // Page-reload survival for the current lesson/curated attempt (docs/design/2026-09-18-
+  // reload-survival.md). `wroteOnce` skips the write on mount, same reasoning as
+  // usePersistedState: the value on mount either came from `restored` itself or is the ordinary
+  // default, and writing it back immediately would be a no-op at best and could clobber a
+  // differently-shaped stored entry at worst. `startColor` always reflects the lesson hook's own
+  // roll (game.playerColor), whether or not lesson mode is the one currently on screen, so
+  // switching back to it later never re-rolls the colour. `moves` is only ever taken from the
+  // active mode's game — the other one is a background attempt the learner has not seen yet.
+  const wroteOnce = useRef(false);
+  useEffect(() => {
+    if (!wroteOnce.current) {
+      wroteOnce.current = true;
+      return;
+    }
+    writePersisted(SNAPSHOT_KEY, {
+      mode,
+      lessonId: lesson.id,
+      curatedEntryId: curatedEntry?.id,
+      showIntro,
+      startColor: game.playerColor,
+      moves: mode === 'lesson' ? uciMoves(game) : uciMoves(curatedGame),
+    });
+  }, [mode, lesson, curatedEntry, showIntro, game, curatedGame]);
 
   // First guess: "the second rung's position" is read as the second lesson the learner has
   // marked confident — progress.ts persists nothing else win-shaped (a curated real-game
