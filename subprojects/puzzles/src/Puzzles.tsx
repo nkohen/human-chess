@@ -5,9 +5,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { inCheck, legalDests, roleToChar, turn, type Role, type SquareName } from '@human-chess/rules';
-import { Button, Field, navigateWithHandoff, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
+import { Button, Field, navigateWithHandoff, Status, Toolbar, usePersistedState, Workbench, type StatusKind } from '@human-chess/ui';
 import { fetchNextPuzzle, fetchPuzzleById, type ParsedPuzzle } from './puzzle';
-import { attemptMove, currentFen, startSolve, type SolveState, type SolveStatus } from './solve';
+import { attemptMove, currentFen, startSolve, type SolveStatus } from './solve';
+import { INITIAL_SNAPSHOT, parsePuzzlesSnapshot, serializePuzzlesSnapshot, STATE_KEY, type PuzzlesSnapshot } from './storage';
 import './puzzles.css';
 
 const STATUS_TEXT: Record<SolveStatus, string> = {
@@ -30,21 +31,21 @@ const STATUS_KIND: Record<SolveStatus, StatusKind> = {
 
 const label = (color: string): string => color[0]!.toUpperCase() + color.slice(1);
 
-interface Tally {
-  solvedFirstTry: number;
-  solvedAfterMistake: number;
-  total: number;
-}
-
-const EMPTY_TALLY: Tally = { solvedFirstTry: 0, solvedAfterMistake: 0, total: 0 };
-
 export function Puzzles(): React.JSX.Element {
-  const [puzzle, setPuzzle] = useState<ParsedPuzzle | undefined>(undefined);
-  const [solveState, setSolveState] = useState<SolveState | undefined>(undefined);
+  // The whole screen — the fetched puzzle (never re-fetched on reload: "next" would hand back a
+  // different one), solve progress, the puzzle-id field, and the session tally — survives a
+  // reload as one snapshot (docs/design/2026-09-18-reload-survival.md). `parse` replays the
+  // stored solve index through solve.ts's `replaySolve` to rebuild the live position; a replay
+  // that throws rejects the snapshot.
+  const [snapshot, setSnapshot] = usePersistedState<PuzzlesSnapshot>(STATE_KEY, INITIAL_SNAPSHOT, {
+    parse: parsePuzzlesSnapshot,
+    serialize: serializePuzzlesSnapshot,
+  });
+  const { puzzle, solve: solveState, idInput, tally } = snapshot;
+  const setIdInput = (value: string): void => setSnapshot(s => ({ ...s, idInput: value }));
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [idInput, setIdInput] = useState('');
-  const [tally, setTally] = useState<Tally>(EMPTY_TALLY);
 
   // Guards every in-flight fetch against a later one superseding it (a fast second click, or
   // React StrictMode's double effect invocation in dev): only the request whose id is still
@@ -52,8 +53,7 @@ export function Puzzles(): React.JSX.Element {
   const requestId = useRef(0);
 
   const applyPuzzle = (p: ParsedPuzzle): void => {
-    setPuzzle(p);
-    setSolveState(startSolve(p.startFen, p.solution));
+    setSnapshot(s => ({ ...s, puzzle: p, solve: startSolve(p.startFen, p.solution) }));
   };
 
   const loadNext = useCallback(() => {
@@ -70,6 +70,7 @@ export function Puzzles(): React.JSX.Element {
       .finally(() => {
         if (requestId.current === id) setLoading(false);
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadById = (): void => {
@@ -90,13 +91,16 @@ export function Puzzles(): React.JSX.Element {
       });
   };
 
-  // Load a first puzzle on mount, same as guess-the-eval auto-generating its first position.
+  // Load a first puzzle on mount, same as guess-the-eval auto-generating its first position — but
+  // only when no puzzle survived a reload (hadRestoredPuzzleRef, seeded once from the snapshot
+  // read on mount): otherwise the restored puzzle would be discarded for an unrelated new one.
   // loadNext is itself request-id guarded (see above), so StrictMode's mount/unmount/remount in
   // dev fires this twice but only the second, current request ever applies a puzzle or an error.
+  const hadRestoredPuzzleRef = useRef(puzzle !== undefined);
   useEffect(() => {
+    if (hadRestoredPuzzleRef.current) return;
     loadNext();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadNext]);
 
   const onMove = (from: SquareName, to: SquareName, promotion?: Role): void => {
     if (!solveState) return;
@@ -104,20 +108,22 @@ export function Puzzles(): React.JSX.Element {
     // that's the puzzle's solution — see solve.ts). attemptMove still compares the full UCI
     // string, so whichever piece the solver picked either matches the solution or reads 'wrong'.
     const uci = promotion ? `${from}${to}${roleToChar(promotion)}` : `${from}${to}`;
-    let next: SolveState;
     try {
-      next = attemptMove(solveState, uci);
+      const next = attemptMove(solveState, uci);
+      const solvedNow = next.status === 'solved' || next.status === 'failed-solved';
+      setSnapshot(s => ({
+        ...s,
+        solve: next,
+        tally: solvedNow
+          ? {
+              solvedFirstTry: s.tally.solvedFirstTry + (next.status === 'solved' ? 1 : 0),
+              solvedAfterMistake: s.tally.solvedAfterMistake + (next.status === 'failed-solved' ? 1 : 0),
+              total: s.tally.total + 1,
+            }
+          : s.tally,
+      }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      return;
-    }
-    setSolveState(next);
-    if (next.status === 'solved' || next.status === 'failed-solved') {
-      setTally(t => ({
-        solvedFirstTry: t.solvedFirstTry + (next.status === 'solved' ? 1 : 0),
-        solvedAfterMistake: t.solvedAfterMistake + (next.status === 'failed-solved' ? 1 : 0),
-        total: t.total + 1,
-      }));
     }
   };
 

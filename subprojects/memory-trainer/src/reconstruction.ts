@@ -3,7 +3,7 @@
 // @human-chess/rules — this module never judges a move against the real game (that is
 // compare.ts, after the fact).
 import {
-  fenOf, legalDests, playMove, positionFromFen, turn, uciSquares,
+  fenOf, legalDests, playMove, playUci, positionFromFen, turn, uciSquares,
   type Color, type Position, type Role, type SquareName,
 } from '@human-chess/rules';
 
@@ -39,3 +39,22 @@ export const lastReconstructedMove = (r: Reconstruction): [SquareName, SquareNam
   const m = r.moves[r.moves.length - 1];
   return m ? uciSquares(m.uci) : undefined;
 };
+
+/**
+ * Rebuilds a `Reconstruction` by replaying `ucis` from `startFen` — used to restore a persisted
+ * attempt across a page reload (docs/design/2026-09-18-reload-survival.md). Unlike
+ * `playReconstructionMove` (which takes board squares from a live click), this takes UCI strings
+ * straight off storage, the same way `packages/review`'s `reviewGame` replays a game. Throws
+ * (via `playUci`'s RulesError) on an illegal move; the caller treats that as "reject the whole
+ * snapshot", never half-restoring a reconstruction.
+ */
+export function replayReconstruction(startFen: string, ucis: string[]): Reconstruction {
+  let pos = positionFromFen(startFen);
+  const moves: ReconstructedMove[] = [];
+  for (const uci of ucis) {
+    const played = playUci(pos, uci);
+    pos = played.pos;
+    moves.push({ uci: played.uci, san: played.san });
+  }
+  return { startFen, pos, moves };
+}

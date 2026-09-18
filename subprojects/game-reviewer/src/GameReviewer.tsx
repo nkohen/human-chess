@@ -7,14 +7,16 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { formatScore, type UciEngine } from '@human-chess/engine';
 import { ImportScreen } from '@human-chess/import/react';
-import type { ImportedGame } from '@human-chess/import';
+import { gameId, type ImportedGame } from '@human-chess/import';
 import {
   ReviewCancelled, reviewGame, type Classification, type EvalOrEnd, type GameReview, type ReviewedMove, type ReviewProgress,
 } from '@human-chess/review';
 import { inCheck, opposite, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
-import { Button, Field, navigateWithHandoff, readHandoffParams, Status, Toolbar, Workbench } from '@human-chess/ui';
+import { Button, consumeHandoffParams, Field, navigateWithHandoff, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import {
-  loadDepth, loadMovetimeSeconds, MAX_DEPTH, MAX_MOVETIME_SECONDS, MIN_DEPTH, MIN_MOVETIME_SECONDS, saveDepth, saveMovetimeSeconds,
+  loadDepth, loadMovetimeSeconds, MAX_DEPTH, MAX_MOVETIME_SECONDS, MIN_DEPTH, MIN_MOVETIME_SECONDS, parseReviewSnapshot,
+  parseStoredScreen, REVIEW_KEY, saveDepth, saveMovetimeSeconds, SCREEN_KEY, serializeReviewSnapshot,
+  type ReviewSnapshot, type StoredScreen,
 } from './storage';
 import './game-reviewer.css';
 
@@ -23,23 +25,31 @@ export interface GameReviewerProps {
   engine: UciEngine | Error | undefined;
 }
 
-type Screen = { kind: 'import' } | { kind: 'review'; game: ImportedGame };
+type Screen = StoredScreen;
 
 const STORAGE_KEY = 'human-chess.game-reviewer.import-username';
 
 export function GameReviewer({ engine }: GameReviewerProps): React.JSX.Element {
-  const [screen, setScreen] = useState<Screen>({ kind: 'import' });
-  const startOver = (): void => setScreen({ kind: 'import' });
-
   // Read once, from the hash App.tsx routed this component in on — GameReviewer is only ever
   // (re)mounted by that routing, so this is exactly whatever query a caller (puzzles' "Review
   // the source game") attached to '#/review'. `pgn` prefills the paste box directly; `gameUrl`
   // (a puzzle record that only carries a game id/URL, not the PGN text) can't be turned into a
   // PGN without a fetch this screen must not make on its own, so it's shown as a plain link
-  // instead and the user pastes the PGN themselves.
-  const [handoff] = useState(() => readHandoffParams(window.location.hash));
+  // instead and the user pastes the PGN themselves. `consumeHandoffParams` also strips the
+  // hand-off out of the URL, so a reload restores the persisted `screen` below instead of
+  // replaying the same hand-off again.
+  const [handoff] = useState(() => consumeHandoffParams());
   const handoffPgn = handoff.get('pgn') ?? undefined;
   const handoffGameUrl = handoff.get('gameUrl') ?? undefined;
+  const hasHandoff = handoffPgn !== undefined || handoffGameUrl !== undefined;
+
+  // A fresh hand-off wins over whatever screen was persisted (docs/design/2026-09-18-reload-
+  // survival.md): rejecting the stored value unconditionally falls back to the `{kind:'import'}`
+  // initial value, which is exactly where a hand-off needs to land (the paste box prefilled).
+  const [screen, setScreen] = usePersistedState<Screen>(SCREEN_KEY, { kind: 'import' }, {
+    parse: raw => (hasHandoff ? undefined : parseStoredScreen(raw)),
+  });
+  const startOver = (): void => setScreen({ kind: 'import' });
 
   if (screen.kind === 'import') {
     return (
@@ -83,12 +93,25 @@ function ReviewScreen({
   onAnotherGame: () => void;
 }): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
-  const [phase, setPhase] = useState<ReviewPhase>('waiting-for-engine');
   const [progress, setProgress] = useState<ReviewProgress | undefined>(undefined);
-  const [review, setReview] = useState<GameReview | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [selectedPly, setSelectedPly] = useState(0);
-  const [flipped, setFlipped] = useState(false);
+
+  // The finished review (whole, so a reload is instant — A1's provenance stays intact through
+  // toStoredGameReview/fromStoredGameReview), the selected ply, and whether the board is
+  // flipped, bound to this game via gameId so a snapshot from reviewing a different game is
+  // never shown here (parseReviewSnapshot rejects a mismatched gameKey).
+  const gameKey = gameId(game);
+  const [snapshot, setSnapshot] = usePersistedState<ReviewSnapshot>(
+    REVIEW_KEY,
+    () => ({ gameKey, review: undefined, selectedPly: 0, flipped: false }),
+    { parse: raw => parseReviewSnapshot(raw, game), serialize: serializeReviewSnapshot },
+  );
+  const { review, selectedPly, flipped } = snapshot;
+  const setReview = (next: GameReview | undefined): void => setSnapshot(s => ({ ...s, review: next }));
+  const setSelectedPly = (updater: number | ((p: number) => number)): void =>
+    setSnapshot(s => ({ ...s, selectedPly: typeof updater === 'function' ? updater(s.selectedPly) : updater }));
+  const setFlipped = (updater: boolean | ((f: boolean) => boolean)): void =>
+    setSnapshot(s => ({ ...s, flipped: typeof updater === 'function' ? updater(s.flipped) : updater }));
 
   // Persisted per the openings builder's depth pattern (subprojects/openings-builder/src/
   // storage.ts): both settings survive a reload, and either one changing restarts the review
@@ -98,6 +121,17 @@ function ReviewScreen({
   const [depthText, setDepthText] = useState<string>(() => String(depth));
   const [movetimeSeconds, setMovetimeSeconds] = useState<number>(() => loadMovetimeSeconds());
   const [movetimeText, setMovetimeText] = useState<string>(() => String(movetimeSeconds));
+
+  // A restored review is shown as-is even if it was made at different settings than what's
+  // currently loaded (it's what the user was looking at) — only an explicit settings change (via
+  // finalizeDepth/finalizeMovetimeSeconds below) should trigger a fresh run. This ref tracks the
+  // depth/movetime the currently-shown result (restored or freshly computed) is "good for";
+  // seeded from the current settings when a review was restored, so the mount-time effect run
+  // below sees them as unchanged and skips straight past re-running.
+  const lastRunSettingsRef = useRef<{ depth: number; movetime: number } | undefined>(
+    review ? { depth, movetime: movetimeSeconds } : undefined,
+  );
+  const [phase, setPhase] = useState<ReviewPhase>(() => (review ? 'done' : 'waiting-for-engine'));
   // Wall-clock start of the review currently running, for the "about N left" progress estimate;
   // read only, never rendered directly — reset at the top of every effect run.
   const startedAtRef = useRef<number | undefined>(undefined);
@@ -121,6 +155,15 @@ function ReviewScreen({
   }
 
   useEffect(() => {
+    // Nothing changed since the currently-shown result (restored or freshly computed) was
+    // produced: leave it on screen. A reload lands here on the very first run whenever a
+    // matching review was restored, regardless of whether the engine has finished loading yet —
+    // showing a cached review never needs the engine.
+    const unchanged = lastRunSettingsRef.current !== undefined
+      && lastRunSettingsRef.current.depth === depth
+      && lastRunSettingsRef.current.movetime === movetimeSeconds;
+    if (unchanged) return;
+
     if (!readyEngine) {
       setPhase('waiting-for-engine');
       return;
@@ -142,9 +185,9 @@ function ReviewScreen({
     )
       .then(r => {
         if (cancelled) return;
-        setReview(r);
-        setSelectedPly(r.moves.length > 0 ? 1 : 0);
+        setSnapshot(s => ({ ...s, review: r, selectedPly: r.moves.length > 0 ? 1 : 0 }));
         setPhase('done');
+        lastRunSettingsRef.current = { depth, movetime: movetimeSeconds };
       })
       .catch((err: unknown) => {
         if (cancelled) return;

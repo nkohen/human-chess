@@ -74,3 +74,24 @@ export function attemptMove(state: SolveState, uci: string): SolveState {
 
 export const currentFen = (state: SolveState): string => fenOf(state.pos);
 export const isSolved = (state: SolveState): boolean => isTerminal(state.status);
+
+/**
+ * Rebuilds a `SolveState` by replaying the first `index` moves of `solution` from `startFen` —
+ * used to restore a persisted solve across a page reload (docs/design/2026-09-18-reload-survival.md).
+ * `index`, `everFailed` and `status` are exactly the fields storage.ts persists; `lastMove` is
+ * always derived here from `solution[index - 1]`, never itself stored, since it is fully
+ * determined by `index`. Throws (via `playUci`'s RulesError) if `index` is out of range or a
+ * solution move is illegal against the replayed position; the caller treats that as "reject the
+ * whole snapshot".
+ */
+export function replaySolve(startFen: string, solution: string[], index: number, everFailed: boolean, status: SolveStatus): SolveState {
+  if (index < 0 || index > solution.length) throw new Error('replay index out of range for this puzzle solution');
+  let pos = positionFromFen(startFen);
+  let lastMove: [SquareName, SquareName] | undefined = undefined;
+  for (let i = 0; i < index; i++) {
+    const uci = solution[i]!;
+    pos = playUci(pos, uci).pos;
+    lastMove = uciSquares(uci);
+  }
+  return { pos, solution, index, everFailed, status, lastMove };
+}

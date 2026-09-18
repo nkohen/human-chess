@@ -5,21 +5,19 @@ import type { ImportedGame } from '@human-chess/import';
 import {
   annotateLine, fullmove, inCheck, opposite, positionFromFen, turn, uciSquares, type Color, type Role, type SquareName,
 } from '@human-chess/rules';
-import { Button, Toolbar, Workbench } from '@human-chess/ui';
+import { Button, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import { classifyCompleteAttempt, compareReconstruction, fenSequence, type ReconstructionOutcome } from './compare';
 import { relativeTime } from './relativeTime';
 import {
   currentFen, lastReconstructedMove, playReconstructionMove, reconstructedSans, reconstructedUcis,
   reconstructionDests, sideToMove, startReconstruction, type Reconstruction,
 } from './reconstruction';
+import {
+  INITIAL_SNAPSHOT, parseTrainerSnapshot, serializeTrainerSnapshot, STATE_KEY, type Screen, type TrainerSnapshot,
+} from './storage';
 import './memory-trainer.css';
 
 const STORAGE_KEY = 'human-chess.memory-trainer.import-username';
-
-type Screen =
-  | { kind: 'import' }
-  | { kind: 'reconstruct'; game: ImportedGame; reconstruction: Reconstruction }
-  | { kind: 'review'; game: ImportedGame; reconstruction: Reconstruction; claimedComplete: boolean };
 
 /**
  * Ply → (colour, move number), anchored to the game's real start position — not always White
@@ -47,7 +45,21 @@ function boardSize(sizePx: number): string {
 }
 
 export function MemoryTrainer(): React.JSX.Element {
-  const [screen, setScreen] = useState<Screen>({ kind: 'import' });
+  // The whole screen — which stage (import/reconstruct/review), the fetched game (never
+  // re-fetched on reload: "latest game" may have changed since), the reconstruction so far, and
+  // the cursor state (flipped, replayIndex) — survives a reload as one snapshot
+  // (docs/design/2026-09-18-reload-survival.md). `parse` replays the stored UCI list through
+  // the rules library to rebuild the live position; a replay that throws rejects the snapshot.
+  const [snapshot, setSnapshot] = usePersistedState<TrainerSnapshot>(STATE_KEY, INITIAL_SNAPSHOT, {
+    parse: parseTrainerSnapshot,
+    serialize: serializeTrainerSnapshot,
+  });
+  const { screen, flipped, replayIndex } = snapshot;
+  const setScreen = (next: Screen): void => setSnapshot(s => ({ ...s, screen: next }));
+  const setFlipped = (updater: boolean | ((f: boolean) => boolean)): void =>
+    setSnapshot(s => ({ ...s, flipped: typeof updater === 'function' ? updater(s.flipped) : updater }));
+  const setReplayIndex = (updater: number | ((i: number) => number)): void =>
+    setSnapshot(s => ({ ...s, replayIndex: typeof updater === 'function' ? updater(s.replayIndex) : updater }));
 
   const startOver = (): void => setScreen({ kind: 'import' });
 
@@ -56,7 +68,7 @@ export function MemoryTrainer(): React.JSX.Element {
 
   const beginReconstruction = (game: ImportedGame): void => {
     setRefetchError(undefined);
-    setScreen({ kind: 'reconstruct', game, reconstruction: startReconstruction(game.startFen) });
+    setSnapshot(s => ({ ...s, screen: { kind: 'reconstruct', game, reconstruction: startReconstruction(game.startFen) }, replayIndex: 0 }));
   };
 
   // "Fetch again" on the reconstruct screen (site lag / our own 60 s cache can hand back the
@@ -73,9 +85,9 @@ export function MemoryTrainer(): React.JSX.Element {
       .then(fetched => {
         // Stale-result guard (reviewer): if the learner has meanwhile finished the attempt or
         // gone elsewhere, the late answer must not yank them back to a fresh reconstruct screen.
-        setScreen(prev =>
-          prev.kind === 'reconstruct' && prev.game === game
-            ? { kind: 'reconstruct', game: fetched, reconstruction: startReconstruction(fetched.startFen) }
+        setSnapshot(prev =>
+          prev.screen.kind === 'reconstruct' && prev.screen.game === game
+            ? { ...prev, screen: { kind: 'reconstruct', game: fetched, reconstruction: startReconstruction(fetched.startFen) } }
             : prev,
         );
         setRefetchError(undefined);
@@ -95,11 +107,17 @@ export function MemoryTrainer(): React.JSX.Element {
     };
     // `claimedComplete` only records which button ended the attempt — it never reveals the real
     // game's length itself; ReviewScreen is the only place that compares against it.
-    const onDone = (claimedComplete: boolean): void => setScreen({ kind: 'review', game, reconstruction, claimedComplete });
+    const onDone = (claimedComplete: boolean): void => setSnapshot(s => ({
+      ...s,
+      screen: { kind: 'review', game, reconstruction, claimedComplete },
+      replayIndex: 0,
+    }));
     return (
       <ReconstructScreen
         game={game}
         reconstruction={reconstruction}
+        flipped={flipped}
+        onFlip={() => setFlipped(f => !f)}
         onMove={onMove}
         onDone={onDone}
         refetching={refetching}
@@ -110,7 +128,18 @@ export function MemoryTrainer(): React.JSX.Element {
   }
 
   const { game, reconstruction, claimedComplete } = screen;
-  return <ReviewScreen game={game} reconstruction={reconstruction} claimedComplete={claimedComplete} onAnotherGame={startOver} />;
+  return (
+    <ReviewScreen
+      game={game}
+      reconstruction={reconstruction}
+      claimedComplete={claimedComplete}
+      flipped={flipped}
+      onFlip={() => setFlipped(f => !f)}
+      replayIndex={replayIndex}
+      onReplayIndexChange={setReplayIndex}
+      onAnotherGame={startOver}
+    />
+  );
 }
 
 /** One line identifying the fetched game — site, players, which colour the learner played, when
@@ -256,6 +285,8 @@ function MoveList({ startFen, ucis }: { startFen: string; ucis: string[] }): Rea
 function ReconstructScreen({
   game,
   reconstruction,
+  flipped,
+  onFlip,
   onMove,
   onDone,
   refetching,
@@ -264,13 +295,14 @@ function ReconstructScreen({
 }: {
   game: ImportedGame;
   reconstruction: Reconstruction;
+  flipped: boolean;
+  onFlip: () => void;
   onMove: (from: SquareName, to: SquareName, promotion?: Role) => void;
   onDone: (claimedComplete: boolean) => void;
   refetching: boolean;
   refetchError: string | undefined;
   onFetchAgain: () => void;
 }): React.JSX.Element {
-  const [flipped, setFlipped] = useState(false);
   const baseOrientation = game.playedAs ?? 'white';
   const orientation = flipped ? opposite(baseOrientation) : baseOrientation;
 
@@ -306,7 +338,7 @@ function ReconstructScreen({
           <Button className="memory-trainer-done" variant="secondary" onClick={() => onDone(false)}>
             I have no idea
           </Button>
-          <Button variant="quiet" onClick={() => setFlipped(f => !f)}>
+          <Button variant="quiet" onClick={onFlip}>
             Flip board
           </Button>
         </Toolbar>
@@ -323,16 +355,21 @@ function ReviewScreen({
   game,
   reconstruction,
   claimedComplete,
+  flipped,
+  onFlip,
+  replayIndex,
+  onReplayIndexChange,
   onAnotherGame,
 }: {
   game: ImportedGame;
   reconstruction: Reconstruction;
   claimedComplete: boolean;
+  flipped: boolean;
+  onFlip: () => void;
+  replayIndex: number;
+  onReplayIndexChange: (updater: number | ((i: number) => number)) => void;
   onAnotherGame: () => void;
 }): React.JSX.Element {
-  const [flipped, setFlipped] = useState(false);
-  const [replayIndex, setReplayIndex] = useState(0);
-
   // ReviewScreen only mounts once per attempt, so this pure comparison runs once rather than
   // needing memoisation.
   const userUcis = reconstructedUcis(reconstruction);
@@ -410,15 +447,15 @@ function ReviewScreen({
         <Toolbar>
           {hasReplayBoard && (
             <>
-              <Button size="sm" onClick={() => setReplayIndex(i => Math.max(0, i - 1))} disabled={!canPrev}>
+              <Button size="sm" onClick={() => onReplayIndexChange(i => Math.max(0, i - 1))} disabled={!canPrev}>
                 prev
               </Button>
-              <Button size="sm" onClick={() => setReplayIndex(i => Math.min(replayFens.length - 1, i + 1))} disabled={!canNext}>
+              <Button size="sm" onClick={() => onReplayIndexChange(i => Math.min(replayFens.length - 1, i + 1))} disabled={!canNext}>
                 next
               </Button>
             </>
           )}
-          <Button variant="quiet" onClick={() => setFlipped(f => !f)}>
+          <Button variant="quiet" onClick={onFlip}>
             Flip board
           </Button>
           <Button variant="secondary" onClick={onAnotherGame}>
