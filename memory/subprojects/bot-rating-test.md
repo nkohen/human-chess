@@ -50,3 +50,19 @@ delete) with side-to-move and castling controls; the FEN field stays the source 
 
 ## Open questions (not yet asked)
 - Time control.
+
+**Built 2026-09-17 (cross-tool hand-offs, docs/audits/2026-09-17-interview-vs-slices.md §2):**
+reads `?fen=...&color=...&blindfold=1` off its own route (`packages/ui/src/handoff.ts`'s
+`readHandoffParams(window.location.hash)`) on mount — the game reviewer's "Play from this
+position against the engine" and puzzles' "Practice this against the engine" both send `fen`/
+`color`; a `Status` line ("Position handed over from another human-chess tool") shows while the
+FEN field still holds exactly the handed-off value and disappears the moment the user edits it
+(a derived boolean, not separate state). The game never auto-starts — Start is still a deliberate
+click. Also built: a **blindfold mode** (`?blindfold=1`, plus a visible "Blindfold (pieces
+hidden)" checkbox in settings and again during play so it can be toggled off) — CSS-only, hiding
+chessground's own `piece` elements under a `.brt-blindfold` wrapper
+(`.brt-blindfold .cg-wrap piece { visibility: hidden }`), no `@human-chess/board` change. Nothing
+links to `blindfold=1` yet; it exists for the visualization trainer to use later (row 55 of the
+audit doc names that hand-off explicitly), which is why this task was told not to touch
+`subprojects/visualization-trainer`. Not built: any hand-off *out* of bot-rating-test (e.g. into
+the reviewer) — out of scope for this pass.

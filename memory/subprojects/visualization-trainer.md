@@ -96,3 +96,9 @@ phases were checked manually instead.
 - Time element on the main exercises; hand-off into a blindfold game vs engine.
 - Feedback and grounding: the resulting position is computed by chessops; correctness is
   board-state; any "why" is engine-grounded.
+
+**Built 2026-09-17: hand-offs.** Puzzles' "Memorize this position" arrives as #/visualization?fen=…;
+VisualizationTrainer validates it through the rules library, opens Memorize, and makes it the
+first of the session's positions (the rest come from the chosen source). The Lines session summary
+links "Play a blindfold game against the engine" to #/bot-rating?blindfold=1, where the pieces are
+hidden by CSS. Both are first guesses at placement.

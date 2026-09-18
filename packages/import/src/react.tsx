@@ -3,6 +3,7 @@
 // entry ("./react" subpath) so non-React consumers of fetchLatestLichessGame/importPgn never
 // pull in React.
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Button, Field, Page, SegmentedControl, Status } from '@human-chess/ui';
 import { fetchLatestChesscomGame } from './chesscom';
 import { fetchLatestLichessGame } from './lichess';
@@ -73,6 +74,16 @@ export interface ImportScreenProps {
   storageKey: string;
   /** Defaults to a generic heading; pass the subproject's own name for its screen. */
   title?: string;
+  /** Prefills the pasted-PGN box and opens straight to it — used by a cross-tool hand-off that
+   * already has the PGN text (e.g. puzzles' "Review the source game", when the puzzle record
+   * carries one). Never triggers an import by itself: the user still presses "Use this PGN",
+   * so nothing here fetches anything on the caller's behalf. */
+  initialPgnText?: string | undefined;
+  /** An extra notice rendered above the form, e.g. explaining why the PGN box was prefilled, or
+   * (when a hand-off only had a game URL, not PGN text) pointing at the source game to paste
+   * from manually — ImportScreen has no "import by URL" path, and this deliberately does not
+   * add one (no fetch beyond the existing username/paste flows). */
+  notice?: ReactNode | undefined;
 }
 
 const SITE_LABELS: Record<ImportSite, string> = { lichess: 'lichess', 'chess.com': 'chess.com' };
@@ -106,11 +117,17 @@ const SOURCE_OPTIONS: { value: Source; label: string }[] = [
  * `requestIdRef` makes an old resolve stale the moment a newer fetch starts, `settledRef` makes
  * it stale the moment any import (fetch or paste) already succeeded, or the component unmounted.
  */
-export function ImportScreen({ onImported, storageKey, title = 'Import a game' }: ImportScreenProps): React.JSX.Element {
+export function ImportScreen({
+  onImported,
+  storageKey,
+  title = 'Import a game',
+  initialPgnText,
+  notice,
+}: ImportScreenProps): React.JSX.Element {
   const { username, setUsername, save } = useLastUsername(storageKey);
   const [site, setSite] = useState<ImportSite>(() => loadLastSite(storageKey));
-  const [pgnMode, setPgnMode] = useState(false);
-  const [pgnText, setPgnText] = useState('');
+  const [pgnMode, setPgnMode] = useState(initialPgnText !== undefined);
+  const [pgnText, setPgnText] = useState(initialPgnText ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
@@ -176,6 +193,7 @@ export function ImportScreen({ onImported, storageKey, title = 'Import a game' }
 
   return (
     <Page title={title} width="medium">
+      {notice}
       <SegmentedControl options={SOURCE_OPTIONS} value={pgnMode ? 'pgn' : site} onChange={chooseSource} ariaLabel="Import source" />
       {!pgnMode && (
         <>

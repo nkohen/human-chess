@@ -55,3 +55,8 @@
   flex: 1 1 auto;
   margin-bottom: 0;
 }
+
+.puzzles-continue {
+  margin-top: var(--hc-space-2);
+  flex-wrap: wrap;
+}

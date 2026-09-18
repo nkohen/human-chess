@@ -4,9 +4,9 @@ import { formatScore, whitePerspective, type Analysis, type UciEngine } from '@h
 import { describeEnd, isInCheck, isPlayersTurn, lastMove, playerDests, result, sideToMove } from '@human-chess/play';
 import { curatedEndgames, curatedGameDate, curatedOpponent, endgameLadder, EVAL_DEPTH, type CuratedPosition, type EndgameLesson } from '@human-chess/positions';
 import { positionFromFen, turn } from '@human-chess/rules';
-import { Button, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
+import { Button, navigateWithHandoff, Panel, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
 import { lessonOutcome } from './lessonAdapt';
-import { loadConfident, saveConfident } from './progress';
+import { loadConfident, loadMetaHandoffDismissed, saveConfident, saveMetaHandoffDismissed } from './progress';
 import { useCuratedGame } from './useCuratedGame';
 import { useLessonGame } from './useLessonGame';
 import './endgames-intro.css';
@@ -41,6 +41,18 @@ export function EndgamesIntro({ engine }: EndgamesIntroProps): React.JSX.Element
   } = useCuratedGame(curatedEntry, mode === 'curated' ? readyEngine : undefined);
 
   useEffect(() => saveConfident(confident), [confident]);
+
+  // First guess: "the second rung's position" is read as the second lesson the learner has
+  // marked confident — progress.ts persists nothing else win-shaped (a curated real-game
+  // position records no confidence, see selectCurated below), so `confident.size` is the only
+  // observable "how many wins" signal across a reload. Shown once, then never again once
+  // dismissed (memory/subprojects/endgames-introduction.md "Meta: hand-off to other tools").
+  const [metaHandoffDismissed, setMetaHandoffDismissed] = useState(() => loadMetaHandoffDismissed());
+  const showMetaHandoff = confident.size >= 2 && !metaHandoffDismissed;
+  const dismissMetaHandoff = (): void => {
+    setMetaHandoffDismissed(true);
+    saveMetaHandoffDismissed();
+  };
 
   const index = endgameLadder.indexOf(lesson);
   const next = endgameLadder[index + 1];
@@ -274,6 +286,27 @@ export function EndgamesIntro({ engine }: EndgamesIntroProps): React.JSX.Element
         )
       }
     >
+      {showMetaHandoff && (
+        <Panel title="Ready for a whole game?" className="endgames-meta-handoff">
+          <p>Three things carry over from these endgames into a full game:</p>
+          <ul className="endgames-meta-handoff-list">
+            <li>Don&apos;t lose pieces.</li>
+            <li>If your opponent loses pieces, the trade benefits you — it brings a winning endgame closer.</li>
+            <li>If you&apos;re down pieces, keep things complicated without losing more.</li>
+          </ul>
+          <Toolbar>
+            <Button variant="secondary" onClick={() => navigateWithHandoff('#/opening-game', {})}>
+              Try the opening training game
+            </Button>
+            <Button variant="secondary" onClick={() => navigateWithHandoff('#/puzzles', {})}>
+              Try puzzles
+            </Button>
+            <Button variant="quiet" onClick={dismissMetaHandoff}>
+              Dismiss
+            </Button>
+          </Toolbar>
+        </Panel>
+      )}
       <h3 className="endgames-section-title">Lessons</h3>
       <ol className="endgames-lesson-list">
         {endgameLadder.map(l => (

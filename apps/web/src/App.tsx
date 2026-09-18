@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
 import { completeLichessLogin, installLichessAuth } from '@human-chess/lichess';
-import { AppShell, Card, CardGrid, Page } from '@human-chess/ui';
+import { AppShell, Card, CardGrid, Page, routeOf } from '@human-chess/ui';
 import { EndgamesIntro } from '@human-chess/endgames-intro';
 import { GuessTheEval } from '@human-chess/guess-the-eval';
 import { VisualizationTrainer } from '@human-chess/visualization-trainer';
@@ -72,6 +72,10 @@ function useEngine(): UciEngine | Error | undefined {
 
 export function App(): React.JSX.Element {
   const hash = useHash();
+  // Hand-offs (packages/ui/src/handoff.ts) attach "?fen=...&color=..." after the route, so
+  // routing compares on the part before '?', never on the raw hash — otherwise every subproject
+  // linked to with a hand-off would fall through to the home page.
+  const route = routeOf(hash);
   const engine = useEngine();
   const engineLine = engine instanceof Error ? `engine: failed to load (${engine.message})` : engine ? `engine: ${engine.name}` : 'engine: loading…';
 
@@ -86,27 +90,30 @@ export function App(): React.JSX.Element {
 
   return (
     <AppShell brand={<a href="#/">human-chess</a>} right={<span className="app-engine">{engineLine}</span>}>
-      {hash === '#/endgames' ? (
+      {/* The three hand-off receivers (packages/ui/src/handoff.ts) read their ?params once on
+          mount, so they are keyed on the full hash: a new hand-off to a route already showing
+          remounts them instead of leaving the URL and the state to diverge. */}
+      {route === '#/endgames' ? (
         <EndgamesIntro engine={engine} />
-      ) : hash === '#/guess-the-eval' ? (
+      ) : route === '#/guess-the-eval' ? (
         <GuessTheEval engine={engine} />
-      ) : hash === '#/visualization' ? (
-        <VisualizationTrainer engine={engine} />
-      ) : hash === '#/hand-and-brain' ? (
+      ) : route === '#/visualization' ? (
+        <VisualizationTrainer key={hash} engine={engine} />
+      ) : route === '#/hand-and-brain' ? (
         <HandAndBrain />
-      ) : hash === '#/memory' ? (
+      ) : route === '#/memory' ? (
         <MemoryTrainer />
-      ) : hash === '#/opening-game' ? (
+      ) : route === '#/opening-game' ? (
         <OpeningTrainingGame engine={engine} />
-      ) : hash === '#/bot-rating' ? (
-        <BotRatingTest engine={engine} />
-      ) : hash === '#/puzzles' ? (
+      ) : route === '#/bot-rating' ? (
+        <BotRatingTest key={hash} engine={engine} />
+      ) : route === '#/puzzles' ? (
         <Puzzles />
-      ) : hash === '#/chessitout' ? (
+      ) : route === '#/chessitout' ? (
         <Chessitout engine={engine} />
-      ) : hash === '#/review' ? (
-        <GameReviewer engine={engine} />
-      ) : hash === '#/openings' ? (
+      ) : route === '#/review' ? (
+        <GameReviewer key={hash} engine={engine} />
+      ) : route === '#/openings' ? (
         <OpeningsBuilder engine={engine} />
       ) : (
         <Page width="wide">

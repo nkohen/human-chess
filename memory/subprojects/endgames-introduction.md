@@ -133,4 +133,20 @@ is provenance metadata only and is never shown as an evaluation (A1) — every n
 sees here comes from the app's own engine. progress.ts is untouched for curated positions (no
 "I'm Confident!" prompt applies to a one-off real game).
 
+**Built 2026-09-17 (meta hand-off, "Meta: hand-off to other tools" above):** once
+`confident.size >= 2` (first guess: "the second rung's position" read as the second lesson
+marked confident via the existing "I'm Confident!" prompt — `progress.ts` persists nothing else
+win-shaped across a reload; a curated real-game position records no confidence at all, per the
+existing comment on `selectCurated`, so there is no other observable "second win" signal to hook),
+a dismissible `Panel` titled "Ready for a whole game?" appears in `children`, below the primary
+controls (below the primary block by construction; the screenshot harness seeds no progress, so it never renders the panel), carrying
+the three lessons verbatim from the interview and two links via `navigateWithHandoff`: "Try the
+opening training game" → `#/opening-game`, "Try puzzles" → `#/puzzles` (the interview's "Hard-
+coded then procedural" section names both eventual nudges; this task only asked for these two).
+Dismissal is a separate guarded-localStorage key
+(`human-chess.endgames-intro.meta-handoff-dismissed`) from `confident`'s own key, shown once,
+never again once dismissed. Not built: anything that decides *which* of the two links to lead
+with, or hides the card again after a fixed number of visits — it just stays dismissed once
+dismissed.
+
 ## Open questions (not yet asked)

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { inCheck, legalDests, roleToChar, turn, type Role, type SquareName } from '@human-chess/rules';
-import { Button, Field, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
+import { Button, Field, navigateWithHandoff, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
 import { fetchNextPuzzle, fetchPuzzleById, type ParsedPuzzle } from './puzzle';
 import { attemptMove, currentFen, startSolve, type SolveState, type SolveStatus } from './solve';
 import './puzzles.css';
@@ -142,22 +142,54 @@ export function Puzzles(): React.JSX.Element {
 
   // Once solved, the verdict + themes (naming the motif would give the solution away, so they
   // only appear now) + the one forward action — Next puzzle — become the primary block.
+  // Hoisted so TypeScript narrows it for the "Review the source game" link below.
+  const gameUrl = puzzle?.gameUrl;
   const primaryContent =
-    finished && solveState ? (
+    finished && solveState && puzzle ? (
       <div className="puzzles-solved" role="dialog">
         <Status kind={STATUS_KIND[solveState.status]}>{STATUS_TEXT[solveState.status]}</Status>
-        {puzzle && (
-          <div className="puzzles-themes">
-            {puzzle.themes.map(theme => (
-              <span key={theme} className="puzzles-theme">
-                {theme}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="puzzles-themes">
+          {puzzle.themes.map(theme => (
+            <span key={theme} className="puzzles-theme">
+              {theme}
+            </span>
+          ))}
+        </div>
         <Button variant="primary" onClick={loadNext} disabled={loading}>
           Next puzzle
         </Button>
+        {/* Cross-references to the other tools (memory/subprojects/puzzles.md "What is
+            different from lichess puzzles"), once the puzzle is settled either way — solved or
+            revealed by failing. All three carry the puzzle's own starting position (before the
+            first solution move) and the solver's own side; "opening tags" from that same memory
+            note are not shown because the live puzzle API this subproject uses (puzzle.ts) has
+            no such field — only lichess's bulk CSV dump carries OpeningTags, and this reads the
+            live /api/puzzle/{next,daily,id} endpoints instead (first guess, recorded here). */}
+        <Toolbar className="puzzles-continue">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => navigateWithHandoff('#/bot-rating', { fen: puzzle.startFen, color: puzzle.solverColor })}
+          >
+            Practice this against the engine
+          </Button>
+          {gameUrl !== undefined && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigateWithHandoff('#/review', { gameUrl })}
+            >
+              Review the source game
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => navigateWithHandoff('#/visualization', { fen: puzzle.startFen })}
+          >
+            Memorize this position
+          </Button>
+        </Toolbar>
       </div>
     ) : undefined;
 

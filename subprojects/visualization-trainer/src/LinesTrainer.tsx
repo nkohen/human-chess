@@ -17,7 +17,7 @@ import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { endPosition, PIECE_ON_OPTIONS, questionsFor, type Position, type Question } from '@human-chess/facts';
 import { fenOf, inCheck, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
-import { Button, Field, SegmentedControl, Status, type StatusKind, Workbench } from '@human-chess/ui';
+import { Button, Field, navigateWithHandoff, SegmentedControl, Status, type StatusKind, Workbench } from '@human-chess/ui';
 import { LINE_PLIES, ROUNDS, randomStartPosition } from './exercise';
 import './visualization-trainer.css';
 
@@ -185,6 +185,11 @@ export function LinesTrainer({ engine }: LinesTrainerProps): React.JSX.Element {
             </p>
             <Button variant="primary" onClick={playAgain}>
               Play again
+            </Button>
+            {/* The interview's secondary goal is blindfold chess; the bot-rating test hides its
+                pieces when asked to (its blindfold=1 hand-off), so a whole game is one tap away. */}
+            <Button variant="secondary" onClick={() => navigateWithHandoff('#/bot-rating', { blindfold: '1' })}>
+              Play a blindfold game against the engine
             </Button>
           </div>
         ) : exercise.kind === 'no-line' ? (

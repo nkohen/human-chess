@@ -38,3 +38,5 @@ export type { AppShellProps, PageProps, PageWidth, WorkbenchProps } from './layo
 
 export { fitSquare } from './fit';
 export { useFitSquare } from './useFitSquare';
+
+export { handoffHash, navigateWithHandoff, readHandoffParams, routeOf } from './handoff';

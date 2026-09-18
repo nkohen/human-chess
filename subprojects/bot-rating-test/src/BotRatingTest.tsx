@@ -35,7 +35,7 @@ import {
   type Color,
   type Position,
 } from '@human-chess/rules';
-import { Button, Field, Page, SegmentedControl, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
+import { Button, cx, Field, Page, readHandoffParams, SegmentedControl, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
 import { appendRecord, clearRecords, loadRecords, type BotRatingRecord, type GameOutcome } from './records';
 import { ELO_LEVELS, suggestNextElo, suggestedStartingElo } from './suggest';
 import { highestWin, summarize } from './summary';
@@ -116,13 +116,45 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
   const readyEngine = engine instanceof Error ? undefined : engine;
   const [records, setRecords] = useState<BotRatingRecord[]>(() => loadRecords());
   const [elo, setElo] = useState(() => suggestedStartingElo(loadRecords()));
-  const [colorChoice, setColorChoice] = useState<ColorChoice>('white');
-  const [fenText, setFenText] = useState(STANDARD_START_FEN);
-  const [fenError, setFenError] = useState<string | undefined>(undefined);
+
+  // Cross-tool hand-off (packages/ui/src/handoff.ts): the game reviewer's "Play from this
+  // position against the engine" and puzzles' "Practice this against the engine" both land here
+  // with ?fen=...&color=.... Read once, from the hash this component was routed in on (App.tsx
+  // only ever mounts BotRatingTest fresh per route change). `handoffFen` is kept around, not just
+  // consumed, so the "handed over" notice below can tell whether the user has since changed it.
+  const [handoff] = useState(() => readHandoffParams(window.location.hash));
+  const handoffFen = handoff.get('fen') ?? undefined;
+  const [colorChoice, setColorChoice] = useState<ColorChoice>(() => {
+    const c = handoff.get('color');
+    return c === 'black' || c === 'white' ? c : 'white';
+  });
+  const [fenText, setFenText] = useState(() => handoffFen ?? STANDARD_START_FEN);
+  // A handed-over FEN is checked right away, the same check Start runs, so the "handed over"
+  // notice never sits next to a position that will only be rejected once the user clicks.
+  const [fenError, setFenError] = useState<string | undefined>(() => {
+    if (handoffFen === undefined) return undefined;
+    try {
+      positionFromFen(handoffFen);
+      return undefined;
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+  });
   const [boardMode, setBoardMode] = useState(false);
   const [active, setActive] = useState<ActiveGame | undefined>(undefined);
   const [resigned, setResigned] = useState(false);
+  // First guess: "blindfold" only ever hides pieces via CSS on the live board (see
+  // bot-rating-test.css's .brt-blindfold) — no Board change, so anything can link here with
+  // blindfold=1 (a future visualization-trainer hand-off is the named example) and get the same
+  // treatment for free. It's a checkbox, not tied to `active`, so it stays in effect (and stays
+  // toggleable) across "Play suggested level" / restarts within the same visit.
+  const [blindfold, setBlindfold] = useState(() => handoff.get('blindfold') === '1');
   const recordedRef = useRef(false);
+
+  // The notice clears the moment the user changes the FEN away from what was handed off — a
+  // derived boolean rather than its own state/effect, so there is nothing to keep in sync: it is
+  // simply "is the field still showing exactly what was handed to it".
+  const handoffNoticeVisible = handoffFen !== undefined && fenText === handoffFen;
 
   // The FEN text is the single source of truth for the setup screen; these are just its fields,
   // read defensively since the text can be mid-edit or pasted garbage. The board editor and the
@@ -291,6 +323,7 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
         }
         aside={
           <>
+            {handoffNoticeVisible && <Status kind="info">Position handed over from another human-chess tool.</Status>}
             <Field label="Your colour">
               <SegmentedControl options={COLOR_CHOICES} value={colorChoice} onChange={setColorChoice} ariaLabel="Your colour" />
             </Field>
@@ -300,6 +333,10 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
             <label className="brt-board-toggle">
               <input type="checkbox" checked={boardMode} onChange={e => setBoardMode(e.target.checked)} />
               Set up on a board
+            </label>
+            <label className="brt-board-toggle">
+              <input type="checkbox" checked={blindfold} onChange={e => setBlindfold(e.target.checked)} />
+              Blindfold (pieces hidden)
             </label>
             {boardMode && (
               <div className="brt-board-editor-controls">
@@ -366,21 +403,27 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
         </p>
       }
       board={(sizePx: number) => (
-        <Board
-          fen={fen}
-          orientation={active.playerColor}
-          turnColor={sideToMove(game)}
-          dests={dests}
-          movableColor={!ended && isPlayersTurn(game) ? active.playerColor : undefined}
-          lastMove={lastMove(game)}
-          check={isInCheck(game)}
-          onMove={onPlayerMove}
-          size={`${sizePx}px`}
-        />
+        <div className={cx('brt-board-slot', blindfold && 'brt-blindfold')}>
+          <Board
+            fen={fen}
+            orientation={active.playerColor}
+            turnColor={sideToMove(game)}
+            dests={dests}
+            movableColor={!ended && isPlayersTurn(game) ? active.playerColor : undefined}
+            lastMove={lastMove(game)}
+            check={isInCheck(game)}
+            onMove={onPlayerMove}
+            size={`${sizePx}px`}
+          />
+        </div>
       )}
       primary={
         <>
           <Status kind={statusKind}>{statusText()}</Status>
+          <label className="brt-board-toggle">
+            <input type="checkbox" checked={blindfold} onChange={e => setBlindfold(e.target.checked)} />
+            Blindfold (pieces hidden)
+          </label>
           {ended && (
             <p>
               Suggested next level: <strong>{suggested}</strong>

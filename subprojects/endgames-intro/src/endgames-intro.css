@@ -49,3 +49,12 @@
   color: var(--hc-text-muted);
   font-size: var(--hc-text-sm);
 }
+
+.endgames-meta-handoff {
+  margin-bottom: var(--hc-space-3);
+}
+
+.endgames-meta-handoff-list {
+  margin: 0 0 var(--hc-space-2);
+  padding-left: var(--hc-space-4);
+}

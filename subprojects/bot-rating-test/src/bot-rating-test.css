@@ -69,3 +69,17 @@
   color: var(--hc-text-muted);
   margin: 0;
 }
+
+.brt-board-slot {
+  width: 100%;
+  height: 100%;
+}
+
+/* Blindfold mode (cross-tool hand-off: ?blindfold=1): a CSS-only piece hide on this board, not a
+ * @human-chess/board change, so any hand-off that lands here with blindfold=1 gets it for free
+ * and the visible checkbox can always undo it. Selector matches chessground's own DOM
+ * (node_modules/chessground/assets/chessground.base.css: ".cg-wrap piece") rather than guessing
+ * at one. */
+.brt-blindfold .cg-wrap piece {
+  visibility: hidden;
+}

@@ -5,7 +5,8 @@
 // everything about how it looks and behaves. Last mode is remembered per browser (mode.ts).
 import { useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
-import { SegmentedControl } from '@human-chess/ui';
+import { positionFromFen } from '@human-chess/rules';
+import { readHandoffParams, SegmentedControl } from '@human-chess/ui';
 import { LinesTrainer } from './LinesTrainer';
 import { MemorizeTrainer } from './MemorizeTrainer';
 import { loadTrainerMode, saveTrainerMode, type TrainerMode } from './mode';
@@ -21,8 +22,26 @@ const MODE_OPTIONS: { value: TrainerMode; label: string }[] = [
   { value: 'memorize', label: 'Memorize' },
 ];
 
+/** A position handed over by another tool (puzzles' "Memorize this position" sends
+ * #/visualization?fen=...), or undefined. Validated through the rules library so a garbage hash
+ * never reaches the memorizer; an invalid one is simply ignored (first guess: nothing to tell the
+ * user, they just get the ordinary trainer). Read once, from the hash this route was entered on
+ * (App.tsx keys the trainer on the full hash, so a new hand-off remounts it). */
+function handoffFen(): string | undefined {
+  const fen = readHandoffParams(window.location.hash).get('fen');
+  if (!fen) return undefined;
+  try {
+    positionFromFen(fen);
+    return fen;
+  } catch {
+    return undefined;
+  }
+}
+
 export function VisualizationTrainer({ engine }: VisualizationTrainerProps): React.JSX.Element {
-  const [mode, setMode] = useState<TrainerMode>(loadTrainerMode);
+  const [firstFen] = useState(handoffFen);
+  // A handed-over position is only meaningful to Memorize, so it wins over the remembered mode.
+  const [mode, setMode] = useState<TrainerMode>(() => (firstFen ? 'memorize' : loadTrainerMode()));
 
   const changeMode = (next: TrainerMode): void => {
     setMode(next);
@@ -34,7 +53,7 @@ export function VisualizationTrainer({ engine }: VisualizationTrainerProps): Rea
       <div className="viz-mode-bar">
         <SegmentedControl ariaLabel="Visualization trainer mode" options={MODE_OPTIONS} value={mode} onChange={changeMode} />
       </div>
-      <div className="viz-mode-content">{mode === 'lines' ? <LinesTrainer engine={engine} /> : <MemorizeTrainer />}</div>
+      <div className="viz-mode-content">{mode === 'lines' ? <LinesTrainer engine={engine} /> : <MemorizeTrainer firstFen={firstFen} />}</div>
     </div>
   );
 }

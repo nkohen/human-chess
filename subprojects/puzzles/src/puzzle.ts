@@ -39,10 +39,16 @@ export interface ParsedPuzzle {
   solution: string[];
   /** SAN of every move played to reach startFen, for context/display. */
   setupSans: string[];
+  /** The source game's lichess URL, when `game.id` is present in the response (observed shape
+   * always has it, but it isn't required by asLichessPuzzleResponse above, so this stays
+   * optional rather than asserting on a field this module doesn't otherwise depend on). First
+   * guess: lichess's own game URL convention is "https://lichess.org/{id}" — not re-derived
+   * from any other field, and never fabricated when `game.id` is missing. */
+  gameUrl: string | undefined;
 }
 
 interface RawLichessPuzzleResponse {
-  game: { pgn: string };
+  game: { pgn: string; id?: string };
   puzzle: {
     id: string;
     rating: number;
@@ -65,6 +71,10 @@ function asLichessPuzzleResponse(json: unknown): RawLichessPuzzleResponse {
   const { game, puzzle } = json as Record<string, unknown>;
   if (typeof game !== 'object' || game === null || typeof (game as Record<string, unknown>).pgn !== 'string') {
     throw new PuzzleError('lichess puzzle response is missing a string "game.pgn"');
+  }
+  const gameId = (game as Record<string, unknown>).id;
+  if (gameId !== undefined && typeof gameId !== 'string') {
+    throw new PuzzleError('lichess puzzle response has a non-string "game.id"');
   }
   if (typeof puzzle !== 'object' || puzzle === null) {
     throw new PuzzleError('lichess puzzle response is missing a "puzzle" object');
@@ -106,6 +116,7 @@ export function parseLichessPuzzle(json: unknown): ParsedPuzzle {
     solverColor: turn(pos),
     solution: puzzle.solution,
     setupSans: parsed.sans,
+    gameUrl: game.id !== undefined ? `https://lichess.org/${game.id}` : undefined,
   };
 }
 

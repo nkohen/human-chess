@@ -112,3 +112,19 @@ worth keeping: chess.com's monthly endpoint sends `cache-control: max-age=5` (ou
 ours, not theirs) and a weak `ETag`, so a conditional `If-None-Match` request would make a
 "fetch again" or a poll for a just-finished game cost a 304 instead of the whole month.
 Not built; noted as the next step if fetch cost ever matters.
+
+**Built 2026-09-17 (hand-off into the bot-rating test, docs/audits/2026-09-17-interview-vs-
+slices.md §2 row 55):** at the currently selected move, the footer toolbar gained "Play from
+this position against the engine" — `navigateWithHandoff('#/bot-rating', { fen, color })` where
+`fen` is the selected move's `fenAfter` (or the game's `startFen` before any move is selected)
+and `color` is `game.playedAs` when the import knew it, else the side to move at that FEN
+(`turn(positionFromFen(fen))`, never guessed). It's always visible once a game is loaded, even
+mid-review (before the engine analysis finishes), since the FEN itself doesn't depend on review
+completing. Also built the receiving half of two other hand-offs: `ImportScreen`
+(`@human-chess/import`) now takes `initialPgnText` (prefills the paste box and opens straight to
+"pasted PGN" mode — used when puzzles' "Review the source game" ever carries a `pgn`, not just a
+`gameUrl`) and `notice` (an extra node above the form). GameReviewer itself reads `pgn`/`gameUrl`
+off `readHandoffParams(window.location.hash)`: a `pgn` hand-off prefills the box directly; a
+`gameUrl`-only one (puzzles' actual case today, see puzzles.md) shows a link to the source game
+instead of prefilling anything, since there is no "import by URL" path here and this task was
+explicit that none should be added (no fetch beyond the existing username/paste flows).

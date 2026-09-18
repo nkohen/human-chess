@@ -45,14 +45,14 @@ Most are probably fine to defer, but they should either be built or written down
 
 | Subproject | Unrecorded cut |
 |---|---|
-| Openings builder | Priority #2 of the interview: opening-tree analysis over your own played games (v) |
+| Openings builder | ~~Priority #2 of the interview: opening-tree analysis over your own played games~~ Built 2026-09-17: "Your games" mode folds your last N lichess or chess.com games (default 100, max 300, 20 plies a side) into a position tree with counts, W/D/L and game links, and adds a browsed line to an opening; own implementation, openingtree's code not reused (v) |
 | Openings builder | ~~Drilling several openings with the union-of-graphs acceptance rule~~ Built 2026-09-17: drill scope This opening / Several / All (colour); an opening stays live while its own graph matches every move played; replies drawn from the union |
 | Openings builder | Two-colour system linked by name; merge two openings at a position; the "split" override; design notes on a repertoire; spaced-repetition queue; drill replies weighted by real-opponent stats (code comment says "later", no user date) (v) |
 | Guess the eval | ~~PvP GeoGuessr mode and its always-timed countdown; optional PvE time limit; "analyse the position after guessing"~~ Built 2026-09-17 as same-device pass-and-play (rooms are still unbuilt): PvP always timed with player 2's limit = min(limit, player 1's time + 10 s) in place of the GeoGuessr countdown; PvE limit none/15/30/60 s; analysis board with top-3 engine lines after the reveal (PvE) or from the results screen (PvP) |
 | Visualization trainer | Position sources (puzzles, own games, pedagogical pool); the progression ladder (longer lines, more pieces, obscuration). ~~The timed position-memorizer minigame~~ Built 2026-09-17 as the Memorize mode (study 5/10/20 s, rebuild on an empty board, diff and score over 5 rounds; random or curated source) |
-| Puzzles | Cross-references to the other tools; own-game puzzle generation from the reviewer |
+| Puzzles | ~~Cross-references to the other tools~~ Built 2026-09-17: after a puzzle, links to practise the position against the engine, review the source game (lichess link in the reviewer, no auto-fetch) and memorize the position; opening tags not shown because the live puzzle API carries none. Still cut: own-game puzzle generation from the reviewer |
 | Bot-rating test | Goal 3: showing which suboptimal lines get punished at what rating; repertoire lines as a start position |
-| Game reviewer + bot test | "Play from this position" hand-off from the review into the bot-rating test (v). Same for the endgames meta hand-off and visualization to blindfold |
+| Game reviewer + bot test | ~~"Play from this position" hand-off from the review into the bot-rating test. Same for the endgames meta hand-off and visualization to blindfold~~ Built 2026-09-17: reviewer button hands FEN and colour to the bot-rating test (prefilled, never auto-started); endgames shows a dismissible "Ready for a whole game?" card with the three interview lessons after two confident lessons, linking to the opening game and puzzles; the Lines session summary links to a blindfold game (bot-rating hides its pieces by CSS) |
 
 ## 3. Possibly unintentional: assumptions and divergences with no user attribution
 

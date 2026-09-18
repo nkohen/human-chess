@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { Board, BoardEditor } from '@human-chess/board';
 import { EMPTY_PLACEMENT_FEN, inCheck, positionFromFen, turn, type SquareName } from '@human-chess/rules';
-import { Button, Field, Page, SegmentedControl, Workbench } from '@human-chess/ui';
+import { Button, Field, Page, SegmentedControl, Status, Workbench } from '@human-chess/ui';
 import {
   DEFAULT_MEMORIZE_SOURCE,
   DEFAULT_STUDY_SECONDS,
@@ -58,7 +58,13 @@ function secondsOf(ms: number): string {
   return (ms / 1000).toFixed(1);
 }
 
-export function MemorizeTrainer(): React.JSX.Element {
+export interface MemorizeTrainerProps {
+  /** A position handed over from another tool (see VisualizationTrainer.tsx), already validated.
+   * It becomes the first of the session's positions; the rest come from the chosen source. */
+  firstFen?: string | undefined;
+}
+
+export function MemorizeTrainer({ firstFen }: MemorizeTrainerProps = {}): React.JSX.Element {
   const [studySeconds, setStudySeconds] = useState<StudySeconds>(DEFAULT_STUDY_SECONDS);
   const [source, setSource] = useState<MemorizeSource>(DEFAULT_MEMORIZE_SOURCE);
   const [sessionFens, setSessionFens] = useState<string[]>([]);
@@ -87,6 +93,7 @@ export function MemorizeTrainer(): React.JSX.Element {
 
   const startSession = (): void => {
     const fens = pickMemorizePositions(source, MEMORIZE_ROUNDS);
+    if (firstFen) fens[0] = firstFen;
     const t = Date.now();
     setSessionFens(fens);
     setResults([]);
@@ -125,6 +132,7 @@ export function MemorizeTrainer(): React.JSX.Element {
         <Field label="Positions from">
           <SegmentedControl ariaLabel="Position source" options={SOURCE_OPTIONS} value={source} onChange={setSource} />
         </Field>
+        {firstFen && <Status kind="info">The position handed over from the other tool will be the first one to memorize.</Status>}
         <Button variant="primary" onClick={startSession}>
           Start
         </Button>

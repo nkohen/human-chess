@@ -11,8 +11,8 @@ import type { ImportedGame } from '@human-chess/import';
 import {
   ReviewCancelled, reviewGame, type Classification, type EvalOrEnd, type GameReview, type ReviewedMove, type ReviewProgress,
 } from '@human-chess/review';
-import { inCheck, opposite, positionFromFen, uciSquares, type SquareName } from '@human-chess/rules';
-import { Button, Field, Status, Toolbar, Workbench } from '@human-chess/ui';
+import { inCheck, opposite, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
+import { Button, Field, navigateWithHandoff, readHandoffParams, Status, Toolbar, Workbench } from '@human-chess/ui';
 import {
   loadDepth, loadMovetimeSeconds, MAX_DEPTH, MAX_MOVETIME_SECONDS, MIN_DEPTH, MIN_MOVETIME_SECONDS, saveDepth, saveMovetimeSeconds,
 } from './storage';
@@ -31,8 +31,36 @@ export function GameReviewer({ engine }: GameReviewerProps): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ kind: 'import' });
   const startOver = (): void => setScreen({ kind: 'import' });
 
+  // Read once, from the hash App.tsx routed this component in on — GameReviewer is only ever
+  // (re)mounted by that routing, so this is exactly whatever query a caller (puzzles' "Review
+  // the source game") attached to '#/review'. `pgn` prefills the paste box directly; `gameUrl`
+  // (a puzzle record that only carries a game id/URL, not the PGN text) can't be turned into a
+  // PGN without a fetch this screen must not make on its own, so it's shown as a plain link
+  // instead and the user pastes the PGN themselves.
+  const [handoff] = useState(() => readHandoffParams(window.location.hash));
+  const handoffPgn = handoff.get('pgn') ?? undefined;
+  const handoffGameUrl = handoff.get('gameUrl') ?? undefined;
+
   if (screen.kind === 'import') {
-    return <ImportScreen storageKey={STORAGE_KEY} title="Game reviewer" onImported={game => setScreen({ kind: 'review', game })} />;
+    return (
+      <ImportScreen
+        storageKey={STORAGE_KEY}
+        title="Game reviewer"
+        initialPgnText={handoffPgn}
+        notice={
+          handoffPgn === undefined && handoffGameUrl !== undefined ? (
+            <Status kind="info">
+              Continuing from a puzzle&apos;s source game — paste its PGN below (human-chess does not fetch it automatically).{' '}
+              <a href={handoffGameUrl} target="_blank" rel="noreferrer">
+                Open the game
+              </a>
+              .
+            </Status>
+          ) : undefined
+        }
+        onImported={game => setScreen({ kind: 'review', game })}
+      />
+    );
   }
   return <ReviewScreen engine={engine} game={screen.game} onAnotherGame={startOver} />;
 }
@@ -258,6 +286,14 @@ function ReviewScreen({
           )}
           <Button variant="quiet" onClick={() => setFlipped(f => !f)}>
             Flip board
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              navigateWithHandoff('#/bot-rating', { fen, color: game.playedAs ?? turn(positionFromFen(fen)) })
+            }
+          >
+            Play from this position against the engine
           </Button>
           {showAnotherGame && (
             <Button variant="secondary" onClick={onAnotherGame}>

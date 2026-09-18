@@ -38,6 +38,7 @@ describe('parseLichessPuzzle', () => {
     expect(result.rating).toBe(1362);
     expect(result.themes).toEqual(['advantage', 'advancedPawn', 'long', 'middlegame']);
     expect(result.solution).toEqual(['a6a5', 'd2a5', 'd3d2', 'a5d2', 'd8d2']);
+    expect(result.gameUrl).toBe('https://lichess.org/r94yQg2R');
 
     // Cross-check startFen/solverColor independently, the same way a caller who trusted A1 would.
     const setup = parsePgnGame(FIXTURE.game.pgn);
@@ -50,6 +51,12 @@ describe('parseLichessPuzzle', () => {
 
     // The first solution move must be legal from startFen, i.e. the reconstruction is sound.
     expect(() => playUci(positionFromFen(result.startFen), result.solution[0]!)).not.toThrow();
+  });
+
+  it('leaves gameUrl undefined when the response has no game.id, never fabricating one', () => {
+    const { id: _id, ...gameWithoutId } = FIXTURE.game;
+    const result = parseLichessPuzzle({ game: gameWithoutId, puzzle: FIXTURE.puzzle });
+    expect(result.gameUrl).toBeUndefined();
   });
 
   it('throws PuzzleError when game.pgn is missing', () => {
