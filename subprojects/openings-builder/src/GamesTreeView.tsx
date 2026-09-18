@@ -7,18 +7,17 @@
 // number shown is read straight off the tree or the store (A1/V3).
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
-import type { StoredImportedGame } from '@human-chess/import';
-import { buildTree, fenAt, type GameFilter, type GamesTree, type TreeMove } from '@human-chess/opening-tree';
+import { fenAt, type TreeMove } from '@human-chess/opening-tree';
 import { inCheck, positionFromFen, turn, uciSquares, START_FEN, type Color, type SquareName } from '@human-chess/rules';
 import type { GameSource } from '@human-chess/store';
 import { Button, Field, Panel, SegmentedControl, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import { Diagnostics } from './Diagnostics';
 import { FilterBar } from './FilterBar';
-import { getGamesStore } from './gamesStore';
 import { GameRefList, MoveTree } from './MoveTree';
+import { useOwnGamesTree } from './ownGamesTree';
 import { GAMES_PATH_KEY, parseGamesPathUcis, rebuildGamesPath } from './persistence';
 import { SourcesPanel } from './SourcesPanel';
-import { endOfDayIso, formatLastPlayed, pathToUcis, sourceKey, type GamesTreeTarget, type YourGamesFilterState } from './treeHelpers';
+import { formatLastPlayed, pathToUcis, type GamesTreeTarget, type YourGamesFilterState } from './treeHelpers';
 import { loadGamesTreeColor, loadGamesTreeFilter, loadMinGames, saveGamesTreeColor, saveGamesTreeFilter, saveMinGames } from './yourGamesStorage';
 import './yourGames.css';
 
@@ -41,14 +40,8 @@ const COLOR_OPTIONS: { value: Color; label: string }[] = [
   { value: 'black', label: 'Black' },
 ];
 
-interface SourceGames {
-  source: GameSource;
-  games: StoredImportedGame[];
-}
-
 export function GamesTreeView({ controls, status, targetOpening }: GamesTreeViewProps): React.JSX.Element {
   const [sources, setSources] = useState<GameSource[]>([]);
-  const [gamesBySource, setGamesBySource] = useState<SourceGames[]>([]);
   const [color, setColor] = useState<Color>(() => loadGamesTreeColor());
   const [filter, setFilter] = useState<YourGamesFilterState>(() => loadGamesTreeFilter());
   const [minGames, setMinGames] = useState<number>(() => loadMinGames());
@@ -60,69 +53,17 @@ export function GamesTreeView({ controls, status, targetOpening }: GamesTreeView
   // invalidates part of the saved path just truncates it instead of wiping it to the root.
   const [pathUcis, setPathUcis] = usePersistedState<string[]>(GAMES_PATH_KEY, [], { parse: parseGamesPathUcis });
   const [expandRequest, setExpandRequest] = useState<{ path: TreeMove[]; token: number } | undefined>(undefined);
-  const [loadError, setLoadError] = useState<string | undefined>(undefined);
   const expandTokenRef = useRef(0);
 
   useEffect(() => saveGamesTreeColor(color), [color]);
   useEffect(() => saveGamesTreeFilter(filter), [filter]);
   useEffect(() => saveMinGames(minGames), [minGames]);
 
-  // Loads every linked account's games whenever the source list changes — on mount (SourcesPanel's
-  // own initial listSources()) and after every add/remove/sync, since SourcesPanel always hands
-  // back a fresh array from the store (see its own comment on why reference identity is enough
-  // to retrigger this even when only a game count changed, not the list of accounts itself).
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const store = getGamesStore();
-        const lists = await Promise.all(sources.map(async source => ({ source, games: await store.listGames(source) })));
-        if (!cancelled) {
-          setGamesBySource(lists);
-          setLoadError(undefined);
-        }
-      } catch (err: unknown) {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [sources]);
-
-  // Which linked accounts feed the tree at all — filter.sourceKeys (empty = all), a different
-  // axis from GameFilter.sources below (that one filters by host type per game, not by which of
-  // *your* accounts a game came from). A persisted sourceKeys can name an account that's since
-  // been removed (localStorage outlives the account); dropping keys not present in the current
-  // `sources` before deciding "empty = all" means a removed account can never lock the tree onto
-  // an empty remainder ("0 of 0 games match") that nothing can ever satisfy again.
-  const selectedSources = useMemo(() => {
-    const live = new Set(sources.map(sourceKey));
-    const liveKeys = filter.sourceKeys.filter(k => live.has(k));
-    return liveKeys.length === 0 ? sources : sources.filter(s => liveKeys.includes(sourceKey(s)));
-  }, [sources, filter.sourceKeys]);
-
-  const selectedGames = useMemo(() => {
-    const selectedKeys = new Set(selectedSources.map(sourceKey));
-    return gamesBySource.filter(entry => selectedKeys.has(sourceKey(entry.source))).flatMap(entry => entry.games);
-  }, [gamesBySource, selectedSources]);
-
-  const players = useMemo(() => selectedSources.map(s => ({ site: s.site, username: s.username })), [selectedSources]);
-
-  const gameFilter: GameFilter = useMemo(
-    () => ({
-      speeds: filter.speeds.length > 0 ? filter.speeds : undefined,
-      rated: filter.rated === 'all' ? undefined : filter.rated === 'rated',
-      opponentRatingMin: filter.opponentRatingMin,
-      opponentRatingMax: filter.opponentRatingMax,
-      opponent: filter.opponent.trim() !== '' ? filter.opponent : undefined,
-      since: filter.since || undefined,
-      until: filter.until ? endOfDayIso(filter.until) : undefined,
-    }),
-    [filter],
-  );
-
-  const tree: GamesTree = useMemo(() => buildTree(selectedGames, { players, color, filter: gameFilter }), [selectedGames, players, color, gameFilter]);
+  // Sources -> selected sources (honouring filter.sourceKeys) -> selected games -> GameFilter ->
+  // buildTree, and the games-loading effect that feeds it, all live in ownGamesTree.ts now — the
+  // same chain BuilderView's inline "Your games" panel uses (task, 2026-09-18: bring the
+  // openingtree-style stats into Build mode too, without leaving two copies of this logic behind).
+  const { tree, selectedGames, loadError } = useOwnGamesTree({ sources, color, filter });
 
   // The actual edges for the persisted `pathUcis`, rebuilt against the current tree every time
   // either changes — this is what truncates a saved path when the tree it was recorded against

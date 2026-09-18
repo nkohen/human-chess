@@ -8,7 +8,8 @@ import { childrenOf, mostPlayed, type GamesTree, type GameRef, type TreeMove } f
 import type { Color } from '@human-chess/rules';
 import { Button, usePersistedState } from '@human-chess/ui';
 import { MOVE_TREE_EXPANDED_KEY, MOVE_TREE_SHOW_ALL_KEY, parseMoveTreeKeySet, reconcileMoveTreeKeys, serializeMoveTreeKeySet } from './persistence';
-import { formatLastPlayed, pathKey, PERFORMANCE_TITLE, pathToUcis, wdlPercents, wdlTitle, type GamesTreeTarget } from './treeHelpers';
+import { formatLastPlayed, pathKey, PERFORMANCE_TITLE, pathToUcis, type GamesTreeTarget } from './treeHelpers';
+import { WdlBar } from './WdlBar';
 
 export type { GamesTreeTarget } from './treeHelpers';
 
@@ -95,7 +96,6 @@ function MoveTreeRows({
         const hasChildren = !isCycle && childrenOf(tree, move.to).length > 0;
         const node = tree.nodes.get(move.to);
         const isTransposition = !isCycle && (node?.parents ?? 0) > 1;
-        const pct = wdlPercents(move.results);
         return (
           <Fragment key={`${epd}:${move.uci}`}>
             <tr
@@ -139,12 +139,7 @@ function MoveTreeRows({
               </td>
               <td>{move.count}</td>
               <td>
-                <span className="ob-tree-wdl" title={wdlTitle(pct, move.count)}>
-                  <span className="ob-tree-wdl-win" style={{ width: `${pct.win}%` }} />
-                  <span className="ob-tree-wdl-draw" style={{ width: `${pct.draw}%` }} />
-                  <span className="ob-tree-wdl-loss" style={{ width: `${pct.loss}%` }} />
-                </span>{' '}
-                {(move.score * 100).toFixed(0)}%
+                <WdlBar results={move.results} count={move.count} /> {(move.score * 100).toFixed(0)}%
               </td>
               <td title={PERFORMANCE_TITLE}>{move.performance !== undefined ? Math.round(move.performance) : '—'}</td>
             </tr>

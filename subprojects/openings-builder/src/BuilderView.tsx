@@ -2,15 +2,21 @@
 // and the opponent's "what if" replies they want in the tree — memory/subprojects/openings-builder-trainer.md,
 // "Building a repertoire"). Every move played is added to the tree. The MultiPV panel on the
 // right gives the multi-line engine the user's interview asked for (priority 1, same file).
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
+import type { TreeMove } from '@human-chess/opening-tree';
 import { inCheck, legalDests, playMove, positionFromFen, turn, uciSquares, type Role, type SquareName } from '@human-chess/rules';
+import type { GameSource } from '@human-chess/store';
 import { Button, Panel, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import { ExplorerPanel } from './ExplorerPanel';
+import { getGamesStore } from './gamesStore';
 import { MultiPvPanel } from './MultiPvPanel';
+import { OwnGamesPanel } from './OwnGamesPanel';
+import { useOwnGamesTree } from './ownGamesTree';
 import { BUILD_PATH_KEY, parseBuildPathSnapshot, rebuildBuildPath, type BuildPathSnapshot } from './persistence';
 import { addMove, childrenOf, fenAt, movesBeyond, removeMove, type Opening, type OpeningMove } from './repertoire';
+import { loadGamesTreeFilter } from './yourGamesStorage';
 
 export interface BuilderViewProps {
   opening: Opening;
@@ -80,6 +86,52 @@ export function BuilderView({ opening, onOpeningChange, engine, controls, status
     setReplyError(failed.length > 0 ? `Could not add: ${failed.join(', ')}` : undefined);
   };
 
+  // "Your games": the openingtree-style own-games statistics, brought into Build mode alongside
+  // the engine lines and the explorer (task, 2026-09-18). Unlike GamesTreeView (fed by
+  // SourcesPanel's onSourcesChanged, which also drives syncing), this view never syncs — it only
+  // needs to know which accounts are already linked, so a one-shot listSources() on mount is
+  // enough; `ownGamesFilter` is read once too (the persisted Your-games filter, so the two modes
+  // agree), never edited from here.
+  const [ownGamesSources, setOwnGamesSources] = useState<GameSource[]>([]);
+  const [ownGamesSourcesLoaded, setOwnGamesSourcesLoaded] = useState(false);
+  const [ownGamesSourcesError, setOwnGamesSourcesError] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    getGamesStore()
+      .listSources()
+      .then(list => {
+        if (cancelled) return;
+        setOwnGamesSources(list);
+        setOwnGamesSourcesLoaded(true);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setOwnGamesSourcesError(err instanceof Error ? err.message : String(err));
+        setOwnGamesSourcesLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Runs once on mount only — this view never adds/removes/syncs an account itself, so there is
+    // nothing else that would need to re-list sources.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [ownGamesFilter] = useState(() => loadGamesTreeFilter());
+  // Built with the opening's own colour, not the persisted Your-games colour (docs: the two
+  // modes must agree on "your side" for this position) — and only from `sources`/`color`/
+  // `filter`, never `currentEpd`/`path`, so it is not rebuilt on every move (performance
+  // requirement).
+  const ownGamesTree = useOwnGamesTree({ sources: ownGamesSources, color: opening.color, filter: ownGamesFilter });
+  const ownGamesTurnIsOwn = turn(pos) === opening.color;
+  const onAddOwnGamesMove = (move: TreeMove): void => {
+    if (ownGamesTurnIsOwn) playAndAdd(move.uci);
+    else addReplies([move.uci]);
+  };
+  const onGoOwnGamesMove = (move: TreeMove): void => {
+    const edge = children.find(m => m.uci === move.uci);
+    if (edge) setPath(p => [...p, edge]);
+  };
+
   // Removing an edge whose continuation has recorded moves takes those with it (they become
   // unreachable), so that case asks first; a leaf goes without a prompt.
   const removeReply = (m: OpeningMove): void => {
@@ -108,6 +160,20 @@ export function BuilderView({ opening, onOpeningChange, engine, controls, status
               orientation={opening.color}
               inTree={children.map(m => m.uci)}
               {...(turn(pos) !== opening.color ? { onAddReplies: addReplies } : {})}
+            />
+          </Panel>
+          <Panel title="Your games">
+            <OwnGamesPanel
+              tree={ownGamesTree.tree}
+              epd={currentEpd}
+              turnIsOwn={ownGamesTurnIsOwn}
+              repertoireChildren={children}
+              onAdd={onAddOwnGamesMove}
+              onGo={onGoOwnGamesMove}
+              hasSources={ownGamesSources.length > 0}
+              loading={!ownGamesSourcesLoaded || ownGamesTree.loading}
+              loadError={ownGamesSourcesError ?? ownGamesTree.loadError}
+              selectedGamesCount={ownGamesTree.selectedGames.length}
             />
           </Panel>
           {turn(pos) !== opening.color && (

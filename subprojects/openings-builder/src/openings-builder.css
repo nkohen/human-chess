@@ -240,3 +240,75 @@
   max-height: 10rem;
   overflow-y: auto;
 }
+
+/* ---------- OwnGamesPanel (BuilderView's "Your games" panel) ---------- */
+
+.ob-own-games-summary {
+  margin: 0 0 var(--hc-space-1);
+}
+
+.ob-own-games-intent {
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+  margin: 0 0 var(--hc-space-2);
+}
+
+.ob-own-games-rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-2);
+}
+
+/* Wraps rather than a rigid table row: the 24rem aside can't fit SAN, count, WDL bar, score,
+ * last-played and an Add/Go button on one line at every width (screenshot harness's iPhone 13
+ * viewport is the tightest case) — wrapping keeps every tap target full-size instead of shrinking
+ * to fit. */
+.ob-own-games-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--hc-space-1) var(--hc-space-2);
+  padding-bottom: var(--hc-space-1);
+  border-bottom: 1px solid var(--hc-border);
+}
+
+.ob-own-games-san {
+  font-weight: 600;
+  min-width: 2.5rem;
+}
+
+.ob-own-games-count,
+.ob-own-games-score,
+.ob-own-games-lastplayed {
+  font-size: var(--hc-text-sm);
+  color: var(--hc-text-muted);
+}
+
+/* Narrower than the move tree's own 5rem bar (same reasoning as yourGames.css's
+ * `.ob-move-tree .ob-tree-wdl` override) so a row's SAN/count/bar/score/last-played/button all
+ * fit the 24rem aside without horizontal overflow. */
+.ob-own-games .ob-tree-wdl {
+  width: 3rem;
+}
+
+.ob-own-games-divergence {
+  font-size: var(--hc-text-sm);
+  color: var(--hc-warning);
+  border: 1px solid var(--hc-warning);
+  border-radius: var(--hc-radius);
+  padding: 0 var(--hc-space-1);
+}
+
+.ob-own-games-check {
+  color: var(--hc-success);
+  font-weight: 600;
+}
+
+.ob-own-games-provenance {
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+  margin: var(--hc-space-2) 0 0;
+}
