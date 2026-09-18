@@ -11,6 +11,13 @@ import { formatLastPlayed, pathKey, PERFORMANCE_TITLE, pathToUcis, wdlPercents, 
 
 export type { GamesTreeTarget } from './treeHelpers';
 
+/** Indentation is a CSS variable, not an inline padding, so yourGames.css can cap it (`min(...)`)
+ * and shrink it on phones: a real opening line runs 10+ plies deep, and an unbounded per-level
+ * indent overflowed the 24rem aside by depth 4 (measured 357px of content in a 350px column). */
+function depthStyle(depth: number): React.CSSProperties {
+  return { '--ob-depth': depth } as React.CSSProperties;
+}
+
 const CHILD_DISPLAY_CAP = 20;
 const GAME_REF_DISPLAY_CAP = 20;
 
@@ -90,9 +97,12 @@ function MoveTreeRows({
         const pct = wdlPercents(move.results);
         return (
           <Fragment key={`${epd}:${move.uci}`}>
-            <tr className={move.to === selectedEpd ? 'ob-move-tree-row ob-move-tree-row--selected' : 'ob-move-tree-row'}>
+            <tr
+              className={move.to === selectedEpd ? 'ob-move-tree-row ob-move-tree-row--selected' : 'ob-move-tree-row'}
+              title={move.lastPlayedAt ? `Last played ${formatLastPlayed(move.lastPlayedAt)}` : undefined}
+            >
               <td>
-                <div className="ob-move-tree-cell-move" style={{ paddingLeft: `${depth * 1.1}rem` }}>
+                <div className="ob-move-tree-cell-move" style={depthStyle(depth)}>
                   {hasChildren ? (
                     <button
                       type="button"
@@ -135,8 +145,7 @@ function MoveTreeRows({
                 </span>{' '}
                 {(move.score * 100).toFixed(0)}%
               </td>
-              <td title={PERFORMANCE_TITLE}>{move.performance !== undefined ? `${Math.round(move.performance)} est.` : '—'}</td>
-              <td>{formatLastPlayed(move.lastPlayedAt)}</td>
+              <td title={PERFORMANCE_TITLE}>{move.performance !== undefined ? Math.round(move.performance) : '—'}</td>
             </tr>
             {isExpanded && (
               <MoveTreeRows
@@ -160,7 +169,7 @@ function MoveTreeRows({
       })}
       {children.length > cap && (
         <tr>
-          <td colSpan={5} style={{ paddingLeft: `${(depth + 1) * 1.1}rem` }}>
+          <td className="ob-move-tree-showall" colSpan={4} style={depthStyle(depth + 1)}>
             <Button variant="quiet" size="sm" onClick={() => toggleShowAll(nodeKey)}>
               Show all {children.length}
             </Button>
@@ -235,8 +244,11 @@ export function MoveTree({ tree, path, onNavigate, targetOpening, color, expandR
             <th>Move</th>
             <th>Games</th>
             <th>Score</th>
-            <th>Perf.</th>
-            <th>Last played</th>
+            {/* "Last played" is deliberately not a column: the Workbench aside is 24rem wide and
+             * a fifth column clipped Perf. mid-word at every desktop width (coordinator, after the
+             * code review's screenshots). It's shown for the selected move in GamesTreeView's
+             * "Games with this move" panel instead, and as each row's tooltip. */}
+            <th title={PERFORMANCE_TITLE}>Est. perf.</th>
           </tr>
         </thead>
         <tbody>
@@ -258,7 +270,6 @@ export function MoveTree({ tree, path, onNavigate, targetOpening, color, expandR
               </div>
             </td>
             <td>{rootNode?.games ?? 0}</td>
-            <td>—</td>
             <td>—</td>
             <td>—</td>
           </tr>

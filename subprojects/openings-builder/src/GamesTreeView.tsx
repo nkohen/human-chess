@@ -11,13 +11,13 @@ import type { StoredImportedGame } from '@human-chess/import';
 import { buildTree, fenAt, type GameFilter, type GamesTree, type TreeMove } from '@human-chess/opening-tree';
 import { inCheck, positionFromFen, turn, uciSquares, START_FEN, type Color, type SquareName } from '@human-chess/rules';
 import type { GameSource } from '@human-chess/store';
-import { Button, Panel, SegmentedControl, Status, Toolbar, Workbench } from '@human-chess/ui';
+import { Button, Field, Panel, SegmentedControl, Status, Toolbar, Workbench } from '@human-chess/ui';
 import { Diagnostics } from './Diagnostics';
 import { FilterBar } from './FilterBar';
 import { getGamesStore } from './gamesStore';
 import { GameRefList, MoveTree } from './MoveTree';
 import { SourcesPanel } from './SourcesPanel';
-import { endOfDayIso, pathToUcis, sourceKey, type GamesTreeTarget, type YourGamesFilterState } from './treeHelpers';
+import { endOfDayIso, formatLastPlayed, pathToUcis, sourceKey, type GamesTreeTarget, type YourGamesFilterState } from './treeHelpers';
 import { loadGamesTreeColor, loadGamesTreeFilter, loadMinGames, saveGamesTreeColor, saveGamesTreeFilter, saveMinGames } from './yourGamesStorage';
 import './yourGames.css';
 
@@ -154,9 +154,11 @@ export function GamesTreeView({ controls, status, targetOpening }: GamesTreeView
       aside={
         <div className="ob-aside-scroll">
           <SourcesPanel onSourcesChanged={setSources} />
-          <Panel title="Colour">
+          {/* A plain Field, not a Panel: the aside is 24rem wide and every panel above the move
+           * tree costs it rows, so the colour picker stays as compact as the Filters summary. */}
+          <Field label="Colour">
             <SegmentedControl ariaLabel="Games tree colour" options={COLOR_OPTIONS} value={color} onChange={setColor} />
-          </Panel>
+          </Field>
           <FilterBar filter={filter} onChange={setFilter} sources={sources} matched={tree.gamesFolded} total={selectedGames.length} skipped={tree.skipped} />
         </div>
       }
@@ -201,6 +203,7 @@ export function GamesTreeView({ controls, status, targetOpening }: GamesTreeView
           </Panel>
           {lastEdge && (
             <Panel title="Games with this move">
+              {lastEdge.lastPlayedAt && <p className="ob-tree-lastplayed">Last played {formatLastPlayed(lastEdge.lastPlayedAt)}</p>}
               <GameRefList refs={lastEdge.games} />
             </Panel>
           )}

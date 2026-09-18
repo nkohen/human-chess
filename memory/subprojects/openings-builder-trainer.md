@@ -204,9 +204,17 @@ shows whenever any `sourceKeys` are set, not just when more than one account is 
 Minor cleanups: `Diagnostics.tsx`'s "Show" path reconstruction now calls the existing, tested
 `pathFromSanLine` helper instead of re-implementing the walk, and its two "Show" buttons use the
 `Button` primitive; the move-tree's expand buttons carry `aria-label`; "Linked accounts" is now a
-`<details>` (open by default with zero accounts, closed otherwise, then left to the user) so the
-move tree gets more vertical room once accounts exist; the "Last played" column hides below 40rem
-so the table fits iPhone-13 width without horizontal scroll or mid-word truncation.
+`<details>` (open with zero accounts, closed as soon as one exists — including right after the
+first sync — unless the user toggled it by hand) so the move tree gets the vertical room; the
+Colour picker is a plain field, not a panel, for the same reason. The table is four columns at
+every width (coordinator, from the review's screenshots, 2026-09-17): "Last played" was dropped as
+a column (a fifth column clipped Perf. inside the 24rem aside at every desktop width) and shows
+instead as each row's tooltip and as a line in "Games with this move"; the per-level indent is a
+CSS variable capped at three levels (0.75rem each, 0.5rem on phones) since a real line is 10+
+plies deep and an unbounded indent cannot fit any column; the W/D/L bar is 3rem (2.5rem on
+phones) inline with its percentage; the performance column is headed "Est. perf." with the
+formula in its tooltip. Measured after the change with a faked 8-game lichess export: the tree
+table's scroll width equals its client width at 1280×800 and on iPhone 13 down to depth 4.
 
 ## Open questions (not yet asked)
 - How the user's played games are pulled in: answered 2026-09-17 — `packages/opening-tree` folds

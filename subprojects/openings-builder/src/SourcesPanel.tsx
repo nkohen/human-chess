@@ -106,16 +106,19 @@ export function SourcesPanel({ onSourcesChanged }: SourcesPanelProps): React.JSX
     }
   }, [pending, rows]);
 
-  // Shown once, right when the initial load settles (loaded flips false -> true): open when there
-  // are no accounts yet (nothing else to see, and the add form is the point), closed once there
-  // are some (the tree below deserves the vertical space more at first glance). Deliberately not
-  // re-run on every `rows` change — `onToggle` below is what makes the user's own later toggles
-  // stick instead of being fought by a recompute on the next add/remove.
+  // Open while there are no accounts (nothing else to see, and the add form is the point), and
+  // closed as soon as there are some — including right after the first "Add & sync" lands, since
+  // the move tree below deserves the vertical space more than the account list (the aside is only
+  // 24rem wide, so an open account list left the tree three rows tall at 1280×800). Once the user
+  // has toggled it by hand, their choice sticks: `userToggled` stops this effect from fighting
+  // them on the next add/remove. A programmatic `open` change also fires `onToggle`, so a toggle
+  // only counts as the user's when the element's new state differs from what we last rendered.
   const [detailsOpen, setDetailsOpen] = useState(true);
+  const userToggled = useRef(false);
+  const empty = rows.length === 0;
   useEffect(() => {
-    if (loaded) setDetailsOpen(rows.length === 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
+    if (loaded && !userToggled.current) setDetailsOpen(empty);
+  }, [loaded, empty]);
 
   const runSync = (source: GameSource): void => {
     if (abortRef.current) return; // only one sync at a time; the ref (not the stale syncingKey
@@ -197,7 +200,14 @@ export function SourcesPanel({ onSourcesChanged }: SourcesPanelProps): React.JSX
   return (
     <Panel title="Linked accounts">
       {loadError && <Status kind="error">Couldn't load linked accounts: {loadError}</Status>}
-      <details className="ob-sources-details" open={detailsOpen} onToggle={e => setDetailsOpen(e.currentTarget.open)}>
+      <details
+        className="ob-sources-details"
+        open={detailsOpen}
+        onToggle={e => {
+          if (e.currentTarget.open !== detailsOpen) userToggled.current = true;
+          setDetailsOpen(e.currentTarget.open);
+        }}
+      >
         <summary>{rows.length > 0 ? `${rows.length} account${rows.length === 1 ? '' : 's'} linked` : 'No accounts linked yet'}</summary>
         <div className="ob-sources-details-body">
           {loaded && rows.length === 0 && !pending && <Status kind="info">Link a lichess or chess.com account and sync to build your tree.</Status>}

@@ -132,13 +132,13 @@
   text-align: left;
   color: var(--hc-text-muted);
   font-weight: 500;
-  padding: var(--hc-space-1) var(--hc-space-2);
+  padding: var(--hc-space-1) var(--hc-space-1);
   white-space: nowrap;
   border-bottom: 1px solid var(--hc-border);
 }
 
 .ob-move-tree td {
-  padding: var(--hc-space-1) var(--hc-space-2);
+  padding: var(--hc-space-1) var(--hc-space-1);
   white-space: nowrap;
   vertical-align: middle;
 }
@@ -158,6 +158,24 @@
   align-items: center;
   gap: var(--hc-space-1);
   white-space: nowrap;
+  /* Per-level indent, capped at three levels: deeper rows still read as nested from their
+   * expand arrows and order, and the table stays inside the aside at any depth. */
+  padding-left: min(calc(var(--ob-depth, 0) * 0.75rem), 2.25rem);
+}
+
+.ob-move-tree td.ob-move-tree-showall {
+  padding-left: min(calc(var(--ob-depth, 0) * 0.75rem), 2.25rem);
+}
+
+@media (max-width: 40rem) {
+  .ob-move-tree-cell-move,
+  .ob-move-tree td.ob-move-tree-showall {
+    padding-left: min(calc(var(--ob-depth, 0) * 0.5rem), 1.5rem);
+  }
+
+  .ob-move-tree .ob-tree-wdl {
+    width: 2.5rem;
+  }
 }
 
 .ob-move-tree-expand {
@@ -189,16 +207,24 @@
   cursor: default;
 }
 
-/* Below iPhone-13 width the five-column tree table doesn't fit even in its scrollable container
- * without either horizontal scroll or truncated text mid-word. "Last played" is the least
- * essential column (games/score/perf. carry the analysis), so it's dropped entirely rather than
- * shown squeezed; the remaining "Perf." cell keeps `white-space: nowrap` (inherited from
- * `.ob-move-tree td` above) so "1563 est." never wraps mid-word. */
-@media (max-width: 40rem) {
-  .ob-move-tree th:last-child,
-  .ob-move-tree td:last-child {
-    display: none;
-  }
+/* The tree table lives in the 24rem Workbench aside, so it is kept to four columns (see
+ * MoveTree.tsx's header row) and the W/D/L bar sits inline with its percentage rather than
+ * stacking above it. */
+.ob-move-tree .ob-tree-wdl {
+  display: inline-flex;
+  vertical-align: middle;
+  width: 3rem;
+}
+
+.ob-move-tree td:last-child,
+.ob-move-tree th:last-child {
+  text-align: right;
+}
+
+.ob-tree-lastplayed {
+  margin: 0 0 var(--hc-space-2);
+  font-size: var(--hc-text-sm);
+  color: var(--hc-text-muted);
 }
 
 /* ---------- Diagnostics ---------- */
