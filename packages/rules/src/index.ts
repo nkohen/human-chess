@@ -71,10 +71,29 @@ export function playUci(pos: Position, uci: string): Played {
  * for a drop move (crazyhouse only; this app never generates one, and a drop has no from square).
  */
 export function uciSquares(uci: string): [SquareName, SquareName] {
+  const { from, to } = parseUciMove(uci);
+  return [from, to];
+}
+
+export interface UciMove {
+  from: SquareName;
+  to: SquareName;
+  promotion?: Role;
+}
+
+/**
+ * A UCI move taken apart by chessops: squares plus the promotion role, e.g. "e7e8q" ->
+ * { from: 'e7', to: 'e8', promotion: 'queen' }. For callers that replay a stored UCI list
+ * through a from/to/promotion API (`playMove`, a subproject's own `move`). Throws RulesError
+ * for a string chessops cannot parse, or for a drop move (crazyhouse only).
+ */
+export function parseUciMove(uci: string): UciMove {
   const move = parseUci(uci);
   if (!move) throw new RulesError(`unparseable UCI move "${uci}"`);
   if (!isNormal(move)) throw new RulesError(`UCI move "${uci}" is a drop, which has no from square`);
-  return [makeSquare(move.from), makeSquare(move.to)];
+  const parsed: UciMove = { from: makeSquare(move.from), to: makeSquare(move.to) };
+  if (move.promotion) parsed.promotion = move.promotion;
+  return parsed;
 }
 
 export function playMove(pos: Position, from: SquareName, to: SquareName, promotion?: Role): Played {

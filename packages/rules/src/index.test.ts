@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   fenOf, isPromotionMove, legalDests, mirrorColors, playMove, playUci, positionEnd,
-  positionFromFen, randomLegalMove, repetitionKey, RulesError, sanLine, turn, uciSquares,
+  parseUciMove, positionFromFen, randomLegalMove, repetitionKey, RulesError, sanLine, turn, uciSquares,
 kingSquare, occupiedSquares, pieceAt, pieceCounts,
 } from './index';
 
@@ -122,5 +122,19 @@ describe('rules', () => {
 
   it('rejects an unparseable UCI string', () => {
     expect(() => uciSquares('not-a-move')).toThrow(RulesError);
+  });
+});
+
+describe('parseUciMove', () => {
+  it('returns squares and the promotion role chessops parsed', () => {
+    expect(parseUciMove('e2e4')).toEqual({ from: 'e2', to: 'e4' });
+    expect(parseUciMove('e7e8q')).toEqual({ from: 'e7', to: 'e8', promotion: 'queen' });
+    expect(parseUciMove('a2a1n')).toEqual({ from: 'a2', to: 'a1', promotion: 'knight' });
+  });
+
+  it('throws RulesError on garbage and on drops', () => {
+    expect(() => parseUciMove('e7e8x')).toThrow(RulesError);
+    expect(() => parseUciMove('zz')).toThrow(RulesError);
+    expect(() => parseUciMove('N@e4')).toThrow(RulesError);
   });
 });
