@@ -45,7 +45,7 @@ describe('EndgamesIntro reload restore', () => {
     // Mount with no engine at all — exactly what a reload looks like while the wasm engine is
     // still initialising. Nothing here is reset or lost while waiting (design doc: "seed in the
     // initialiser, not an effect").
-    const { rerender } = render(createElement(EndgamesIntro, { engine: undefined }));
+    const { rerender, container } = render(createElement(EndgamesIntro, { engine: undefined }));
     expect(screen.getByText(/Loading the engine…/)).toBeTruthy();
 
     // Providing the engine (a later render, no remount and so no re-read of storage) reveals the
@@ -57,8 +57,15 @@ describe('EndgamesIntro reload restore', () => {
     // Not getByText: the lesson's title also appears verbatim as its entry in the lesson list.
     expect(screen.getByRole('heading', { name: 'Two rooks: the ladder' })).toBeTruthy();
     expect(screen.getByText(/You play white\./)).toBeTruthy();
-    expect(screen.getByText(/^Your move\.$/)).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull(); // the "Let's go" intro card is not shown again
+
+    // "Your move." alone would also be true of a brand-new, unplayed lesson attempt, so it does
+    // not by itself prove the two restored moves were actually replayed. Board's `lastMove` prop
+    // (only set once game.moves is non-empty — see packages/play/src/game.ts's lastMove) makes
+    // chessground render exactly two `square.last-move` elements, for the 'from'/'to' squares of
+    // the final restored move (e5d5) — a fresh, moveless game renders none.
+    expect(screen.getByText(/^Your move\.$/)).toBeTruthy();
+    expect(container.querySelectorAll('square.last-move')).toHaveLength(2);
   });
 
   it('rejects a corrupt snapshot and falls back to the ordinary first-open lesson', () => {

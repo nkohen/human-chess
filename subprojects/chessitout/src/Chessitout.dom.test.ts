@@ -3,6 +3,7 @@ import { createElement } from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { UciEngine, type UciTransport } from '@human-chess/engine';
+import { curatedMidgames } from '@human-chess/positions';
 import { START_FEN } from '@human-chess/rules';
 import { Chessitout } from './Chessitout';
 import { SNAPSHOT_KEY, type ChessitoutSnapshot } from './snapshot';
@@ -69,5 +70,39 @@ describe('Chessitout reload restore', () => {
     render(createElement(Chessitout, { engine: undefined }));
     expect(screen.getByText(/Loading the engine…/)).toBeTruthy();
     // No crash, and nothing from the corrupt entry leaks through once an engine is available.
+  });
+
+  it('seeds a restored curated-position attempt directly, with no recompute effect and no "Mining a position…" wait', () => {
+    const entry = curatedMidgames[0]!;
+    // The eval is stored whole (not recomputed after a restore — see snapshot.ts): a
+    // deliberately made-up score, distinct from anything a real analyse call of this fen would
+    // return, so the assertion below can only pass if this stored value is the one actually
+    // rendered, not a freshly recomputed one.
+    const value = { fen: entry.fen, source: 'curated-user-game', moves: [], eval: { score: { type: 'cp', value: -60 }, engine: 'test-engine', depth: 18 } };
+    // What actually gets stored is the entry id (not the whole CuratedPosition) — see
+    // snapshot.test.ts's own curated round-trip test for the same shape.
+    const stored = {
+      phase: 'voting',
+      position: { kind: 'curated', entryId: entry.id, value },
+      vote: undefined,
+      playerColor: undefined,
+      viewFrom: 'white',
+      elo: 1800,
+      tally: { right: 0, wrong: 0 },
+      judged: false,
+      moves: [],
+    };
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(stored));
+
+    const { rerender } = render(createElement(Chessitout, { engine: undefined }));
+    expect(screen.getByText(/Loading the engine…/)).toBeTruthy();
+
+    // inertEngine never answers a real analyse call, so if Chessitout tried to recompute the
+    // eval here (rather than using the stored value directly) the screen would be stuck on
+    // "Mining a position…" — asserting the voting screen instead proves no recompute happened.
+    rerender(createElement(Chessitout, { engine: inertEngine() }));
+    expect(screen.queryByText(/Mining a position…/)).toBeNull();
+    expect(screen.getByText(/Who stands better\?/)).toBeTruthy();
+    expect(screen.getByText(/From your game vs/)).toBeTruthy();
   });
 });
