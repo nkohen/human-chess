@@ -9,18 +9,27 @@
 // position (item 3, same slice). Every number shown comes from an Analysis returned by the
 // engine, never invented (A1); every engine failure is shown as text, never swallowed.
 // Design record: memory/subprojects/guess-the-eval.md. Minimal slice: memory/minimal-slices.md row 2.
+//
+// Reload survival (docs/design/2026-09-18-reload-survival.md): every field of user-facing
+// progress lives in one snapshot object (snapshot.ts's SoloSnapshot), seeded synchronously in the
+// usePersistedState initialiser — never in an effect, so a restored 'revealed'/'analysing' phase
+// paints on the very first render, not a flash of 'generating'. `error` and `generation` stay
+// plain state: transient/loading, not progress (the rule's own words). The clock persists its
+// absolute `endAt`; useCountdown honours a restored one that has already passed as an expired
+// clock, not a fresh one (see useCountdown.ts).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
-import { EngineError, formatPawns, formatScore, whitePerspective, type Analysis, type Score, type UciEngine } from '@human-chess/engine';
-import { generateRecipePosition, pickRecipe, type RecipePosition } from '@human-chess/positions';
+import { EngineError, formatPawns, formatScore, whitePerspective, type UciEngine } from '@human-chess/engine';
+import { generateRecipePosition, pickRecipe } from '@human-chess/positions';
 import { inCheck, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
-import { Button, Field, Page, Status, Toolbar, Workbench } from '@human-chess/ui';
+import { Button, Field, Page, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import { AnalysisBoard } from './AnalysisBoard';
 import { Countdown } from './Countdown';
 import { EvalScale } from './EvalScale';
 import { idleBoard } from './idleBoard';
 import { ROUNDS } from './rounds';
 import { band, describeBand, grade, MAX_POINTS, points, SLIDER_MAX_CP, SLIDER_MIN_CP } from './scoring';
+import { freshSoloSnapshot, GTE_SOLO_KEY, parseSoloSnapshot } from './snapshot';
 import { useCountdown } from './useCountdown';
 import './guess-the-eval.css';
 
@@ -36,61 +45,39 @@ export interface SoloRoundProps {
   onExit: () => void;
 }
 
-type Phase = 'generating' | 'guessing' | 'evaluating' | 'revealed' | 'analysing' | 'summary';
-
-interface RoundResult {
-  truth: Score;
-  guessCp: number;
-  points: number;
-  /** True when this guess was locked in automatically because the clock ran out, rather than by
-   * the player pressing "Lock in" — shown in the reveal, never silently treated the same. */
-  timedOut: boolean;
-  /** The recipe description shown in the summary list, alongside the reveal (never before it —
-   * it can hint at the answer, see describeRecipe). */
-  recipeDescription: string;
-}
-
 const ANALYSE_DEPTH = 14;
 
 export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
-  const [position, setPosition] = useState<RecipePosition | undefined>(undefined);
-  const [phase, setPhase] = useState<Phase>('generating');
+  const [snap, setSnap] = usePersistedState(GTE_SOLO_KEY, freshSoloSnapshot, { parse: parseSoloSnapshot });
+  const { position, phase, guessCp, roundIndex, results, endAt, analysis } = snap;
   const [error, setError] = useState<string | undefined>(undefined);
-  const [guessCp, setGuessCp] = useState(0);
-  const [timedOut, setTimedOut] = useState(false);
-  const [analysis, setAnalysis] = useState<Analysis | undefined>(undefined);
-  const [roundIndex, setRoundIndex] = useState(0);
-  const [results, setResults] = useState<RoundResult[]>([]);
   const [generation, setGeneration] = useState(0);
+
+  const limitMs = timeLimitSec === undefined ? undefined : timeLimitSec * 1000;
 
   // Resets everything needed to generate a fresh position for the *current* round (or a retry of
   // it after an engine failure); round bookkeeping (roundIndex, results) is left alone so a retry
   // does not cost the player their progress.
   const startGeneration = useCallback(() => {
     setGeneration(g => g + 1);
-    setPosition(undefined);
-    setAnalysis(undefined);
     setError(undefined);
-    setGuessCp(0);
-    setTimedOut(false);
-    setPhase('generating');
-  }, []);
+    setSnap(s => ({ ...s, position: undefined, analysis: undefined, guessCp: 0, timedOut: false, endAt: undefined, phase: 'generating' }));
+  }, [setSnap]);
 
   const advance = useCallback(() => {
     if (roundIndex + 1 >= ROUNDS) {
-      setPhase('summary');
+      setSnap(s => ({ ...s, phase: 'summary' }));
       return;
     }
-    setRoundIndex(r => r + 1);
+    setSnap(s => ({ ...s, roundIndex: s.roundIndex + 1 }));
     startGeneration();
-  }, [roundIndex, startGeneration]);
+  }, [roundIndex, startGeneration, setSnap]);
 
   const playAgain = useCallback(() => {
-    setRoundIndex(0);
-    setResults([]);
+    setSnap(s => ({ ...s, roundIndex: 0, results: [] }));
     startGeneration();
-  }, [startGeneration]);
+  }, [startGeneration, setSnap]);
 
   useEffect(() => {
     if (!readyEngine || phase !== 'generating') return;
@@ -100,8 +87,7 @@ export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): Rea
     generateRecipePosition(readyEngine, recipe, { signal: controller.signal })
       .then(pos => {
         if (cancelled) return;
-        setPosition(pos);
-        setPhase('guessing');
+        setSnap(s => ({ ...s, position: pos, phase: 'guessing', endAt: limitMs !== undefined ? Date.now() + limitMs : undefined }));
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -123,16 +109,14 @@ export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): Rea
 
   const lockIn = useCallback(() => {
     if (!readyEngine || !position) return;
-    setPhase('evaluating');
-  }, [readyEngine, position]);
+    setSnap(s => ({ ...s, phase: 'evaluating' }));
+  }, [readyEngine, position, setSnap]);
 
   const onTimeExpired = useCallback(() => {
-    setTimedOut(true);
-    lockIn();
-  }, [lockIn]);
+    setSnap(s => ({ ...s, timedOut: true, phase: 'evaluating' }));
+  }, [setSnap]);
 
-  const limitMs = timeLimitSec === undefined ? undefined : timeLimitSec * 1000;
-  const { remainingMs } = useCountdown(limitMs, phase === 'guessing', onTimeExpired);
+  const { remainingMs } = useCountdown(limitMs, phase === 'guessing', onTimeExpired, endAt);
 
   // The actual engine call for a locked-in guess, as an effect (not inline in `lockIn`) so that
   // leaving this phase early — the component unmounting, or a future revision that lets the
@@ -148,19 +132,22 @@ export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): Rea
         const line = a.lines[0];
         if (!line) {
           setError(`The engine failed: ${a.engine} returned no evaluation line for this position`);
-          setPhase('guessing');
+          setSnap(s => ({ ...s, phase: 'guessing' }));
           return;
         }
-        setAnalysis(a);
-        setPhase('revealed');
         const sideToMove = turn(positionFromFen(position.fen));
         const truth = whitePerspective(line.score, sideToMove);
-        setResults(rs => [...rs, { truth, guessCp, points: points(guessCp, truth), timedOut, recipeDescription: position.description }]);
+        setSnap(s => ({
+          ...s,
+          analysis: a,
+          phase: 'revealed',
+          results: [...s.results, { truth, guessCp: s.guessCp, points: points(s.guessCp, truth), timedOut: s.timedOut, recipeDescription: position.description }],
+        }));
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         setError(`The engine failed: ${err instanceof Error ? err.message : String(err)}`);
-        setPhase('guessing');
+        setSnap(s => ({ ...s, phase: 'guessing' }));
       });
     return () => {
       cancelled = true;
@@ -279,7 +266,7 @@ export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): Rea
   const lastMove: [SquareName, SquareName] | undefined = lastMinedMove ? uciSquares(lastMinedMove) : undefined;
 
   if (phase === 'analysing') {
-    return <AnalysisBoard engine={readyEngine} initialFen={position.fen} title="Guess the eval — analysis" onBack={() => setPhase('revealed')} />;
+    return <AnalysisBoard engine={readyEngine} initialFen={position.fen} title="Guess the eval — analysis" onBack={() => setSnap(s => ({ ...s, phase: 'revealed' }))} />;
   }
 
   const roundBoard = (sizePx: number): React.JSX.Element => (
@@ -303,7 +290,7 @@ export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): Rea
       <Button variant="primary" onClick={advance}>
         {roundIndex + 1 >= ROUNDS ? 'See results' : 'Next position'}
       </Button>
-      <Button variant="secondary" onClick={() => setPhase('analysing')}>
+      <Button variant="secondary" onClick={() => setSnap(s => ({ ...s, phase: 'analysing' }))}>
         Analyse this position
       </Button>
       <EvalScale guessCp={guessCp} truth={truth} />
@@ -319,7 +306,7 @@ export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): Rea
           step={10}
           value={guessCp}
           disabled={phase === 'evaluating'}
-          onChange={e => setGuessCp(Number(e.target.value))}
+          onChange={e => setSnap(s => ({ ...s, guessCp: Number(e.target.value) }))}
         />
       </Field>
       {limitMs !== undefined && phase === 'guessing' && <Countdown remainingMs={remainingMs} limitMs={limitMs} />}

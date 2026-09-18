@@ -6,11 +6,21 @@
 // have different rules (docs/design/2026-09-17-ui.md) and a setup screen belongs in the one that
 // is allowed to scroll.
 // Design record: memory/subprojects/guess-the-eval.md.
+//
+// Reload survival (docs/design/2026-09-18-reload-survival.md): `screen` and `mode` are the one
+// piece of top-level progress (limits and PvP names were already persisted, in storage.ts, kept
+// as they were). A reload while `screen` is 'solo'/'pvp' lands straight back on the round in
+// progress — SoloRound/PvpRound each restore the rest of it from their own persisted key. A
+// deliberate "Start round" click, though, always begins a *fresh* round (its pre-persistence
+// behaviour, since the target screen used to fully unmount/remount on every visit): it clears
+// that mode's leftover snapshot before switching, so reload-resume never leaks into an explicit
+// restart.
 import { useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
-import { Button, Field, Page, SegmentedControl } from '@human-chess/ui';
+import { Button, clearPersisted, Field, Page, SegmentedControl, usePersistedState } from '@human-chess/ui';
 import { PvpRound } from './PvpRound';
 import { SoloRound } from './SoloRound';
+import { freshTopSnapshot, GTE_PVP_KEY, GTE_SOLO_KEY, GTE_TOP_KEY, parseTopSnapshot, type GteMode } from './snapshot';
 import { DEFAULT_PLAYER1_NAME, DEFAULT_PLAYER2_NAME, loadPlayerNames, loadPveTimeLimit, loadPvpTimeLimit, savePlayerNames, savePveTimeLimit, savePvpTimeLimit, type PlayerNames } from './storage';
 import { PVE_TIME_LIMITS, PVP_TIME_LIMITS, type PveTimeLimit, type TimeLimitSec } from './timing';
 
@@ -19,21 +29,25 @@ export interface GuessTheEvalProps {
   engine: UciEngine | Error | undefined;
 }
 
-type Mode = 'solo' | 'pvp';
-type Screen = 'settings' | Mode;
-
 function pveTimeLimitLabel(limit: PveTimeLimit): string {
   return limit === 'none' ? 'None' : `${limit}s`;
 }
 
 export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
-  const [screen, setScreen] = useState<Screen>('settings');
-  const [mode, setMode] = useState<Mode>('solo');
+  const [top, setTop] = usePersistedState(GTE_TOP_KEY, freshTopSnapshot, { parse: parseTopSnapshot });
+  const { screen, mode } = top;
+  const setMode = (next: GteMode): void => setTop(t => ({ ...t, mode: next }));
   const [pveLimit, setPveLimit] = useState<PveTimeLimit>(() => loadPveTimeLimit());
   const [pvpLimit, setPvpLimit] = useState<TimeLimitSec>(() => loadPvpTimeLimit());
   const [names, setNames] = useState<PlayerNames>(() => loadPlayerNames());
 
-  const onExit = (): void => setScreen('settings');
+  const onExit = (): void => setTop(t => ({ ...t, screen: 'settings' }));
+
+  const startRound = (): void => {
+    // A fresh round, never a resumed one — see the reload-survival note above.
+    clearPersisted(mode === 'solo' ? GTE_SOLO_KEY : GTE_PVP_KEY);
+    setTop(t => ({ ...t, screen: mode }));
+  };
 
   if (screen === 'solo') {
     return <SoloRound engine={engine} timeLimitSec={pveLimit === 'none' ? undefined : pveLimit} onExit={onExit} />;
@@ -107,7 +121,7 @@ export function GuessTheEval({ engine }: GuessTheEvalProps): React.JSX.Element {
         </>
       )}
 
-      <Button variant="primary" onClick={() => setScreen(mode)}>
+      <Button variant="primary" onClick={startRound}>
         Start round
       </Button>
     </Page>

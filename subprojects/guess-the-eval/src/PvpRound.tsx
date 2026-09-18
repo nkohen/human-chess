@@ -13,18 +13,26 @@
 // decision: player 2's limit is min(shared limit, player 1's real elapsed time + a 10s cushion)
 // — see timing.ts's pvpSecondPlayerLimitMs. Analysis is only offered on the results screen (the
 // interview: "any position at the end of the match, not mid-match"), reusing AnalysisBoard.
+//
+// Reload survival (docs/design/2026-09-18-reload-survival.md): one snapshot object (snapshot.ts's
+// PvpSnapshot) holds every field of progress, including which player's turn it is and that
+// player's already-locked guess, so a hand-over between players resumes at the same hand-over,
+// not player 1's. `error`/`generation` stay plain, transient state. The clock persists its
+// absolute `endAt`; a deadline already passed on restore (the tab was away) counts as that
+// player's clock timing out, honestly, never a fresh full-length restart (useCountdown.ts).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
-import { EngineError, formatPawns, formatScore, whitePerspective, type Analysis, type Score, type UciEngine } from '@human-chess/engine';
-import { generateRecipePosition, pickRecipe, type RecipePosition } from '@human-chess/positions';
+import { EngineError, formatPawns, formatScore, whitePerspective, type UciEngine } from '@human-chess/engine';
+import { generateRecipePosition, pickRecipe } from '@human-chess/positions';
 import { inCheck, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
-import { Button, Field, Page, Status, Toolbar, Workbench } from '@human-chess/ui';
+import { Button, Field, Page, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import { AnalysisBoard } from './AnalysisBoard';
 import { Countdown } from './Countdown';
 import { EvalScale } from './EvalScale';
 import { idleBoard } from './idleBoard';
 import { ROUNDS } from './rounds';
 import { MAX_POINTS, points, SLIDER_MAX_CP, SLIDER_MIN_CP } from './scoring';
+import { freshPvpSnapshot, GTE_PVP_KEY, parsePvpSnapshot } from './snapshot';
 import { pvpSecondPlayerLimitMs, type TimeLimitSec } from './timing';
 import { useCountdown } from './useCountdown';
 import './guess-the-eval.css';
@@ -44,70 +52,46 @@ export interface PvpRoundProps {
   onExit: () => void;
 }
 
-type Phase = 'generating' | 'handover' | 'guessing' | 'evaluating' | 'reveal' | 'results';
-
-interface PvpRoundResult {
-  fen: string;
-  lastMove: [SquareName, SquareName] | undefined;
-  truth: Score;
-  guess1Cp: number;
-  guess2Cp: number;
-  points1: number;
-  points2: number;
-  timedOut1: boolean;
-  timedOut2: boolean;
-  recipeDescription: string;
-}
-
 export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoundProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
-  const [position, setPosition] = useState<RecipePosition | undefined>(undefined);
-  const [phase, setPhase] = useState<Phase>('generating');
+  const [snap, setSnap] = usePersistedState(GTE_PVP_KEY, freshPvpSnapshot, { parse: parsePvpSnapshot });
+  const { position, phase, roundIndex, results, endAt, analysis, turnPlayer, sliderCp, guess1Cp, guess1UsedMs, timedOut1, timedOut2, analysingIndex } = snap;
   const [error, setError] = useState<string | undefined>(undefined);
   const [generation, setGeneration] = useState(0);
-  const [roundIndex, setRoundIndex] = useState(0);
-  const [results, setResults] = useState<PvpRoundResult[]>([]);
-  const [analysingIndex, setAnalysingIndex] = useState<number | undefined>(undefined);
-
-  const [turnPlayer, setTurnPlayer] = useState<1 | 2>(1);
-  const [sliderCp, setSliderCp] = useState(0);
-  const [guess1Cp, setGuess1Cp] = useState(0);
-  const [guess1UsedMs, setGuess1UsedMs] = useState(0);
-  const [timedOut1, setTimedOut1] = useState(false);
-  const [timedOut2, setTimedOut2] = useState(false);
-  const [analysis, setAnalysis] = useState<Analysis | undefined>(undefined);
 
   const activeName = turnPlayer === 1 ? player1 : player2;
 
   const startGeneration = useCallback(() => {
     setGeneration(g => g + 1);
-    setPosition(undefined);
-    setAnalysis(undefined);
     setError(undefined);
-    setTurnPlayer(1);
-    setSliderCp(0);
-    setGuess1Cp(0);
-    setGuess1UsedMs(0);
-    setTimedOut1(false);
-    setTimedOut2(false);
-    setPhase('generating');
-  }, []);
+    setSnap(s => ({
+      ...s,
+      position: undefined,
+      analysis: undefined,
+      endAt: undefined,
+      turnPlayer: 1,
+      sliderCp: 0,
+      guess1Cp: 0,
+      guess1UsedMs: 0,
+      timedOut1: false,
+      timedOut2: false,
+      phase: 'generating',
+    }));
+  }, [setSnap]);
 
   const advance = useCallback(() => {
     if (roundIndex + 1 >= ROUNDS) {
-      setPhase('results');
+      setSnap(s => ({ ...s, phase: 'results' }));
       return;
     }
-    setRoundIndex(r => r + 1);
+    setSnap(s => ({ ...s, roundIndex: s.roundIndex + 1 }));
     startGeneration();
-  }, [roundIndex, startGeneration]);
+  }, [roundIndex, startGeneration, setSnap]);
 
   const playAgain = useCallback(() => {
-    setRoundIndex(0);
-    setResults([]);
-    setAnalysingIndex(undefined);
+    setSnap(s => ({ ...s, roundIndex: 0, results: [], analysingIndex: undefined }));
     startGeneration();
-  }, [startGeneration]);
+  }, [startGeneration, setSnap]);
 
   useEffect(() => {
     if (!readyEngine || phase !== 'generating') return;
@@ -117,8 +101,7 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
     generateRecipePosition(readyEngine, recipe, { signal: controller.signal })
       .then(pos => {
         if (cancelled) return;
-        setPosition(pos);
-        setPhase('handover');
+        setSnap(s => ({ ...s, position: pos, phase: 'handover' }));
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -137,23 +120,25 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
   const lockInActive = useCallback(
     (usedMs: number, timedOut: boolean) => {
       if (turnPlayer === 1) {
-        setGuess1Cp(sliderCp);
-        setGuess1UsedMs(usedMs);
-        setTimedOut1(timedOut);
-        setSliderCp(0);
-        setTurnPlayer(2);
-        setPhase('handover');
+        setSnap(s => ({ ...s, guess1Cp: s.sliderCp, guess1UsedMs: usedMs, timedOut1: timedOut, sliderCp: 0, turnPlayer: 2, phase: 'handover', endAt: undefined }));
       } else {
-        setTimedOut2(timedOut);
-        setPhase('evaluating');
+        setSnap(s => ({ ...s, timedOut2: timedOut, phase: 'evaluating' }));
       }
     },
-    [turnPlayer, sliderCp],
+    [turnPlayer, setSnap],
   );
 
   const activeLimitMs = turnPlayer === 1 ? limitSec * 1000 : pvpSecondPlayerLimitMs(limitSec, guess1UsedMs);
   const onTimeExpired = useCallback(() => lockInActive(activeLimitMs, true), [lockInActive, activeLimitMs]);
-  const { remainingMs, elapsedNowMs } = useCountdown(activeLimitMs, phase === 'guessing', onTimeExpired);
+  const { remainingMs, elapsedNowMs } = useCountdown(activeLimitMs, phase === 'guessing', onTimeExpired, endAt);
+
+  // The handover screen's "I'm ready" starts the just-handed-to player's clock; it is the one
+  // place (other than a fresh position) a PvP clock starts, so it is the one place `endAt` is
+  // set — same reasoning as SoloRound's generation effect, just triggered by the player instead
+  // of the engine becoming ready.
+  const readyToGuess = useCallback(() => {
+    setSnap(s => ({ ...s, phase: 'guessing', endAt: Date.now() + activeLimitMs }));
+  }, [activeLimitMs, setSnap]);
 
   useEffect(() => {
     if (!readyEngine || !position || phase !== 'evaluating') return;
@@ -169,34 +154,37 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
         const line = a.lines[0];
         if (!line) {
           setError(`The engine failed: ${a.engine} returned no evaluation line for this position`);
-          setPhase('guessing');
+          setSnap(s => ({ ...s, phase: 'guessing' }));
           return;
         }
-        setAnalysis(a);
         const sideToMove = turn(positionFromFen(position.fen));
         const truth = whitePerspective(line.score, sideToMove);
         const lastMinedMove = position.moves[position.moves.length - 1];
-        setResults(rs => [
-          ...rs,
-          {
-            fen: position.fen,
-            lastMove: lastMinedMove ? uciSquares(lastMinedMove) : undefined,
-            truth,
-            guess1Cp,
-            guess2Cp: guess2AtEvaluate,
-            points1: points(guess1Cp, truth),
-            points2: points(guess2AtEvaluate, truth),
-            timedOut1,
-            timedOut2,
-            recipeDescription: position.description,
-          },
-        ]);
-        setPhase('reveal');
+        setSnap(s => ({
+          ...s,
+          analysis: a,
+          phase: 'reveal',
+          results: [
+            ...s.results,
+            {
+              fen: position.fen,
+              lastMove: lastMinedMove ? uciSquares(lastMinedMove) : undefined,
+              truth,
+              guess1Cp: s.guess1Cp,
+              guess2Cp: guess2AtEvaluate,
+              points1: points(s.guess1Cp, truth),
+              points2: points(guess2AtEvaluate, truth),
+              timedOut1: s.timedOut1,
+              timedOut2: s.timedOut2,
+              recipeDescription: position.description,
+            },
+          ],
+        }));
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         setError(`The engine failed: ${err instanceof Error ? err.message : String(err)}`);
-        setPhase('guessing');
+        setSnap(s => ({ ...s, phase: 'guessing' }));
       });
     return () => {
       cancelled = true;
@@ -263,7 +251,7 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
             engine={readyEngine}
             initialFen={target.fen}
             title={`Guess the eval — analysis (position ${analysingIndex + 1})`}
-            onBack={() => setAnalysingIndex(undefined)}
+            onBack={() => setSnap(s => ({ ...s, analysingIndex: undefined }))}
           />
         );
       }
@@ -307,7 +295,7 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
             <li key={i} className="gte-summary-row" title={r.recipeDescription}>
               <div className="gte-pvp-row-header">
                 <span>Position {i + 1}</span>
-                <Button variant="secondary" size="sm" onClick={() => setAnalysingIndex(i)}>
+                <Button variant="secondary" size="sm" onClick={() => setSnap(s => ({ ...s, analysingIndex: i }))}>
                   Analyse
                 </Button>
               </div>
@@ -364,7 +352,7 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
         primary={
           <>
             <p className="gte-handover-message">Pass the device to {activeName}.</p>
-            <Button variant="primary" onClick={() => setPhase('guessing')}>
+            <Button variant="primary" onClick={readyToGuess}>
               {activeName}, I'm ready
             </Button>
           </>
@@ -480,7 +468,7 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
               step={10}
               value={sliderCp}
               disabled={phase === 'evaluating'}
-              onChange={e => setSliderCp(Number(e.target.value))}
+              onChange={e => setSnap(s => ({ ...s, sliderCp: Number(e.target.value) }))}
             />
           </Field>
           {phase === 'guessing' && <Countdown remainingMs={remainingMs} limitMs={activeLimitMs} />}

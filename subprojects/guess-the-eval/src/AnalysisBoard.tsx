@@ -4,17 +4,19 @@
 // there is no shared/multiplayer analysis board, since packages/rooms (reserved for a future
 // multiplayer layer) does not exist yet — so PvP's "analyse any position at the end" reuses this
 // same component on whichever one device the match was played on, same as PvE.
-import { useMemo, useState } from 'react';
+//
+// Reload survival (docs/design/2026-09-18-reload-survival.md): seedFen + history are one
+// persisted snapshot (snapshot.ts), shared by every caller since only one AnalysisBoard is ever
+// mounted at a time. The initialiser seeds its fallback from `initialFen` (the sentinel this
+// component already resets on, below) rather than a hardcoded default, so a first-ever mount with
+// nothing stored still starts from the right position.
+import { useMemo } from 'react';
 import { Board } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { fenOf, inCheck, legalDests, playMove, positionFromFen, turn, type Role, type SquareName } from '@human-chess/rules';
-import { Button, Panel, Toolbar, Workbench } from '@human-chess/ui';
+import { Button, Panel, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import { AnalysisPanel } from './AnalysisPanel';
-
-interface HistoryEntry {
-  fen: string;
-  lastMove?: [SquareName, SquareName];
-}
+import { GTE_ANALYSIS_BOARD_KEY, parseAnalysisBoardSnapshot, type AnalysisHistoryEntry } from './snapshot';
 
 export interface AnalysisBoardProps {
   engine: UciEngine | undefined;
@@ -26,14 +28,18 @@ export interface AnalysisBoardProps {
 }
 
 export function AnalysisBoard({ engine, initialFen, title, onBack }: AnalysisBoardProps): React.JSX.Element {
+  const [snap, setSnap] = usePersistedState(
+    GTE_ANALYSIS_BOARD_KEY,
+    () => ({ seedFen: initialFen, history: [{ fen: initialFen }] as AnalysisHistoryEntry[] }),
+    { parse: parseAnalysisBoardSnapshot },
+  );
   // Re-seeds the history whenever the caller hands over a different starting position (PvP's
-  // results screen reuses one AnalysisBoard instance across several "Analyse" buttons).
-  const [seedFen, setSeedFen] = useState(initialFen);
-  const [history, setHistory] = useState<HistoryEntry[]>([{ fen: initialFen }]);
-  if (seedFen !== initialFen) {
-    setSeedFen(initialFen);
-    setHistory([{ fen: initialFen }]);
+  // results screen reuses one AnalysisBoard instance across several "Analyse" buttons) — a reset
+  // during render, same pattern as before persistence, so it fires before this render paints.
+  if (snap.seedFen !== initialFen) {
+    setSnap({ seedFen: initialFen, history: [{ fen: initialFen }] });
   }
+  const { history } = snap;
 
   const current = history[history.length - 1]!;
   const pos = useMemo(() => positionFromFen(current.fen), [current.fen]);
@@ -42,11 +48,11 @@ export function AnalysisBoard({ engine, initialFen, title, onBack }: AnalysisBoa
   // `promotion` comes from the board's own picker (Board.tsx) on a promoting move; undefined otherwise.
   const onBoardMove = (from: SquareName, to: SquareName, promotion?: Role): void => {
     const played = playMove(pos, from, to, promotion);
-    setHistory(h => [...h, { fen: fenOf(played.pos), lastMove: [from, to] }]);
+    setSnap(s => ({ ...s, history: [...s.history, { fen: fenOf(played.pos), lastMove: [from, to] }] }));
   };
 
   const undo = (): void => {
-    setHistory(h => (h.length > 1 ? h.slice(0, -1) : h));
+    setSnap(s => (s.history.length > 1 ? { ...s, history: s.history.slice(0, -1) } : s));
   };
 
   const board = (sizePx: number): React.JSX.Element => (

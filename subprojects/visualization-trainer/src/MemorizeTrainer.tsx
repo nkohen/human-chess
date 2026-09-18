@@ -9,10 +9,20 @@
 // Layout: docs/design/2026-09-17-ui.md. Settings and the summary have no board, so they are a
 // `Page` (rule 1: a setup/import screen is a Page, not a Workbench); studying/rebuilding/
 // reviewing each show a board, so they are a `Workbench`.
+//
+// Reload survival (docs/design/2026-09-18-reload-survival.md): every field of session progress
+// lives in one snapshot object (snapshot.ts's MemorizeSnapshot), seeded synchronously in the
+// usePersistedState initialiser. `phase` already carries its own absolute `endAt`/`startAt`
+// (Phase, below), so it is persisted exactly as it is — no extra clock bookkeeping needed. The
+// study-clock-expired effect a few lines down compares `now` (read fresh at mount) against the
+// restored phase's `endAt` on the very first render after a reload the same way it does on every
+// other 100ms tick, so a clock that ran out while the tab was away moves straight on to
+// rebuilding, honestly, the same as it would have live — never silently extended. `now` itself
+// stays a plain `useState`: it is a display tick, not progress.
 import { useEffect, useState } from 'react';
 import { Board, BoardEditor } from '@human-chess/board';
 import { EMPTY_PLACEMENT_FEN, inCheck, positionFromFen, turn, type SquareName } from '@human-chess/rules';
-import { Button, Field, Page, SegmentedControl, Status, Workbench } from '@human-chess/ui';
+import { Button, Field, Page, SegmentedControl, Status, usePersistedState, Workbench } from '@human-chess/ui';
 import {
   DEFAULT_MEMORIZE_SOURCE,
   DEFAULT_STUDY_SECONDS,
@@ -25,6 +35,7 @@ import {
   type MemorizeSource,
   type StudySeconds,
 } from './memorize';
+import { freshMemorizeSnapshot, parseMemorizeSnapshot, VT_MEMORIZE_KEY, type MemorizePhaseSnapshot } from './snapshot';
 import './visualization-trainer.css';
 
 const EMPTY_DESTS = new Map<SquareName, SquareName[]>();
@@ -47,12 +58,7 @@ interface MemorizeResult {
   score: MemorizeScore;
 }
 
-type Phase =
-  | { kind: 'settings' }
-  | { kind: 'studying'; index: number; fen: string; studySeconds: StudySeconds; endAt: number }
-  | { kind: 'rebuilding'; index: number; fen: string; studySeconds: StudySeconds; startAt: number; placement: string }
-  | { kind: 'reviewed'; index: number; fen: string; studySeconds: StudySeconds; rebuildMs: number; placement: string; score: MemorizeScore }
-  | { kind: 'summary' };
+type Phase = MemorizePhaseSnapshot;
 
 function secondsOf(ms: number): string {
   return (ms / 1000).toFixed(1);
@@ -65,14 +71,12 @@ export interface MemorizeTrainerProps {
 }
 
 export function MemorizeTrainer({ firstFen }: MemorizeTrainerProps = {}): React.JSX.Element {
-  const [studySeconds, setStudySeconds] = useState<StudySeconds>(DEFAULT_STUDY_SECONDS);
-  const [source, setSource] = useState<MemorizeSource>(DEFAULT_MEMORIZE_SOURCE);
-  const [sessionFens, setSessionFens] = useState<string[]>([]);
-  const [results, setResults] = useState<MemorizeResult[]>([]);
-  const [phase, setPhase] = useState<Phase>({ kind: 'settings' });
+  const [snap, setSnap] = usePersistedState(VT_MEMORIZE_KEY, () => freshMemorizeSnapshot(DEFAULT_STUDY_SECONDS, DEFAULT_MEMORIZE_SOURCE), { parse: parseMemorizeSnapshot });
+  const { studySeconds, source, sessionFens, results, phase } = snap;
 
   // Ticks while a clock (study countdown or rebuild count-up) is running, purely so the displayed
-  // time updates; the actual timestamps live on the phase object, never on this counter.
+  // time updates; the actual timestamps live on the phase object (persisted), never on this
+  // counter — a display tick, not progress, so it stays a plain useState.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (phase.kind !== 'studying' && phase.kind !== 'rebuilding') return;
@@ -83,54 +87,62 @@ export function MemorizeTrainer({ firstFen }: MemorizeTrainerProps = {}): React.
   // The study clock's own end-of-countdown transition: hides the position and opens the rebuild.
   // `now` is set to the same timestamp as `startAt` here (and below in startSession/goNext)
   // rather than left to the next 100ms tick — otherwise the first rebuilding frame reads
-  // `now - startAt` with a stale, smaller `now`, showing a negative "-0.0s" for one tick.
+  // `now - startAt` with a stale, smaller `now`, showing a negative "-0.0s" for one tick. This
+  // same check, run against a restored `phase.endAt` on the very first render after a reload
+  // (docs/design/2026-09-18-reload-survival.md), is what moves a clock that ran out while the tab
+  // was away straight on to rebuilding, exactly as it would have live — no separate code path.
   useEffect(() => {
     if (phase.kind !== 'studying' || now < phase.endAt) return;
     const t = Date.now();
     setNow(t);
-    setPhase({ kind: 'rebuilding', index: phase.index, fen: phase.fen, studySeconds: phase.studySeconds, startAt: t, placement: EMPTY_PLACEMENT_FEN });
-  }, [now, phase]);
+    setSnap(s =>
+      s.phase.kind !== 'studying'
+        ? s
+        : { ...s, phase: { kind: 'rebuilding', index: s.phase.index, fen: s.phase.fen, studySeconds: s.phase.studySeconds, startAt: t, placement: EMPTY_PLACEMENT_FEN } },
+    );
+  }, [now, phase, setSnap]);
 
   const startSession = (): void => {
     const fens = pickMemorizePositions(source, MEMORIZE_ROUNDS);
     if (firstFen) fens[0] = firstFen;
     const t = Date.now();
-    setSessionFens(fens);
-    setResults([]);
     setNow(t);
-    setPhase({ kind: 'studying', index: 0, fen: fens[0]!, studySeconds, endAt: t + studySeconds * 1000 });
+    setSnap(s => ({ ...s, sessionFens: fens, results: [], phase: { kind: 'studying', index: 0, fen: fens[0]!, studySeconds: s.studySeconds, endAt: t + s.studySeconds * 1000 } }));
   };
 
   const submitRebuild = (): void => {
     if (phase.kind !== 'rebuilding') return;
     const rebuildMs = Date.now() - phase.startAt;
     const score = scoreRebuild(phase.fen, phase.placement);
-    setResults(r => [...r, { studySeconds: phase.studySeconds, rebuildMs, score }]);
-    setPhase({ kind: 'reviewed', index: phase.index, fen: phase.fen, studySeconds: phase.studySeconds, rebuildMs, placement: phase.placement, score });
+    setSnap(s => ({
+      ...s,
+      results: [...s.results, { studySeconds: phase.studySeconds, rebuildMs, score }],
+      phase: { kind: 'reviewed', index: phase.index, fen: phase.fen, studySeconds: phase.studySeconds, rebuildMs, placement: phase.placement, score },
+    }));
   };
 
   const goNext = (): void => {
     if (phase.kind !== 'reviewed') return;
     const nextIndex = phase.index + 1;
     if (nextIndex >= sessionFens.length) {
-      setPhase({ kind: 'summary' });
+      setSnap(s => ({ ...s, phase: { kind: 'summary' } }));
       return;
     }
     const t = Date.now();
     setNow(t);
-    setPhase({ kind: 'studying', index: nextIndex, fen: sessionFens[nextIndex]!, studySeconds, endAt: t + studySeconds * 1000 });
+    setSnap(s => ({ ...s, phase: { kind: 'studying', index: nextIndex, fen: sessionFens[nextIndex]!, studySeconds: s.studySeconds, endAt: t + s.studySeconds * 1000 } }));
   };
 
-  const playAgain = (): void => setPhase({ kind: 'settings' });
+  const playAgain = (): void => setSnap(s => ({ ...s, phase: { kind: 'settings' } }));
 
   if (phase.kind === 'settings') {
     return (
       <Page title="Visualization trainer — Memorize" intro="Study a position, then rebuild it from memory against the clock." width="medium">
         <Field label="Study time">
-          <SegmentedControl ariaLabel="Study time" options={STUDY_OPTIONS} value={studySeconds} onChange={setStudySeconds} />
+          <SegmentedControl ariaLabel="Study time" options={STUDY_OPTIONS} value={studySeconds} onChange={value => setSnap(s => ({ ...s, studySeconds: value }))} />
         </Field>
         <Field label="Positions from">
-          <SegmentedControl ariaLabel="Position source" options={SOURCE_OPTIONS} value={source} onChange={setSource} />
+          <SegmentedControl ariaLabel="Position source" options={SOURCE_OPTIONS} value={source} onChange={value => setSnap(s => ({ ...s, source: value }))} />
         </Field>
         {firstFen && <Status kind="info">The position handed over from the other tool will be the first one to memorize.</Status>}
         <Button variant="primary" onClick={startSession}>
@@ -209,7 +221,7 @@ export function MemorizeTrainer({ firstFen }: MemorizeTrainerProps = {}): React.
           <BoardEditor
             fen={phase.placement}
             orientation={ORIENTATION}
-            onChange={placement => setPhase(p => (p.kind === 'rebuilding' ? { ...p, placement } : p))}
+            onChange={placement => setSnap(s => (s.phase.kind === 'rebuilding' ? { ...s, phase: { ...s.phase, placement } } : s))}
             size={`${Math.max(0, sizePx - EDITOR_PALETTE_RESERVE_PX)}px`}
           />
         )}

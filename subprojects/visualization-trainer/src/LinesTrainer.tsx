@@ -12,13 +12,23 @@
 // visualize plus the three questions and their answer/check button are `primary` (the thing the
 // learner must act on next), the round count and running score — and, once revealed, the end
 // position — are `children`.
+//
+// Reload survival (docs/design/2026-09-18-reload-survival.md): every field of session progress
+// lives in one snapshot object (snapshot.ts's LinesSnapshot), seeded synchronously in the
+// usePersistedState initialiser. The engine-chosen line is only ever written into that snapshot
+// once it is actually ready (`kind: 'ready'`) — 'loading'/'no-line'/'failed' are transient UI
+// state (`transient` below), cheap to recompute, and so stay a plain `useState`, same reasoning
+// as SoloRound.tsx's `error`. Loading a line for `startPosition` never happens twice: if a
+// restored snapshot already has one for the current `startPosition`, the fetch effect below is
+// skipped outright, so a reload's reveal shows exactly the line it showed before (A1).
 import { useEffect, useMemo, useState } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { endPosition, PIECE_ON_OPTIONS, questionsFor, type Position, type Question } from '@human-chess/facts';
 import { fenOf, inCheck, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
-import { Button, Field, navigateWithHandoff, SegmentedControl, Status, type StatusKind, Workbench } from '@human-chess/ui';
+import { Button, Field, navigateWithHandoff, SegmentedControl, Status, type StatusKind, usePersistedState, Workbench } from '@human-chess/ui';
 import { LINE_PLIES, ROUNDS, randomStartPosition } from './exercise';
+import { EMPTY_ANSWERS, freshLinesSnapshot, parseLinesSnapshot, VT_LINES_KEY, type AnswersSnapshot } from './snapshot';
 import './visualization-trainer.css';
 
 /** Search depth for the engine line the learner is asked to visualize. */
@@ -35,9 +45,8 @@ type ExerciseState =
   | { kind: 'failed'; message: string }
   | { kind: 'ready'; startFen: string; ucis: string[] };
 
-type Answers = { check: boolean | undefined; pieceOn: string | undefined; material: string };
+type Answers = AnswersSnapshot;
 
-const EMPTY_ANSWERS: Answers = { check: undefined, pieceOn: undefined, material: '' };
 const EMPTY_DESTS = new Map<SquareName, SquareName[]>();
 const YES_NO_OPTIONS: { value: 'yes' | 'no'; label: string }[] = [
   { value: 'yes', label: 'Yes' },
@@ -53,19 +62,21 @@ const formatSigned = (n: number): string => (n > 0 ? `+${n}` : `${n}`);
 
 export function LinesTrainer({ engine }: LinesTrainerProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
-  const [startPosition, setStartPosition] = useState(() => randomStartPosition());
+  const [snap, setSnap] = usePersistedState(VT_LINES_KEY, freshLinesSnapshot, { parse: parseLinesSnapshot });
+  const { startPosition, exercise: storedExercise, answers, revealed, tally, round, sessionDone } = snap;
   const { fen: startFen, moves: startMoves } = startPosition;
-  const [exercise, setExercise] = useState<ExerciseState>({ kind: 'loading' });
-  const [answers, setAnswers] = useState<Answers>(EMPTY_ANSWERS);
-  const [revealed, setRevealed] = useState(false);
-  const [tally, setTally] = useState({ correct: 0, total: 0 });
-  const [round, setRound] = useState(1);
-  const [sessionDone, setSessionDone] = useState(false);
+  // True exactly when the persisted line is still the one for the position on screen — a stale
+  // one (left over from before startPosition last changed) is treated the same as none at all.
+  const hasStoredExercise = storedExercise !== undefined && storedExercise.startFen === startFen;
+  const [transient, setTransient] = useState<{ kind: 'loading' } | { kind: 'no-line' } | { kind: 'failed'; message: string }>({ kind: 'loading' });
+  const exercise: ExerciseState = useMemo(
+    () => (hasStoredExercise ? { kind: 'ready', startFen: storedExercise!.startFen, ucis: storedExercise!.ucis } : transient),
+    [hasStoredExercise, storedExercise, transient],
+  );
 
   useEffect(() => {
-    setExercise({ kind: 'loading' });
-    setAnswers(EMPTY_ANSWERS);
-    setRevealed(false);
+    if (hasStoredExercise) return; // already have the real line for this position — never re-mine it
+    setTransient({ kind: 'loading' });
     if (!readyEngine) return;
     let cancelled = false;
     readyEngine
@@ -74,20 +85,21 @@ export function LinesTrainer({ engine }: LinesTrainerProps): React.JSX.Element {
         if (cancelled) return;
         const pv = analysis.lines[0]?.pv ?? [];
         if (pv.length === 0) {
-          setExercise({ kind: 'no-line' });
+          setTransient({ kind: 'no-line' });
           return;
         }
         const ucis = pv.slice(0, LINE_PLIES);
-        setExercise({ kind: 'ready', startFen, ucis });
+        setSnap(s => ({ ...s, exercise: { startFen, ucis } }));
       })
       .catch((err: unknown) => {
-        if (!cancelled) setExercise({ kind: 'failed', message: err instanceof Error ? err.message : String(err) });
+        if (!cancelled) setTransient({ kind: 'failed', message: err instanceof Error ? err.message : String(err) });
       });
     return () => {
       cancelled = true;
       readyEngine.stop();
     };
-  }, [readyEngine, startFen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyEngine, startFen, hasStoredExercise]);
 
   const startPos = useMemo(() => positionFromFen(startFen), [startFen]);
   // startMoves is the real setup-ply sequence that produced startFen (randomStartPosition); its
@@ -115,23 +127,28 @@ export function LinesTrainer({ engine }: LinesTrainerProps): React.JSX.Element {
 
   /** Fetches another line for the same round (used when the engine returned none — this never
    * happened as far as the learner is concerned, so it does not consume a round). */
-  const retryExercise = (): void => setStartPosition(randomStartPosition());
+  const retryExercise = (): void => setSnap(s => ({ ...s, startPosition: randomStartPosition(), exercise: undefined, answers: EMPTY_ANSWERS, revealed: false }));
 
   /** Advances to the next round, or — after the last one — ends the session. */
   const nextExercise = (): void => {
     if (round >= ROUNDS) {
-      setSessionDone(true);
+      setSnap(s => ({ ...s, sessionDone: true }));
       return;
     }
-    setRound(r => r + 1);
-    setStartPosition(randomStartPosition());
+    setSnap(s => ({ ...s, round: s.round + 1, startPosition: randomStartPosition(), exercise: undefined, answers: EMPTY_ANSWERS, revealed: false }));
   };
 
   const playAgain = (): void => {
-    setTally({ correct: 0, total: 0 });
-    setRound(1);
-    setSessionDone(false);
-    setStartPosition(randomStartPosition());
+    setSnap(s => ({
+      ...s,
+      tally: { correct: 0, total: 0 },
+      round: 1,
+      sessionDone: false,
+      startPosition: randomStartPosition(),
+      exercise: undefined,
+      answers: EMPTY_ANSWERS,
+      revealed: false,
+    }));
   };
 
   const checkAnswers = (): void => {
@@ -140,8 +157,7 @@ export function LinesTrainer({ engine }: LinesTrainerProps): React.JSX.Element {
     if (checkQ?.kind === 'check' && answers.check === checkQ.answer) correct++;
     if (pieceOnQ?.kind === 'piece-on' && answers.pieceOn === pieceOnQ.answer) correct++;
     if (materialQ?.kind === 'material' && isMaterialCorrect(answers.material, materialQ.answer)) correct++;
-    setTally(t => ({ correct: t.correct + correct, total: t.total + questions.length }));
-    setRevealed(true);
+    setSnap(s => ({ ...s, tally: { correct: s.tally.correct + correct, total: s.tally.total + questions.length }, revealed: true }));
   };
 
   const statusInfo = (): { kind: StatusKind; text: string } | undefined => {
@@ -213,7 +229,7 @@ export function LinesTrainer({ engine }: LinesTrainerProps): React.JSX.Element {
                   value={checkValue}
                   onChange={value => {
                     if (revealed) return;
-                    setAnswers(a => ({ ...a, check: value === 'yes' }));
+                    setSnap(s => ({ ...s, answers: { ...s.answers, check: value === 'yes' } }));
                   }}
                 />
               </Field>
@@ -230,7 +246,7 @@ export function LinesTrainer({ engine }: LinesTrainerProps): React.JSX.Element {
                   id="viz-piece-on"
                   disabled={revealed}
                   value={answers.pieceOn ?? ''}
-                  onChange={e => setAnswers(a => ({ ...a, pieceOn: e.target.value }))}
+                  onChange={e => setSnap(s => ({ ...s, answers: { ...s.answers, pieceOn: e.target.value } }))}
                 >
                   <option value="" disabled>
                     choose…
@@ -262,7 +278,7 @@ export function LinesTrainer({ engine }: LinesTrainerProps): React.JSX.Element {
                   type="number"
                   disabled={revealed}
                   value={answers.material}
-                  onChange={e => setAnswers(a => ({ ...a, material: e.target.value }))}
+                  onChange={e => setSnap(s => ({ ...s, answers: { ...s.answers, material: e.target.value } }))}
                 />
               </Field>
               {revealed && materialQ?.kind === 'material' && (

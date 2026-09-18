@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
 import { positionFromFen } from '@human-chess/rules';
-import { readHandoffParams, SegmentedControl } from '@human-chess/ui';
+import { consumeHandoffParams, SegmentedControl } from '@human-chess/ui';
 import { LinesTrainer } from './LinesTrainer';
 import { MemorizeTrainer } from './MemorizeTrainer';
 import { loadTrainerMode, saveTrainerMode, type TrainerMode } from './mode';
@@ -26,9 +26,14 @@ const MODE_OPTIONS: { value: TrainerMode; label: string }[] = [
  * #/visualization?fen=...), or undefined. Validated through the rules library so a garbage hash
  * never reaches the memorizer; an invalid one is simply ignored (first guess: nothing to tell the
  * user, they just get the ordinary trainer). Read once, from the hash this route was entered on
- * (App.tsx keys the trainer on the full hash, so a new hand-off remounts it). */
+ * (App.tsx keys the trainer on the full hash, so a new hand-off remounts it).
+ *
+ * Reload survival (docs/design/2026-09-18-reload-survival.md): `consumeHandoffParams`, not
+ * `readHandoffParams` — it strips the hand-off's query string from the address bar as it reads
+ * it, so a fresh hand-off wins over MemorizeTrainer's persisted session (below), and a reload
+ * right after lands back on that persisted session instead of replaying the same hand-off. */
 function handoffFen(): string | undefined {
-  const fen = readHandoffParams(window.location.hash).get('fen');
+  const fen = consumeHandoffParams(window.location.hash).get('fen');
   if (!fen) return undefined;
   try {
     positionFromFen(fen);
