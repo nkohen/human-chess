@@ -216,6 +216,16 @@ phones) inline with its percentage; the performance column is headed "Est. perf.
 formula in its tooltip. Measured after the change with a faked 8-game lichess export: the tree
 table's scroll width equals its client width at 1280×800 and on iPhone 13 down to depth 4.
 
+**Reload survival (2026-09-18).** Every screen restores where it was after a page reload:
+`subprojects/openings-builder/src/persistence.ts` holds the snapshot shapes and parsers (keys
+`human-chess.openings.{builderState,buildPath,drillState,gamesPath,moveTreeExpanded,
+moveTreeShowAll}.v1`) for the selected opening, mode, several-openings picks and new-opening
+draft; the builder path (UCIs from the opening root); the drill trail, status and expected move;
+the games-tree path; and MoveTree's expanded/show-all sets. Paths are UCI lists rebuilt through
+the rules library; a parse failure drops the whole snapshot. Render tests
+(`OpeningsBuilder.render.test.ts`, `MoveTree.render.test.ts`, jsdom) seed storage, mount, assert.
+Rule and per-tool table: docs/design/2026-09-18-reload-survival.md.
+
 ## Open questions (not yet asked)
 - How the user's played games are pulled in: answered 2026-09-17 — `packages/opening-tree` folds
   `fetchRecentLichessGames`/`fetchRecentChesscomGames` results, own implementation rather than
