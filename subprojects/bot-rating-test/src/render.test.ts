@@ -128,11 +128,11 @@ describe('BotRatingTest reload survival', () => {
     // The hand-off params are consumed: the URL no longer carries the query string.
     expect(window.location.hash).toBe('#/bot-rating');
 
-    // The stale snapshot was cleared before usePersistedState ever read storage (so it fell
-    // through to the hand-off-seeded value); usePersistedState itself never writes back on the
-    // very first mount render (packages/ui/src/persisted.ts), so storage is empty right after
-    // mount — the next real interaction (or the game-sync effect once a game starts) is what
-    // persists the new screen from here on.
-    expect(localStorage.getItem(SCREEN_KEY)).toBeNull();
+    // The stale snapshot was cleared before usePersistedState read storage, so the hook seeded
+    // the hand-off screen and wrote it at once (packages/ui/src/persisted.ts): a reload before
+    // any interaction lands on the handed-over setup, not on the stale game.
+    const written = JSON.parse(localStorage.getItem(SCREEN_KEY)!) as Screen;
+    expect(written.active).toBeUndefined();
+    expect(written.fenText).toBe(handoffFen);
   });
 });
