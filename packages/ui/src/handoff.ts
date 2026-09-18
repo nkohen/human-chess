@@ -37,3 +37,23 @@ export function readHandoffParams(hash: string): URLSearchParams {
   const queryAt = hash.indexOf('?');
   return new URLSearchParams(queryAt === -1 ? '' : hash.slice(queryAt + 1));
 }
+
+/**
+ * Reads a hand-off and takes it out of the address bar in the same step, so a page reload
+ * does not replay it. A receiving screen calls this once, in a state initialiser: a fresh
+ * hand-off (params present) wins over whatever the screen had persisted, and the URL is
+ * rewritten to the bare route with `history.replaceState`, which fires no `hashchange`, so the
+ * next reload restores the screen's own persisted state instead of re-applying the hand-off.
+ * Without params it is `readHandoffParams` and touches nothing. Never throws.
+ */
+export function consumeHandoffParams(hash: string = window.location.hash): URLSearchParams {
+  const params = readHandoffParams(hash);
+  if (hash.includes('?')) {
+    try {
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}${routeOf(hash)}`);
+    } catch {
+      // history unavailable: the hand-off simply stays in the URL
+    }
+  }
+  return params;
+}

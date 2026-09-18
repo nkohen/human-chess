@@ -27,6 +27,18 @@ export function startGame(startFen: string, playerColor: Color): Game {
   return { startFen, playerColor, pos, moves: [], seen: new Map([[repetitionKey(pos), 1]]), end: positionEnd(pos) };
 }
 
+/**
+ * Rebuild a game in progress from what a page reload keeps: the start FEN, the player's colour
+ * and the UCI moves played so far (`uciMoves(game)`). Throws on an illegal or malformed move,
+ * or on a move after the game ended, so a stale or corrupt snapshot is rejected as a whole
+ * rather than restored half-way; callers fall back to a fresh game.
+ */
+export function resumeGame(startFen: string, playerColor: Color, ucis: readonly string[]): Game {
+  let game = startGame(startFen, playerColor);
+  for (const uci of ucis) game = applyMove(game, uci);
+  return game;
+}
+
 export function applyMove(game: Game, uci: string): Game {
   return applyPlayed(game, playUci(game.pos, uci));
 }

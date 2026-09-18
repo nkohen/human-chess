@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyMove, currentFen, describeEnd, isPlayersTurn, playerDests, result, startGame } from './game';
+import { applyMove, currentFen, describeEnd, isPlayersTurn, playerDests, result, resumeGame, startGame, uciMoves } from './game';
 
 const fen = '8/8/8/4k3/8/8/8/R3K2R w - - 0 1';
 
@@ -49,5 +49,32 @@ describe('game', () => {
     g = applyMove(g, 'd5e5');
     expect(g.end).toEqual({ kind: 'threefold-repetition' });
     expect(result(g)).toBe('draw');
+  });
+});
+
+describe('resumeGame', () => {
+  const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+  it('rebuilds the same game as playing the moves one by one', () => {
+    const played = applyMove(applyMove(startGame(start, 'white'), 'e2e4'), 'e7e5');
+    const resumed = resumeGame(start, 'white', ['e2e4', 'e7e5']);
+    expect(currentFen(resumed)).toBe(currentFen(played));
+    expect(uciMoves(resumed)).toEqual(['e2e4', 'e7e5']);
+    expect(resumed.moves.map(m => m.san)).toEqual(['e4', 'e5']);
+    expect(resumed.seen).toEqual(played.seen);
+    expect(resumed.end).toBeUndefined();
+    expect(isPlayersTurn(resumed)).toBe(true);
+  });
+
+  it('restores a finished game with its end', () => {
+    const mated = resumeGame(start, 'black', ['f2f3', 'e7e5', 'g2g4', 'd8h4']);
+    expect(mated.end).toEqual({ kind: 'checkmate', winner: 'black' });
+    expect(result(mated)).toBe('won');
+  });
+
+  it('rejects a malformed, illegal or post-mortem move list as a whole', () => {
+    expect(() => resumeGame(start, 'white', ['e2e5'])).toThrow();
+    expect(() => resumeGame(start, 'white', ['zz'])).toThrow();
+    expect(() => resumeGame(start, 'black', ['f2f3', 'e7e5', 'g2g4', 'd8h4', 'a2a3'])).toThrow();
   });
 });
