@@ -1,0 +1,243 @@
+/* "Your games" analysis (GamesTreeView + SourcesPanel/FilterBar/MoveTree/Diagnostics): styling
+ * genuinely local to this screen only — spacing, colour and controls otherwise come from
+ * @human-chess/ui (docs/design/2026-09-17-ui.md, adoption rule 5). Kept in its own file rather
+ * than folded into openings-builder.css since it's a distinct screen (build/drill's styles live
+ * there already) with its own table-heavy layout.
+ *
+ * Every table below (.ob-move-tree, .ob-diag-table) is wrapped by its own JSX in a horizontally
+ * scrollable container rather than left to overflow the page: at iPhone 13 width a five-column
+ * table with indentation genuinely doesn't fit, and screenshots.mjs fails on page-level overflow
+ * (CLAUDE.md), not on a deliberately scrollable inner region. */
+
+/* ---------- SourcesPanel ---------- */
+
+.ob-sources-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: var(--hc-space-2) 0;
+}
+
+.ob-sources-details-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-2);
+  padding-top: var(--hc-space-2);
+}
+
+.ob-sources {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--hc-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-2);
+}
+
+.ob-sources-row {
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+  padding: var(--hc-space-2) var(--hc-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-1);
+}
+
+.ob-sources-row-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--hc-space-2);
+}
+
+.ob-sources-label {
+  font-weight: 600;
+}
+
+.ob-sources-meta {
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+}
+
+.ob-sources-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--hc-space-2) var(--hc-space-3);
+}
+
+.ob-sources-add .hc-field {
+  margin-bottom: 0;
+}
+
+/* ---------- FilterBar ---------- */
+
+.ob-filterbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-2);
+}
+
+.ob-filterbar-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: var(--hc-space-2) 0;
+}
+
+.ob-filterbar-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-3);
+  padding-top: var(--hc-space-2);
+}
+
+.ob-filterbar-speeds,
+.ob-filterbar-sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hc-space-1);
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius);
+  padding: var(--hc-space-2) var(--hc-space-3);
+  margin: 0;
+}
+
+.ob-filterbar-speeds legend,
+.ob-filterbar-sources legend {
+  font-size: var(--hc-text-sm);
+  color: var(--hc-text-muted);
+  padding: 0;
+}
+
+.ob-filterbar-speeds label,
+.ob-filterbar-sources label {
+  display: flex;
+  align-items: center;
+  gap: var(--hc-space-2);
+}
+
+/* ---------- MoveTree ---------- */
+
+.ob-move-tree-scroll {
+  overflow-x: auto;
+}
+
+.ob-move-tree {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--hc-text-sm);
+}
+
+.ob-move-tree th {
+  text-align: left;
+  color: var(--hc-text-muted);
+  font-weight: 500;
+  padding: var(--hc-space-1) var(--hc-space-2);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--hc-border);
+}
+
+.ob-move-tree td {
+  padding: var(--hc-space-1) var(--hc-space-2);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.ob-move-tree-row:hover {
+  background: var(--hc-surface-2);
+}
+
+.ob-move-tree-row--selected {
+  background: var(--hc-surface-2);
+  outline: 1px solid var(--hc-accent);
+  outline-offset: -1px;
+}
+
+.ob-move-tree-cell-move {
+  display: flex;
+  align-items: center;
+  gap: var(--hc-space-1);
+  white-space: nowrap;
+}
+
+.ob-move-tree-expand {
+  background: none;
+  border: none;
+  padding: 0 var(--hc-space-1);
+  cursor: pointer;
+  color: var(--hc-text-muted);
+  min-width: 1.2rem;
+}
+
+.ob-move-tree-expand-spacer {
+  display: inline-block;
+  width: 1.2rem;
+}
+
+.ob-move-tree-san {
+  background: none;
+  border: none;
+  padding: 0 var(--hc-space-1);
+  cursor: pointer;
+  color: var(--hc-accent);
+  font-family: var(--hc-mono);
+  text-align: left;
+}
+
+.ob-move-tree-transposition {
+  color: var(--hc-text-muted);
+  cursor: default;
+}
+
+/* Below iPhone-13 width the five-column tree table doesn't fit even in its scrollable container
+ * without either horizontal scroll or truncated text mid-word. "Last played" is the least
+ * essential column (games/score/perf. carry the analysis), so it's dropped entirely rather than
+ * shown squeezed; the remaining "Perf." cell keeps `white-space: nowrap` (inherited from
+ * `.ob-move-tree td` above) so "1563 est." never wraps mid-word. */
+@media (max-width: 40rem) {
+  .ob-move-tree th:last-child,
+  .ob-move-tree td:last-child {
+    display: none;
+  }
+}
+
+/* ---------- Diagnostics ---------- */
+
+.ob-diag-subtitle {
+  margin: var(--hc-space-4) 0 var(--hc-space-2);
+  font-size: var(--hc-text-base);
+}
+
+.ob-diag-empty {
+  color: var(--hc-text-muted);
+  font-size: var(--hc-text-sm);
+  margin: 0;
+}
+
+.ob-diag-table-scroll {
+  overflow-x: auto;
+}
+
+.ob-diag-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--hc-text-sm);
+}
+
+.ob-diag-table th {
+  text-align: left;
+  color: var(--hc-text-muted);
+  font-weight: 500;
+  padding: var(--hc-space-1) var(--hc-space-2);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--hc-border);
+}
+
+.ob-diag-table td {
+  padding: var(--hc-space-1) var(--hc-space-2);
+  vertical-align: middle;
+}
+
+.ob-diag-table td:first-child {
+  font-family: var(--hc-mono);
+}

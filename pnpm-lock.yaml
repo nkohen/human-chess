@@ -406,6 +406,9 @@ importers:
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@human-chess/store':
+        specifier: workspace:*
+        version: link:../../packages/store
       '@human-chess/ui':
         specifier: workspace:*
         version: link:../../packages/ui

@@ -1,51 +1,27 @@
-// "Your games": an opening tree folded from the user's own lichess or chess.com games
-// (memory/subprojects/openings-builder-trainer.md, priority 2 — "analysis through an opening
-// tree over the user's own games", openingtree.com named as the diagnostic reference but NOT
-// its code, per the task's reuse directive: this is a small, independent implementation).
-// Fetching is @human-chess/import's fetchRecentLichessGames/fetchRecentChesscomGames; folding
-// into a position graph is @human-chess/opening-tree's buildGamesTree — this file is display
-// and navigation only, same division BuilderView keeps with repertoire.ts.
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+// "Your games": an openingtree.com-style analysis over the user's own synced lichess/chess.com
+// games (memory/subprojects/openings-builder-trainer.md, priority 2). Games live in
+// @human-chess/store (synced by packages/import's syncSourceGames, managed by SourcesPanel);
+// folding into a position graph is @human-chess/opening-tree's buildTree; this file wires the
+// sources list, the loaded games, the filter, the tree, the selected path (board position +
+// move-tree highlight), and the diagnostics panel together. Display and navigation only — every
+// number shown is read straight off the tree or the store (A1/V3).
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
-import {
-  fetchRecentChesscomGames,
-  fetchRecentLichessGames,
-  type FetchRecentChesscomGamesOpts,
-  type FetchRecentLichessGamesOpts,
-  type ImportedGame,
-  type RecentGamesResult,
-} from '@human-chess/import';
-import { useLastUsername, type ImportSite } from '@human-chess/import/react';
-import {
-  buildGamesTree,
-  childrenOf,
-  fenAt,
-  mostPlayed,
-  moveScore,
-  type GameRef,
-  type GamesTree,
-  type MoveResults,
-  type TreeMove,
-} from '@human-chess/opening-tree';
+import type { StoredImportedGame } from '@human-chess/import';
+import { buildTree, fenAt, type GameFilter, type GamesTree, type TreeMove } from '@human-chess/opening-tree';
 import { inCheck, positionFromFen, turn, uciSquares, START_FEN, type Color, type SquareName } from '@human-chess/rules';
-import { Button, Field, Panel, SegmentedControl, Status, Toolbar, Workbench } from '@human-chess/ui';
+import type { GameSource } from '@human-chess/store';
+import { Button, Panel, SegmentedControl, Status, Toolbar, Workbench } from '@human-chess/ui';
+import { Diagnostics } from './Diagnostics';
+import { FilterBar } from './FilterBar';
+import { getGamesStore } from './gamesStore';
+import { GameRefList, MoveTree } from './MoveTree';
+import { SourcesPanel } from './SourcesPanel';
+import { endOfDayIso, pathToUcis, sourceKey, type GamesTreeTarget, type YourGamesFilterState } from './treeHelpers';
+import { loadGamesTreeColor, loadGamesTreeFilter, loadMinGames, saveGamesTreeColor, saveGamesTreeFilter, saveMinGames } from './yourGamesStorage';
+import './yourGames.css';
 
-/** What GamesTreeView needs from the build tab's currently selected opening to offer "Add to
- * <name>": its display name, its colour (only surfaced when it matches the tree's own colour —
- * a black-repertoire opening has no use for a move from a white-perspective tree), and a
- * callback that adds a whole line, from the opening's own root, and persists. A *line* rather
- * than a single (epd, uci) pair: this view's own EPDs are keyed into the games tree, not
- * necessarily a node the target opening has ever reached — `addMove` on an opening now throws
- * on an unknown `fromEpd` (repertoire.ts, B2) rather than silently creating an orphan node, so
- * the caller (OpeningsBuilder) walks the opening's tree from its root instead, adding each move
- * in `ucis` in turn (each `addMove` idempotent) so every intermediate node is guaranteed to
- * exist by the time the next one needs it. Kept as a closure so this file never has to import
- * the repertoire model itself. */
-export interface GamesTreeTarget {
-  name: string;
-  color: Color;
-  addLine: (ucis: string[]) => void;
-}
+export type { GamesTreeTarget } from './treeHelpers';
 
 export interface GamesTreeViewProps {
   /** The opening picker / new-opening form / mode toggle, shared with BuilderView and DrillView.
@@ -57,225 +33,133 @@ export interface GamesTreeViewProps {
   targetOpening?: GamesTreeTarget | undefined;
 }
 
-const STORAGE_KEY = 'human-chess.openings.gamesTree.username';
-const DEFAULT_GAMES = 100;
-const MIN_GAMES = 1;
-const MAX_GAMES = 300;
-// Matches the openings builder's own repertoire depth in spirit (deep enough for real opening
-// theory, shallow enough to fold hundreds of games quickly) — a first guess, not measured
-// against real games. Configurable in @human-chess/opening-tree; fixed here since the task
-// doesn't ask for a second depth control alongside the count field.
-const MAX_PLIES_PER_SIDE = 20;
-const GAME_REF_DISPLAY_CAP = 20;
-
 const NO_DESTS = new Map<SquareName, SquareName[]>();
 
-const SITE_OPTIONS: { value: ImportSite; label: string }[] = [
-  { value: 'lichess', label: 'lichess' },
-  { value: 'chess.com', label: 'chess.com' },
-];
 const COLOR_OPTIONS: { value: Color; label: string }[] = [
   { value: 'white', label: 'White' },
   { value: 'black', label: 'Black' },
 ];
 
-function clampGames(n: number): number {
-  if (!Number.isFinite(n)) return DEFAULT_GAMES;
-  return Math.min(MAX_GAMES, Math.max(MIN_GAMES, Math.round(n)));
-}
-
-/** Cached per (site, username, count) for the session — re-selecting the same combination (e.g.
- * switching back from build mode) doesn't re-fetch. Module-level, not component state, so it
- * survives GamesTreeView unmounting when the user switches modes and remounting when they
- * switch back (the task's own suggested shape). Stores the whole `RecentGamesResult` (games +
- * how many the fetch itself couldn't parse, M1), not just the games array, so a cache hit keeps
- * the same "folded N of M" honesty a fresh fetch has. */
-const recentGamesCache = new Map<string, RecentGamesResult>();
-
-function cacheKey(site: ImportSite, username: string, maxGames: number): string {
-  return `${site}:${username.toLowerCase()}:${maxGames}`;
-}
-
-function fetchRecent(site: ImportSite, username: string, maxGames: number): Promise<RecentGamesResult> {
-  const opts: FetchRecentLichessGamesOpts & FetchRecentChesscomGamesOpts = { maxGames };
-  return site === 'lichess' ? fetchRecentLichessGames(username, opts) : fetchRecentChesscomGames(username, opts);
-}
-
-/** The games and the username they were fetched *as*, taken together at load time (M2) — built
- * as one snapshot rather than pairing the fetched games with whatever the live username input
- * says right now, which would silently rebuild the tree against a half-typed name the moment the
- * user starts editing it after a load. `fetchSkipped` is folded into the "N of M" total the
- * loadForm panel shows, alongside the tree's own `gamesSkipped`. */
-interface LoadedGames {
-  games: ImportedGame[];
-  username: string;
-  fetchSkipped: number;
-}
-
-function wdlPercents(r: MoveResults): { win: number; draw: number; loss: number } {
-  const total = r.wins + r.draws + r.losses;
-  if (total <= 0) return { win: 0, draw: 0, loss: 0 };
-  return { win: (r.wins / total) * 100, draw: (r.draws / total) * 100, loss: (r.losses / total) * 100 };
-}
-
-function wdlTitle(pct: { win: number; draw: number; loss: number }, total: number): string {
-  return `Won ${pct.win.toFixed(1)}% · Drew ${pct.draw.toFixed(1)}% · Lost ${pct.loss.toFixed(1)}% (${total} game${total === 1 ? '' : 's'}, your side)`;
-}
-
-/** The games behind one edge, capped so a heavily-played move (hundreds of games) doesn't dump
- * an unbounded list — every entry is a real GameRef (url/playedAt/opponent straight off the
- * ImportedGame that contributed it), never summarised or invented. */
-function GameRefList({ refs }: { refs: GameRef[] }): React.JSX.Element {
-  const shown = refs.slice(0, GAME_REF_DISPLAY_CAP);
-  return (
-    <ul className="ob-tree-gamerefs">
-      {shown.map((ref, i) => (
-        <li key={i}>
-          {ref.url ? (
-            <a href={ref.url} target="_blank" rel="noreferrer">
-              {ref.opponent ?? 'game'}
-            </a>
-          ) : (
-            (ref.opponent ?? 'game')
-          )}
-          {ref.playedAt ? ` — ${ref.playedAt.slice(0, 10)}` : ''}
-        </li>
-      ))}
-      {refs.length > GAME_REF_DISPLAY_CAP && <li>+{refs.length - GAME_REF_DISPLAY_CAP} more</li>}
-    </ul>
-  );
+interface SourceGames {
+  source: GameSource;
+  games: StoredImportedGame[];
 }
 
 export function GamesTreeView({ controls, status, targetOpening }: GamesTreeViewProps): React.JSX.Element {
-  const { username, setUsername, save } = useLastUsername(STORAGE_KEY);
-  const [site, setSite] = useState<ImportSite>('lichess');
-  const [color, setColor] = useState<Color>('white');
-  // Free text while typing, clamped on blur/Enter — same pattern as MultiPvPanel's depth field,
-  // so "300" doesn't get chopped to "3" mid-keystroke.
-  const [gamesText, setGamesText] = useState(String(DEFAULT_GAMES));
-  const [gamesCount, setGamesCount] = useState(DEFAULT_GAMES);
-  const [loaded, setLoaded] = useState<LoadedGames | undefined>(undefined);
-  const [loading, setLoading] = useState(false);
-  const [fetchError, setFetchError] = useState<string | undefined>(undefined);
+  const [sources, setSources] = useState<GameSource[]>([]);
+  const [gamesBySource, setGamesBySource] = useState<SourceGames[]>([]);
+  const [color, setColor] = useState<Color>(() => loadGamesTreeColor());
+  const [filter, setFilter] = useState<YourGamesFilterState>(() => loadGamesTreeFilter());
+  const [minGames, setMinGames] = useState<number>(() => loadMinGames());
   const [path, setPath] = useState<TreeMove[]>([]);
+  const [expandRequest, setExpandRequest] = useState<{ path: TreeMove[]; token: number } | undefined>(undefined);
+  const [loadError, setLoadError] = useState<string | undefined>(undefined);
+  const expandTokenRef = useRef(0);
 
-  const requestIdRef = useRef(0);
+  useEffect(() => saveGamesTreeColor(color), [color]);
+  useEffect(() => saveGamesTreeFilter(filter), [filter]);
+  useEffect(() => saveMinGames(minGames), [minGames]);
 
-  // Built from `loaded` (the games and the username they were fetched as, captured together at
-  // load time), never from the live `username` input directly (M2) — typing in that field after
-  // a load must not rebuild the tree against a name that no longer matches the games it has.
-  const tree: GamesTree | undefined = useMemo(
-    () => (loaded ? buildGamesTree(loaded.games, loaded.username, color, { maxPliesPerSide: MAX_PLIES_PER_SIDE }) : undefined),
-    [loaded, color],
-  );
-
-  // A newly built tree (a fetch completed, or the colour changed) invalidates any in-progress
-  // path — same "compare during render, reset if changed" trick BuilderView uses for a changed
-  // opening id, since an effect would let one stale-tree render slip through first.
-  const [pathForTree, setPathForTree] = useState(tree);
-  if (pathForTree !== tree) {
-    setPathForTree(tree);
-    setPath([]);
-  }
-
-  function finalizeGames(raw: string): void {
-    setGamesCount(clampGames(Number(raw) || DEFAULT_GAMES));
-    setGamesText(String(clampGames(Number(raw) || DEFAULT_GAMES)));
-  }
-
-  const load = (force: boolean): void => {
-    const name = username.trim();
-    if (!name) return;
-    const key = cacheKey(site, name, gamesCount);
-    if (!force) {
-      const cached = recentGamesCache.get(key);
-      if (cached) {
-        setLoaded({ games: cached.games, username: name, fetchSkipped: cached.skipped });
-        setFetchError(undefined);
-        save(name);
-        return;
+  // Loads every linked account's games whenever the source list changes — on mount (SourcesPanel's
+  // own initial listSources()) and after every add/remove/sync, since SourcesPanel always hands
+  // back a fresh array from the store (see its own comment on why reference identity is enough
+  // to retrigger this even when only a game count changed, not the list of accounts itself).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const store = getGamesStore();
+        const lists = await Promise.all(sources.map(async source => ({ source, games: await store.listGames(source) })));
+        if (!cancelled) {
+          setGamesBySource(lists);
+          setLoadError(undefined);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
       }
-    }
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    setFetchError(undefined);
-    fetchRecent(site, name, gamesCount)
-      .then(fetched => {
-        if (requestIdRef.current !== requestId) return;
-        recentGamesCache.set(key, fetched);
-        setLoaded({ games: fetched.games, username: name, fetchSkipped: fetched.skipped });
-        save(name);
-      })
-      .catch((err: unknown) => {
-        if (requestIdRef.current !== requestId) return;
-        setFetchError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (requestIdRef.current === requestId) setLoading(false);
-      });
-  };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sources]);
 
-  const currentEpd = tree ? (path.length ? path[path.length - 1]!.to : tree.root) : undefined;
-  const fen = currentEpd ? fenAt(currentEpd) : START_FEN;
-  const pos = useMemo(() => positionFromFen(fen), [fen]);
-  const lastMove: [SquareName, SquareName] | undefined = path.length ? uciSquares(path[path.length - 1]!.uci) : undefined;
-  const children = tree && currentEpd ? mostPlayed(childrenOf(tree, currentEpd)) : [];
-  const lastEdge = path.length ? path[path.length - 1] : undefined;
+  // Which linked accounts feed the tree at all — filter.sourceKeys (empty = all), a different
+  // axis from GameFilter.sources below (that one filters by host type per game, not by which of
+  // *your* accounts a game came from). A persisted sourceKeys can name an account that's since
+  // been removed (localStorage outlives the account); dropping keys not present in the current
+  // `sources` before deciding "empty = all" means a removed account can never lock the tree onto
+  // an empty remainder ("0 of 0 games match") that nothing can ever satisfy again.
+  const selectedSources = useMemo(() => {
+    const live = new Set(sources.map(sourceKey));
+    const liveKeys = filter.sourceKeys.filter(k => live.has(k));
+    return liveKeys.length === 0 ? sources : sources.filter(s => liveKeys.includes(sourceKey(s)));
+  }, [sources, filter.sourceKeys]);
 
-  const loadForm = (
-    <Panel title="Load your games">
-      <div className="ob-tree-form">
-        <Field label="Site">
-          <SegmentedControl ariaLabel="Games site" options={SITE_OPTIONS} value={site} onChange={setSite} />
-        </Field>
-        <Field label={`${site === 'lichess' ? 'Lichess' : 'Chess.com'} username`} htmlFor="gtv-username">
-          <input id="gtv-username" value={username} onChange={e => setUsername(e.target.value)} disabled={loading} />
-        </Field>
-        <Field label="Colour">
-          <SegmentedControl ariaLabel="Games tree colour" options={COLOR_OPTIONS} value={color} onChange={setColor} />
-        </Field>
-        <Field label="Games to load (max 300)" htmlFor="gtv-count" hint="First guess: 100.">
-          <input
-            id="gtv-count"
-            type="number"
-            min={MIN_GAMES}
-            max={MAX_GAMES}
-            value={gamesText}
-            onChange={e => setGamesText(e.target.value)}
-            onBlur={e => finalizeGames(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') finalizeGames(e.currentTarget.value);
-            }}
-            disabled={loading}
-          />
-        </Field>
-        <Button variant="primary" onClick={() => load(false)} disabled={loading || !username.trim()}>
-          {loading ? 'Loading…' : 'Load'}
-        </Button>
-        {loaded !== undefined && (
-          <Button variant="secondary" onClick={() => load(true)} disabled={loading || !username.trim()}>
-            Fetch again
-          </Button>
-        )}
-      </div>
-      {loading && <Status kind="busy">Fetching games from {site}…</Status>}
-      {fetchError && <Status kind="error">{fetchError}</Status>}
-      {tree && loaded && (
-        <Status kind="info">
-          Folded {tree.gamesFolded} of {tree.gamesFolded + tree.gamesSkipped + loaded.fetchSkipped} fetched games ({loaded.username} as{' '}
-          {tree.color}); depth capped at {tree.maxPliesPerSide} plies per side.
-          {loaded.fetchSkipped > 0 && ` ${loaded.fetchSkipped} could not be parsed and were excluded before folding.`}
-        </Status>
-      )}
-    </Panel>
+  const selectedGames = useMemo(() => {
+    const selectedKeys = new Set(selectedSources.map(sourceKey));
+    return gamesBySource.filter(entry => selectedKeys.has(sourceKey(entry.source))).flatMap(entry => entry.games);
+  }, [gamesBySource, selectedSources]);
+
+  const players = useMemo(() => selectedSources.map(s => ({ site: s.site, username: s.username })), [selectedSources]);
+
+  const gameFilter: GameFilter = useMemo(
+    () => ({
+      speeds: filter.speeds.length > 0 ? filter.speeds : undefined,
+      rated: filter.rated === 'all' ? undefined : filter.rated === 'rated',
+      opponentRatingMin: filter.opponentRatingMin,
+      opponentRatingMax: filter.opponentRatingMax,
+      opponent: filter.opponent.trim() !== '' ? filter.opponent : undefined,
+      since: filter.since || undefined,
+      until: filter.until ? endOfDayIso(filter.until) : undefined,
+    }),
+    [filter],
   );
+
+  const tree: GamesTree = useMemo(() => buildTree(selectedGames, { players, color, filter: gameFilter }), [selectedGames, players, color, gameFilter]);
+
+  // A newly built tree (a sync landed, the filter or colour changed) invalidates any
+  // in-progress path — same "compare during render, reset if changed" trick v1 used, since an
+  // effect would let one stale-tree render slip through first.
+  const [treeForPath, setTreeForPath] = useState(tree);
+  if (treeForPath !== tree) {
+    setTreeForPath(tree);
+    setPath([]);
+    // A stale expandRequest (from a previous tree's Diagnostics "Show" click) targets TreeMoves
+    // that may no longer exist once the tree's rebuilt — MoveTree resets its own expanded/showAll
+    // state on the same tree-changed transition, so a leftover request here would have nothing
+    // valid left to apply it to.
+    setExpandRequest(undefined);
+  }
+
+  const currentEpd = path.length > 0 ? path[path.length - 1]!.to : tree.root;
+  const fen = fenAt(currentEpd);
+  const pos = useMemo(() => positionFromFen(fen), [fen]);
+  const lastMove: [SquareName, SquareName] | undefined = path.length > 0 ? uciSquares(path[path.length - 1]!.uci) : undefined;
+  const lastEdge = path.length > 0 ? path[path.length - 1] : undefined;
+
+  /** Diagnostics' "Show" buttons: navigate the board to the entry's position AND ask MoveTree to
+   * expand every ancestor along the way (a fresh token every time, even for the same entry
+   * clicked twice — see MoveTree's own comment on why). */
+  const showEntry = (entryPath: TreeMove[]): void => {
+    setPath(entryPath);
+    expandTokenRef.current += 1;
+    setExpandRequest({ path: entryPath, token: expandTokenRef.current });
+  };
 
   return (
     <Workbench
       title="Your games"
       status={status}
       primary={controls}
-      aside={loadForm}
+      aside={
+        <div className="ob-aside-scroll">
+          <SourcesPanel onSourcesChanged={setSources} />
+          <Panel title="Colour">
+            <SegmentedControl ariaLabel="Games tree colour" options={COLOR_OPTIONS} value={color} onChange={setColor} />
+          </Panel>
+          <FilterBar filter={filter} onChange={setFilter} sources={sources} matched={tree.gamesFolded} total={selectedGames.length} skipped={tree.skipped} />
+        </div>
+      }
       footer={
         <Toolbar>
           <Button variant="quiet" onClick={() => setPath([])} disabled={path.length === 0}>
@@ -301,41 +185,32 @@ export function GamesTreeView({ controls, status, targetOpening }: GamesTreeView
       )}
     >
       <div className="ob-path">
-        {tree && path.length > 0 ? <MoveLine startFen={fenAt(tree.root)} ucis={path.map(m => m.uci)} orientation={color} /> : <Status kind="info">(start)</Status>}
-      </div>
-      <Panel title="Moves played here">
-        {!tree && <Status kind="info">Load your games above to see your opening tree.</Status>}
-        {tree && children.length === 0 && <Status kind="info">No folded game reaches this position.</Status>}
-        {tree && children.length > 0 && (
-          <ul className="ob-tree-moves">
-            {children.map(m => {
-              const pct = wdlPercents(m.results);
-              return (
-                <li key={m.uci}>
-                  <Button variant="secondary" size="sm" className="ob-tree-move-button" onClick={() => setPath(p => [...p, m])}>
-                    {m.san} · {m.count} game{m.count === 1 ? '' : 's'} · {(moveScore(m) * 100).toFixed(0)}%
-                  </Button>
-                  <span className="ob-tree-wdl" title={wdlTitle(pct, m.count)}>
-                    <span className="ob-tree-wdl-win" style={{ width: `${pct.win}%` }} />
-                    <span className="ob-tree-wdl-draw" style={{ width: `${pct.draw}%` }} />
-                    <span className="ob-tree-wdl-loss" style={{ width: `${pct.loss}%` }} />
-                  </span>
-                  {targetOpening && targetOpening.color === color && (
-                    <Button variant="quiet" size="sm" onClick={() => targetOpening.addLine([...path.map(p => p.uci), m.uci])}>
-                      Add to {targetOpening.name}
-                    </Button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+        {path.length > 0 ? (
+          <MoveLine startFen={fenAt(tree.root)} ucis={pathToUcis(path)} orientation={color} />
+        ) : (
+          <Status kind="info">(start)</Status>
         )}
-      </Panel>
-      {lastEdge && (
-        <Panel title="Games with this move">
-          <GameRefList refs={lastEdge.games} />
-        </Panel>
+      </div>
+      {loadError && <Status kind="error">Couldn't load your synced games: {loadError}</Status>}
+      {sources.length === 0 ? (
+        <Status kind="info">Link a lichess or chess.com account and sync to build your tree.</Status>
+      ) : (
+        <>
+          <Panel title="Move tree">
+            <MoveTree tree={tree} path={path} onNavigate={setPath} targetOpening={targetOpening} color={color} expandRequest={expandRequest} />
+          </Panel>
+          {lastEdge && (
+            <Panel title="Games with this move">
+              <GameRefList refs={lastEdge.games} />
+            </Panel>
+          )}
+          <Diagnostics tree={tree} minGames={minGames} onMinGamesChange={setMinGames} onShow={showEntry} />
+        </>
       )}
     </Workbench>
   );
 }
+
+// Kept for parity with v1 in case a future caller wants the plain starting FEN without a tree —
+// not used inside this file (fenAt(tree.root) covers every real usage here).
+export { START_FEN };

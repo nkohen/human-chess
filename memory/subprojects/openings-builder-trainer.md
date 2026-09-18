@@ -132,6 +132,39 @@ separate trees per Load, not merged into one combined tree. No merge with the ex
 explorer statistics (`ExplorerPanel`'s lichess rating-band data) — the two stay side by side,
 not combined into one display.
 
+**Built 2026-09-17: openingtree-style analysis (replaces the per-load "Your games" slice
+above).** "Your games" now persists synced games instead of a one-shot per-load fetch: new
+`@human-chess/store` (`openGamesStore<StoredImportedGame>()`, IndexedDB with an in-memory
+fallback) holds every linked lichess/chess.com account's games, kept current by `packages/
+import`'s resumable `syncSourceGames`. `SourcesPanel.tsx` is the accounts manager — add a
+site+username (sync starts immediately; there's no separate "unsynced draft" state, since
+`GamesStore.listSources()` only returns accounts that have actually synced), Sync/Cancel per
+row (one sync at a time, `AbortController`-cancellable, no auto-retry on failure per A1), Remove
+(clears the account's stored games), and a persisted "max games per sync" (first guess 2000,
+range 100–5000). `GamesTreeView.tsx` loads every linked account's games and folds them with
+`@human-chess/opening-tree`'s `buildTree` (not the old `buildGamesTree`), giving transposition
+merging, per-move estimated performance, and last-played dates for free. `FilterBar.tsx` wraps
+`GameFilter` (speed, rated, opponent rating/name, date range) in a native `<details>`, plus a
+`sourceKeys` axis of my own (filters by *which linked account* a game came from — a different
+concept from `GameFilter.sources`, which is host-type; account checkboxes only show once more
+than one account is linked). `MoveTree.tsx` is the expandable move-tree table (root first, 20
+children shown per node with "Show all N", a "↩" transposition marker), replacing the old flat
+move list. `Diagnostics.tsx` surfaces `worstMoves`/`mostLostPositions`/`openingSummary` (a
+persisted "minimum games" threshold, first guess 5) with a "Show" button that reconstructs a
+navigable path from each entry's SAN line and jumps the board and move-tree there. "Add to
+`<opening>`" is unchanged (`GamesTreeTarget.addLine`, now moved to `treeHelpers.ts` to avoid an
+import cycle with `MoveTree.tsx`/`Diagnostics.tsx`). Filter state, colour and min-games persist
+per browser (`human-chess.openings.gamesTree.filter.v1` and siblings). Own decisions, not asked
+of the user: the `sourceKeys` account-filter axis described above; "Add" immediately syncs
+rather than staging a draft account; no per-source colour coding in the tree or move list; no
+merge with `ExplorerPanel`'s lichess rating-band data (still side by side, unchanged from the
+prior slice). Tests are pure-function only (`treeHelpers.test.ts`) — the workspace has no jsdom
+environment configured (`vitest.config.ts`), so no React component tests were added for the new
+screen; `npx pnpm@10 check` (1081 tests) and `SCREENSHOTS_PORT=5199 node scripts/
+screenshots.mjs openings` both pass clean, and the empty-store state (no linked accounts) was
+separately verified by driving Playwright into "Your games" mode directly, since the shared
+screenshot harness only visits the default (Build) mode for this route.
+
 **Code-review fixes, same day:** a "From Position" game (chess960 setups, a lichess study
 continued as a game) was crashing the whole route — `buildGamesTree` now compares each game's
 own start position against the tree's root via `repetitionKey` and skips a mismatch rather than
@@ -149,6 +182,31 @@ that never parsed at all, not just ones the tree itself excluded. `MAX_RECENT_AR
 request. The games-tree's tree is now built from the username captured at load time, not the
 live username input, so editing the field after a load no longer rebuilds against a half-typed
 name.
+
+**Code-review fixes, round 2 (same day):** `MoveTree.tsx`'s `expanded`/`showAll` state and
+`expandRequest` application are now keyed by *path* (`treeHelpers.pathKey`, unit-tested) rather
+than by the EPD a path reaches — a real game can cycle back to an earlier position (e.g.
+`1.Nf3 Nf6 2.Ng1 Ng8` returns to the start EPD), and the old EPD keying made the recursive row
+renderer re-enter that subtree forever, hanging the tab; `MoveTreeRows` also now threads an
+`ancestors` set of EPDs down the render path so a cycle is caught structurally and rendered as a
+terminal row (a "↩ repeats an earlier position" marker, no expand control) rather than followed.
+`SourcesPanel.tsx` now shows a `pending` row (busy Status, Cancel, and any error) for the account
+just submitted via "Add & sync" until the store actually lists it — previously a first sync that
+failed before writing any game (e.g. a 404 "no such lichess user") had no row to render its error
+in and the failure just vanished; a leftover error from an earlier failed add, once superseded by
+a new one, still shows under the add form rather than being dropped. `GamesTreeView.tsx` and
+`SourcesPanel.tsx` both now catch their store calls (`listGames`, the initial `listSources`,
+`clearSource().then(refresh)`) into a `loadError` state rendered as `<Status kind="error">`
+instead of leaving an unhandled rejection; a persisted `sourceKeys` naming an account that's
+since been removed no longer locks the tree onto an empty, unsatisfiable "0 of 0 games match"
+(stale keys are dropped before the "empty = all" rule applies), and the Accounts filter fieldset
+shows whenever any `sourceKeys` are set, not just when more than one account is currently linked.
+Minor cleanups: `Diagnostics.tsx`'s "Show" path reconstruction now calls the existing, tested
+`pathFromSanLine` helper instead of re-implementing the walk, and its two "Show" buttons use the
+`Button` primitive; the move-tree's expand buttons carry `aria-label`; "Linked accounts" is now a
+`<details>` (open by default with zero accounts, closed otherwise, then left to the user) so the
+move tree gets more vertical room once accounts exist; the "Last played" column hides below 40rem
+so the table fits iPhone-13 width without horizontal scroll or mid-word truncation.
 
 ## Open questions (not yet asked)
 - How the user's played games are pulled in: answered 2026-09-17 — `packages/opening-tree` folds
