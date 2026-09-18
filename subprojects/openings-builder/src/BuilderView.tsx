@@ -2,13 +2,14 @@
 // and the opponent's "what if" replies they want in the tree — memory/subprojects/openings-builder-trainer.md,
 // "Building a repertoire"). Every move played is added to the tree. The MultiPV panel on the
 // right gives the multi-line engine the user's interview asked for (priority 1, same file).
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import type { UciEngine } from '@human-chess/engine';
 import { inCheck, legalDests, playMove, positionFromFen, turn, uciSquares, type Role, type SquareName } from '@human-chess/rules';
-import { Button, Panel, Status, Toolbar, Workbench } from '@human-chess/ui';
+import { Button, Panel, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import { ExplorerPanel } from './ExplorerPanel';
 import { MultiPvPanel } from './MultiPvPanel';
+import { BUILD_PATH_KEY, parseBuildPathSnapshot, rebuildBuildPath, type BuildPathSnapshot } from './persistence';
 import { addMove, childrenOf, fenAt, movesBeyond, removeMove, type Opening, type OpeningMove } from './repertoire';
 
 export interface BuilderViewProps {
@@ -24,9 +25,20 @@ export interface BuilderViewProps {
 }
 
 export function BuilderView({ opening, onOpeningChange, engine, controls, status }: BuilderViewProps): React.JSX.Element {
-  // The path of edges taken from the root to here. Re-derived to the empty path whenever the
-  // selected opening changes (a different id means a different tree entirely).
-  const [path, setPath] = useState<OpeningMove[]>([]);
+  // The path of edges taken from the root to here, persisted as a UCI list keyed by opening id
+  // (every opening shares the same root EPD — the standard starting position — so the id is the
+  // only thing that tells "this opening's saved path" apart from an unrelated one that happens
+  // to start the same way). Restoring only happens in this initialiser (parseSnapshot runs once,
+  // at mount) — the sentinel below, unchanged from before, handles the opening changing *after*
+  // mount (the picker, not a reload): switching to a different opening still starts at its root,
+  // same as today, unless a later reload finds a saved path for that exact opening.
+  const parseSnapshot = (raw: unknown): OpeningMove[] | undefined => {
+    const snapshot = parseBuildPathSnapshot(raw);
+    if (!snapshot || snapshot.openingId !== opening.id) return undefined;
+    return rebuildBuildPath(opening, snapshot.ucis);
+  };
+  const serializeSnapshot = useCallback((value: OpeningMove[]): BuildPathSnapshot => ({ openingId: opening.id, ucis: value.map(m => m.uci) }), [opening.id]);
+  const [path, setPath] = usePersistedState<OpeningMove[]>(BUILD_PATH_KEY, [], { parse: parseSnapshot, serialize: serializeSnapshot });
   const [pathOpeningId, setPathOpeningId] = useState(opening.id);
   if (pathOpeningId !== opening.id) {
     setPathOpeningId(opening.id);

@@ -13,11 +13,12 @@
 // calls it right; the drill tracks which openings are still "live" and drops one silently (no
 // stop) the moment the path leaves its graph — only a move absent from every live opening stops
 // the drill.
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { Board, MoveLine } from '@human-chess/board';
 import { inCheck, legalDests, playMove, positionFromFen, turn, uciSquares, type Role, type SquareName } from '@human-chess/rules';
-import { Button, Panel, Status, Workbench } from '@human-chess/ui';
+import { Button, Panel, Status, usePersistedState, Workbench } from '@human-chess/ui';
 import { acceptedMoves, liveOpenings, nextMoveOptions, pickReply } from './drill';
+import { DRILL_STATE_KEY, parseDrillSnapshot, replayTrail, type DrillSnapshot } from './persistence';
 import { fenAt, type Opening } from './repertoire';
 
 export interface DrillViewProps {
@@ -32,8 +33,6 @@ export interface DrillViewProps {
   status?: ReactNode;
 }
 
-type DrillStatus = 'playing' | 'wrong' | 'complete';
-
 const OPPONENT_MOVE_DELAY_MS = 400;
 
 /** A stable key for the selected scope, so a `useState` initialiser can tell "same scope,
@@ -47,21 +46,32 @@ export function DrillView({ openings, controls, status }: DrillViewProps): React
   const primary = openings[0];
   const color = primary?.color ?? 'white';
   const root = primary?.root ?? '';
-  const [epd, setEpd] = useState(root);
-  const [drillScopeKey, setDrillScopeKey] = useState(scopeKey(openings));
-  const [trail, setTrail] = useState<string[]>([]);
-  const [drillStatus, setDrillStatus] = useState<DrillStatus>('playing');
-  const [expected, setExpected] = useState<{ san: string; openingNames: string[] }[]>([]);
 
-  const reset = (): void => {
-    setEpd(root);
-    setTrail([]);
-    setDrillStatus('playing');
-    setExpected([]);
-  };
+  // trail/status/expected as one snapshot, seeded together with the scope key — the key doubles
+  // as the "does this snapshot even apply" sentinel (below) and as part of what's validated at
+  // load: a snapshot recorded under a different scope (a different opening picked, or a
+  // different 'several' selection) is rejected wholesale rather than replayed against the wrong
+  // openings. `epd` is deliberately not part of the snapshot: it's always fully determined by
+  // `root` + `trail` (replayTrail, via @human-chess/rules), so it's recomputed below instead of
+  // stored — storing it too would be a second source of truth that could drift from the trail.
+  const [snapshot, setSnapshot] = usePersistedState<DrillSnapshot>(
+    DRILL_STATE_KEY,
+    () => ({ scopeKey: scopeKey(openings), trail: [], status: 'playing', expected: [] }),
+    {
+      parse: raw => {
+        const parsed = parseDrillSnapshot(raw);
+        if (!parsed || parsed.scopeKey !== scopeKey(openings)) return undefined;
+        if (replayTrail(root, parsed.trail) === undefined) return undefined; // corrupt/illegal trail: reject the whole snapshot
+        return parsed;
+      },
+    },
+  );
+  const { trail, status: drillStatus, expected } = snapshot;
+  const epd = useMemo(() => replayTrail(root, trail) ?? root, [root, trail]);
 
-  if (drillScopeKey !== scopeKey(openings)) {
-    setDrillScopeKey(scopeKey(openings));
+  const reset = (): void => setSnapshot({ scopeKey: scopeKey(openings), trail: [], status: 'playing', expected: [] });
+
+  if (snapshot.scopeKey !== scopeKey(openings)) {
     reset();
   }
 
@@ -82,15 +92,14 @@ export function DrillView({ openings, controls, status }: DrillViewProps): React
     if (drillStatus !== 'playing') return;
     const options = nextMoveOptions(live, epd);
     if (options.length === 0) {
-      setDrillStatus('complete');
+      setSnapshot(prev => ({ ...prev, status: 'complete' }));
       return;
     }
     if (usersTurn) return;
     const pick = pickReply(live, epd);
     if (!pick) return;
     const timer = setTimeout(() => {
-      setTrail(t => [...t, pick.uci]);
-      setEpd(pick.to);
+      setSnapshot(prev => ({ ...prev, trail: [...prev.trail, pick.uci] }));
     }, OPPONENT_MOVE_DELAY_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,12 +111,10 @@ export function DrillView({ openings, controls, status }: DrillViewProps): React
     const accepted = acceptedMoves(live, epd);
     const match = accepted.find(m => m.uci === played.uci);
     if (match) {
-      setTrail(t => [...t, match.uci]);
-      setEpd(match.to);
+      setSnapshot(prev => ({ ...prev, trail: [...prev.trail, match.uci] }));
       return;
     }
-    setExpected(accepted.map(m => ({ san: m.san, openingNames: m.openingNames })));
-    setDrillStatus('wrong');
+    setSnapshot(prev => ({ ...prev, status: 'wrong', expected: accepted.map(m => ({ san: m.san, openingNames: m.openingNames })) }));
   };
 
   const dests = usersTurn && drillStatus === 'playing' ? legalDests(pos) : new Map<SquareName, SquareName[]>();

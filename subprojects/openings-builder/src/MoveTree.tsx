@@ -6,7 +6,8 @@
 import { Fragment, useState } from 'react';
 import { childrenOf, mostPlayed, type GamesTree, type GameRef, type TreeMove } from '@human-chess/opening-tree';
 import type { Color } from '@human-chess/rules';
-import { Button } from '@human-chess/ui';
+import { Button, usePersistedState } from '@human-chess/ui';
+import { MOVE_TREE_EXPANDED_KEY, MOVE_TREE_SHOW_ALL_KEY, parseMoveTreeKeySet, reconcileMoveTreeKeys, serializeMoveTreeKeySet } from './persistence';
 import { formatLastPlayed, pathKey, PERFORMANCE_TITLE, pathToUcis, wdlPercents, wdlTitle, type GamesTreeTarget } from './treeHelpers';
 
 export type { GamesTreeTarget } from './treeHelpers';
@@ -192,14 +193,26 @@ function MoveTreeRows({
  * GamesTreeView already used for `path`. */
 export function MoveTree({ tree, path, onNavigate, targetOpening, color, expandRequest }: MoveTreeProps): React.JSX.Element {
   const ROOT_KEY = '';
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([ROOT_KEY]));
-  const [showAll, setShowAll] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = usePersistedState<Set<string>>(MOVE_TREE_EXPANDED_KEY, () => new Set([ROOT_KEY]), {
+    parse: parseMoveTreeKeySet,
+    serialize: serializeMoveTreeKeySet,
+  });
+  const [showAll, setShowAll] = usePersistedState<Set<string>>(MOVE_TREE_SHOW_ALL_KEY, () => new Set(), {
+    parse: parseMoveTreeKeySet,
+    serialize: serializeMoveTreeKeySet,
+  });
 
+  // A newly built tree (a fresh sync, a changed filter or colour — including the very first
+  // "real" tree replacing the empty placeholder an async games load starts from) reconciles
+  // rather than resets: each expanded/shown path is kept only if its uci sequence still resolves
+  // against the new tree (reconcileMoveTreeKeys, same truncate-on-validity idea as a path
+  // snapshot). A blind reset here would otherwise wipe a just-restored snapshot the instant the
+  // real tree replaces that placeholder, before the user ever saw it.
   const [treeForState, setTreeForState] = useState(tree);
   if (treeForState !== tree) {
     setTreeForState(tree);
-    setExpanded(new Set([ROOT_KEY]));
-    setShowAll(new Set());
+    setExpanded(prev => reconcileMoveTreeKeys(tree, prev));
+    setShowAll(prev => reconcileMoveTreeKeys(tree, prev));
   }
 
   // Applies a Diagnostics "Show" request at most once per token — same "compare during render,

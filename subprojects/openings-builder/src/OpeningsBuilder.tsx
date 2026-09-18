@@ -6,10 +6,11 @@ import { useEffect, useMemo, useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
 import type { Color, SquareName } from '@human-chess/rules';
 import { Board } from '@human-chess/board';
-import { Button, Field, SegmentedControl, Status, Workbench } from '@human-chess/ui';
+import { Button, Field, SegmentedControl, Status, usePersistedState, Workbench } from '@human-chess/ui';
 import { BuilderView } from './BuilderView';
 import { DrillView } from './DrillView';
 import { GamesTreeView } from './GamesTreeView';
+import { BUILDER_STATE_KEY, parseBuilderState, type BuilderStateSnapshot, type Mode } from './persistence';
 import { addMove, childrenOf, createOpening, START_FEN, type Opening } from './repertoire';
 import { loadDrillScope, loadRepertoire, saveDrillScope, saveRepertoire, type DrillScope } from './storage';
 import './openings-builder.css';
@@ -19,24 +20,51 @@ export interface OpeningsBuilderProps {
   engine: UciEngine | Error | undefined;
 }
 
-type Mode = 'build' | 'drill' | 'games';
-
 const NO_DESTS = new Map<SquareName, SquareName[]>();
 
 export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
   const [openings, setOpenings] = useState<Opening[]>(() => loadRepertoire());
-  const [selectedId, setSelectedId] = useState<string | undefined>(() => openings[0]?.id);
-  const [mode, setMode] = useState<Mode>('build');
-  const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState<Color>('white');
+  // Picked opening, mode, the "several" drill-scope checkboxes, and the new-opening draft — one
+  // snapshot so a reload restores the whole picker at once rather than pieces that could
+  // disagree with each other (e.g. a 'several' selection surviving without the opening it was
+  // seeded from). `selectedId` is re-validated against `openings` below (an id can outlive the
+  // opening it named, e.g. deleted in another tab); `severalIds` used to be a fresh decision
+  // each session, but the reload rule (docs/design/2026-09-18-reload-survival.md) now covers it
+  // too.
+  const [builderState, setBuilderState] = usePersistedState<BuilderStateSnapshot>(
+    BUILDER_STATE_KEY,
+    () => ({ selectedId: openings[0]?.id ?? null, mode: 'build', severalIds: [], newName: '', newColor: 'white' }),
+    { parse: parseBuilderState },
+  );
   const [drillScope, setDrillScope] = useState<DrillScope>(() => loadDrillScope());
-  // Which openings are checked for the 'several' drill scope, by id. Only the scope choice
-  // itself is persisted (storage.ts); this selection is a fresh decision each session.
-  const [severalIds, setSeveralIds] = useState<Set<string>>(new Set());
 
   useEffect(() => saveRepertoire(openings), [openings]);
   useEffect(() => saveDrillScope(drillScope), [drillScope]);
+
+  // A selectedId that no longer names a loaded opening (deleted since the snapshot was saved)
+  // falls back to the first opening, same as a fresh session always has — "compare during
+  // render, reset if changed", so the very next render already has a valid id instead of one
+  // extra render showing nothing selected.
+  if (builderState.selectedId !== null && !openings.some(o => o.id === builderState.selectedId)) {
+    setBuilderState(prev => ({ ...prev, selectedId: openings[0]?.id ?? null }));
+  }
+
+  const selectedId = builderState.selectedId ?? undefined;
+  const mode = builderState.mode;
+  const newName = builderState.newName;
+  const newColor = builderState.newColor;
+  const severalIds = useMemo(() => new Set(builderState.severalIds), [builderState.severalIds]);
+
+  const setSelectedId = (id: string | undefined): void => setBuilderState(prev => ({ ...prev, selectedId: id ?? null }));
+  const setMode = (next: Mode): void => setBuilderState(prev => ({ ...prev, mode: next }));
+  const setNewName = (next: string): void => setBuilderState(prev => ({ ...prev, newName: next }));
+  const setNewColor = (next: Color): void => setBuilderState(prev => ({ ...prev, newColor: next }));
+  const setSeveralIds = (next: Set<string> | ((prev: Set<string>) => Set<string>)): void =>
+    setBuilderState(prev => {
+      const nextSet = typeof next === 'function' ? next(new Set(prev.severalIds)) : next;
+      return { ...prev, severalIds: [...nextSet] };
+    });
 
   const selected = openings.find(o => o.id === selectedId);
 
