@@ -35,7 +35,7 @@ const ALLOWED = LIVE ? new URL(LIVE).host : `localhost:${PORT}`;
 const WEB_DIR = path.join(ROOT, 'apps', 'web');
 const VITE_BIN = path.join(WEB_DIR, 'node_modules', '.bin', 'vite');
 
-const ROUTES = ['', 'endgames', 'guess-the-eval', 'visualization', 'hand-and-brain', 'openings', 'memory', 'opening-game', 'bot-rating', 'puzzles', 'chessitout', 'review'];
+const ROUTES = ['', 'endgames', 'guess-the-eval', 'visualization', 'hand-and-brain', 'openings', 'memory', 'opening-game', 'bot-rating', 'puzzles', 'chessitout', 'review', 'lesson-builder'];
 
 function isNetworkFailureText(t) { return /^Failed to load resource|net::ERR_|Failed to fetch|NetworkError/i.test(t); }
 

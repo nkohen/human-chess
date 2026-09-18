@@ -71,6 +71,11 @@ const ROUTES = [
   { name: 'puzzles', hash: 'puzzles', placeholder: '.puzzles-board-placeholder', noPrimaryControl: true },
   { name: 'chessitout', hash: 'chessitout', hasBoardOnLoad: true },
   { name: 'review', hash: 'review', extra: 'import' },
+  // Lesson Builder opens on its library Page (a list of saved lessons plus New/Import actions),
+  // not a board and not a single-CTA flow — like the home page, there is no one primary control
+  // to keep above the fold, so noPrimaryControl. The editor/player (both Workbench board screens)
+  // are only reachable after creating a lesson, which this static first-paint pass doesn't do.
+  { name: 'lesson-builder', hash: 'lesson-builder', noPrimaryControl: true },
 ];
 
 const VIEWPORTS = [
