@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { fetchLatestLichessGame, fetchRecentLichessGames } from './lichess';
+import { describe, expect, it, vi } from 'vitest';
+import { LichessRateLimited, configureLichessFetch, type LichessFetchImpl } from '@human-chess/lichess';
+import { fetchLatestLichessGame, fetchLichessGames, fetchRecentLichessGames } from './lichess';
 
 const CANNED_PGN = `[Event "Rated Blitz game"]
 [Site "https://lichess.org/abcd1234"]
@@ -162,5 +163,143 @@ describe('fetchRecentLichessGames', () => {
     const fetchImpl: typeof fetch = (async () =>
       ({ ok: false, status: 404, text: async () => '', headers: new Headers() }) as unknown as Response) as unknown as typeof fetch;
     await expect(fetchRecentLichessGames('nosuchuser', { maxGames: 100, fetchImpl })).rejects.toThrow(/no lichess user/);
+  });
+});
+
+const THREE_GAME_PGN = `[Event "Rated Blitz game"]
+[Site "https://lichess.org/g1"]
+[White "nadavk"]
+[Black "a"]
+[Result "1-0"]
+
+1. e4 e5 1-0
+
+[Event "Rated Bullet game"]
+[Site "https://lichess.org/g2"]
+[White "b"]
+[Black "nadavk"]
+[Result "0-1"]
+
+1. d4 d5 0-1
+
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/g3"]
+[White "nadavk"]
+[Black "c"]
+[Result "1/2-1/2"]
+
+1. c4 c5 1/2-1/2
+`;
+
+/** A Response whose body is a real ReadableStream, split at `splitAt` — deliberately choosing a
+ * split point inside the *second* "[Event " so readPgnWithIdleTimeout's carry-over handling (a
+ * needle split across a chunk boundary) is actually exercised, not just the easy single-chunk
+ * case. */
+function streamedGamesResponse(pgn: string, splitAt: number): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(pgn.slice(0, splitAt)));
+      controller.enqueue(encoder.encode(pgn.slice(splitAt)));
+      controller.close();
+    },
+  });
+  return new Response(stream, { status: 200 });
+}
+
+describe('fetchLichessGames', () => {
+  it('reads a streamed body incrementally, reporting progress and returning every game (needle split across a chunk boundary)', async () => {
+    const secondEventAt = THREE_GAME_PGN.indexOf('[Event ', THREE_GAME_PGN.indexOf('[Event ') + 1);
+    const splitAt = secondEventAt + 3; // mid-way through "[Event " itself
+    const fetchImpl: LichessFetchImpl = async () => streamedGamesResponse(THREE_GAME_PGN, splitAt);
+
+    const progress: number[] = [];
+    const { games, skipped } = await fetchLichessGames('nadavk', { fetchImpl, onProgress: n => progress.push(n) });
+
+    expect(games).toHaveLength(3);
+    expect(skipped).toBe(0);
+    expect(games[0]!.black).toBe('a');
+    expect(games[1]!.playedAs).toBe('black');
+    expect(games[2]!.meta?.speed).toBe('rapid');
+    // Progress is non-decreasing and ends at the true total, regardless of exactly how many
+    // chunks it took to get there.
+    expect(progress.length).toBeGreaterThan(0);
+    expect(progress[progress.length - 1]).toBe(3);
+    expect([...progress].sort((a, b) => a - b)).toEqual(progress);
+  });
+
+  it('falls back to a whole-body text() read when the response has no readable stream', async () => {
+    const fetchImpl: LichessFetchImpl = (async () =>
+      ({ ok: true, status: 200, text: async () => THREE_GAME_PGN, headers: new Headers() }) as unknown as Response) as LichessFetchImpl;
+    const { games, skipped } = await fetchLichessGames('nadavk', { fetchImpl });
+    expect(games).toHaveLength(3);
+    expect(skipped).toBe(0);
+  });
+
+  it('builds the request URL with tags/opening/perfType and the since/until/rated/max filters', async () => {
+    let requestedUrl = '';
+    const fetchImpl: LichessFetchImpl = async url => {
+      requestedUrl = url;
+      return { ok: true, status: 200, text: async () => '', headers: new Headers() } as unknown as Response;
+    };
+    await fetchLichessGames('nadavk', { sinceMs: 1_000, untilMs: 2_000, rated: true, max: 500, fetchImpl });
+    expect(requestedUrl).toContain('tags=true');
+    expect(requestedUrl).toContain('opening=true');
+    expect(requestedUrl).toContain('perfType=ultraBullet%2Cbullet%2Cblitz%2Crapid%2Cclassical%2Ccorrespondence');
+    expect(requestedUrl).toContain('since=1000');
+    expect(requestedUrl).toContain('until=2000');
+    expect(requestedUrl).toContain('rated=true');
+    expect(requestedUrl).toContain('max=500');
+  });
+
+  it('defaults max to 2000 and hard-caps it at 5000', async () => {
+    const urls: string[] = [];
+    const fetchImpl: LichessFetchImpl = async url => {
+      urls.push(url);
+      return { ok: true, status: 200, text: async () => '', headers: new Headers() } as unknown as Response;
+    };
+    await fetchLichessGames('nadavk', { fetchImpl });
+    await fetchLichessGames('nadavk', { max: 999_999, fetchImpl });
+    expect(urls[0]).toContain('max=2000');
+    expect(urls[1]).toContain('max=5000');
+  });
+
+  it('rejects with a clear message on a 404 (no such user)', async () => {
+    const fetchImpl: LichessFetchImpl = async () => new Response('', { status: 404 });
+    await expect(fetchLichessGames('nosuchuser', { fetchImpl })).rejects.toThrow(/no lichess user/);
+  });
+
+  it('rejects with LichessRateLimited on a 429 from a caller-supplied fetchImpl', async () => {
+    const fetchImpl: LichessFetchImpl = async () => new Response('', { status: 429 });
+    await expect(fetchLichessGames('nadavk', { fetchImpl })).rejects.toBeInstanceOf(LichessRateLimited);
+  });
+
+  it('rejects with LichessRateLimited when the real lichessFetch client hits its own cooldown', async () => {
+    // No _resetForTests afterward (not exported from @human-chess/lichess's public API, same as
+    // packages/import/src/chesscom.test.ts's parallel test) — safe because every other test in
+    // this file passes its own explicit fetchImpl rather than relying on the default lichessFetch,
+    // and vitest gives each test file its own module registry.
+    configureLichessFetch({ fetchImpl: async () => new Response('', { status: 429 }) });
+    await expect(fetchLichessGames('nadavk')).rejects.toBeInstanceOf(LichessRateLimited);
+  });
+
+  it('rejects with the signal’s own reason when already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException('caller gave up', 'AbortError'));
+    const fetchImpl: LichessFetchImpl = async () => new Response('', { status: 200 });
+    await expect(fetchLichessGames('nadavk', { signal: controller.signal, fetchImpl })).rejects.toThrow(/caller gave up/);
+  });
+
+  it('aborts with a clear message when lichess sends no data for the idle window (60 s)', async () => {
+    vi.useFakeTimers();
+    try {
+      const neverResolves: LichessFetchImpl = () => new Promise<Response>(() => {});
+      const promise = fetchLichessGames('nadavk', { fetchImpl: neverResolves });
+      const assertion = expect(promise).rejects.toThrow(/sent no data for 60 s/);
+      await vi.advanceTimersByTimeAsync(60_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

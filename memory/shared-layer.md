@@ -31,7 +31,7 @@ numbers; focus on concepts applied in practice rather than comparison to expert 
 ## Directory decomposition (2026-09-16, first slice built)
 
 One line per top-level directory, as CLAUDE.md requires. Built: rules, board, engine, play,
-positions, facts, import, review, lichess, site-client, chesscom, opening-tree, eleven
+positions, facts, import, review, lichess, site-client, chesscom, opening-tree, store, eleven
 subprojects, apps/web. Reserved (named, not created): the rest.
 
 | Directory | Responsibility | Interview pieces it will absorb |
@@ -46,8 +46,8 @@ subprojects, apps/web. Reserved (named, not created): the rest.
 | `packages/site-client` | generic one-at-a-time HTTP client factory (extracted 2026-09-17 from `packages/lichess`'s fetch.ts/cache.ts): serial queue, same-URL dedupe, persisted 429 cooldown, localStorage TTL cache; `createSiteClient({name, storagePrefix, authHosts?})` builds one independent instance per site | lichess access, chess.com access |
 | `packages/lichess` | the one client for lichess.org HTTP APIs (added 2026-09-16 after the user hit lichess limits and asked for OAuth; its queue/cooldown/cache mechanics moved into `packages/site-client` 2026-09-17, same public API and storage keys): single in-flight request, app-wide 429 cooldown, localStorage response cache, OAuth PKCE login + token attach; `import`, `puzzles` and the openings builder's explorer calls go through it | lichess access |
 | `packages/chesscom` (built 2026-09-17) | the one client for chess.com's Published-Data API (api.chess.com): another `packages/site-client` instance, no login; `chesscomArchives`/`chesscomMonthlyGames` typed endpoint helpers with shape validation | chess.com access |
-| `packages/import` | lichess fetch, chess.com fetch (walks monthly archives newest-first, added 2026-09-17), or pasted-PGN import into one ImportedGame shape; PGN parsing delegated to `packages/rules` (`parsePgnGame`); provenance tags still to add | game import |
-| `packages/store` (reserved) | persistence: accounts, linked ratings, games, repertoires | account layer |
+| `packages/import` | lichess fetch, chess.com fetch (walks monthly archives newest-first, added 2026-09-17), or pasted-PGN import into one ImportedGame shape; PGN parsing delegated to `packages/rules` (`parsePgnGame`); `ImportedGame.meta` (speed/rated/elos/eco/opening/timeControl, added 2026-09-17) filled from lichess PGN headers and chess.com API fields, chess.com winning on overlap; `fetchLichessGames` (paged single-request streaming fetch with an idle timeout, added 2026-09-17) and `syncSourceGames` (drives a `GamesStore<StoredImportedGame>` from either site, with a look-back-windowed forward cursor plus a backward backfill pass for lichess and incremental per-month persistence for chess.com — fixed 2026-09-17, see the paragraph above); `hash.ts` (`fnv1aHash`/`normaliseGameUrl`/`gameId`/`toStoredGame`, `StoredImportedGame` type — moved here from packages/store 2026-09-17 to break a runtime dependency cycle, see above) | game import |
+| `packages/store` (built 2026-09-17) | persistence for the user's own data in the browser: games fetched from lichess and chess.com per linked account, in IndexedDB with an in-memory fallback; generic over the stored-game shape (`GamesStore<G extends StoredGame = StoredGame>`, `StoredGame = { id, playedAt? }`, no dependency on packages/import — fixed 2026-09-17) with `putGames`/`listGames`/`countGames`/`newestPlayedAt`/`getSyncState`/`setSyncState`/`clearSource`/`listSources`, keyed by `GameSource{site,username}` (case-insensitive); `openGamesStore<G>()` picks IndexedDB when available else memory; `packages/import`'s `syncSourceGames` drives it as `GamesStore<StoredImportedGame>` | account layer (games slice only; linked ratings/repertoires still open) |
 | `packages/facts` (built 2026-09-16) | plain-language board-state facts and questions, each answered by a chessops query (check, piece on square, material by the 1/3/3/5/9 convention); engine comparison still to come | fact extraction, reasoning check |
 | `packages/concepts` (reserved) | concept vocabulary with board-state tests | concept library |
 | `packages/review` | per-move engine review (eval before/after, loss from the mover's side, classification by first-guess cutoffs, best move) with provenance; report prose, what-if and findability still to come | standard review shape |
@@ -70,6 +70,49 @@ chess.com at the route layer, screenshots every route at 1280x800, 1280x650 and 
 descriptor, and fails on overflow, a primary control below the fold, tap targets under 40px or
 console errors; docs/visual-testing.md has the human-eye checklist. Session-scratchpad CDP
 scripts are no longer the way to smoke a layout change.
+
+Import + store, first guesses (Built 2026-09-17): `packages/import`'s lichess Speed rule when
+`[Event]` doesn't say (estimated seconds = initial + 40 × increment; <30s ultraBullet, <180s
+bullet, <480s blitz, <1500s rapid, <21600s (6h) classical, else correspondence) is verified
+against scalachess Speed.scala/Clock.scala 2026-09-17 (cross-checked from memory of that source,
+not a live fetch, per the no-live-lichess-probing rule) — flag if it drifts from lichess's actual
+thresholds. `fetchLichessGames`'s defaults (`max` 2000, hard cap 5000, 60s idle timeout on the
+streamed response body) are first guesses, not measured against real usage. Known limitation:
+through the real `@human-chess/site-client` client, that idle timeout (and an abort) cannot stop
+the underlying network transfer — a GET strips the caller's `signal` and hands back
+`response.clone()` (client.ts ~line 312), so `fetchLichessGames` only stops *reading* the
+response, not the request itself (see its own doc comment).
+
+`packages/import`'s id strategy for a stored game (`StoredImportedGame`, in
+`packages/import/src/hash.ts`) is the game's own `url`, normalised (`normaliseGameUrl`: strips a
+`#...` fragment, a trailing `/white`/`/black` orientation suffix, a trailing slash, and collapses
+lichess's 12-character "player-perspective" full id to its 8-character game id) when present, else
+`pgn:<FNV-1a-32 hash>` — dependency-free, adequate for deduping one person's own game history, not
+collision-resistant against an adversary. `packages/store`'s IndexedDB layout (database
+`human-chess` v1, stores `games`/`sync`, `games` indexed on a flat `sourceKey`) is a first guess
+with no prior art to match. `packages/store` and `packages/import` originally had a circular
+*package.json* dependency (store needed `ImportedGame`'s type, import's `syncSourceGames` needed
+`GamesStore`'s type); resolving it with `import type` on both sides turned out not to remove the
+runtime cycle (import's `sync.ts` still imported a value, `toStoredGame`, from store) — fixed
+2026-09-17 by making `packages/store` generic and import-agnostic instead (`GamesStore<G extends
+StoredGame = StoredGame>`, `StoredGame` now just `{ id, playedAt? }`) and moving the id/hash
+helpers (`fnv1aHash`/`normaliseGameUrl`/`gameId`/`toStoredGame`, plus the new
+`StoredImportedGame = ImportedGame & StoredGame` type) into `packages/import`, which passes
+`GamesStore<StoredImportedGame>` around. The dependency now runs one way only (import -> store);
+`packages/store`'s package.json no longer lists `@human-chess/import`.
+
+Lichess sync resumability (fixed 2026-09-17, `packages/import/src/sync.ts`): a plain
+"cursor = newest playedAt + 1ms" scheme is not actually resumable-complete, because lichess's
+`since`/`until` filter a game's *createdAt* (this package's `playedAt`, the PGN's
+UTCDate/UTCTime), not when it finished — a slow-finishing game can start before the cursor but
+only appear in the export once it finishes, after the cursor, and a first sync of an account with
+more history than `maxGames` can never reach the older games since the cursor only ever moves
+forward. `syncLichessGames` now (a) backs the forward fetch's `since` off by
+`LICHESS_BACKFILL_WINDOW_MS` (30 days, first guess) from the stored cursor, relying on
+`store.putGames`'s id dedupe to make the resulting overlap free, and (b) tracks `oldestMs`/
+`historyComplete` in `SyncState.lichess` and issues one backward "backfill" request
+(`until = oldestMs - 1`) after the forward one whenever the store hasn't yet reached `maxGames`
+and the account's full history isn't already known reached.
 
 Promotion picker (2026-09-17): `packages/board`'s `Board` now detects a promotion itself
 (`isPromotionMove` on the pre-move fen) and shows a lichess-style queen/knight/rook/bishop picker

@@ -12,8 +12,8 @@ import {
   type ChesscomGame,
 } from '@human-chess/chesscom';
 import { RulesError } from '@human-chess/rules';
-import { toImportedGame } from './parse';
-import type { ImportedGame, RecentGamesResult } from './types';
+import { toImportedGame, type ImportedGameOverrides } from './parse';
+import type { GameSpeed, ImportedGame, RecentGamesResult } from './types';
 
 const TIMEOUT_MS = 15_000;
 const MAX_ARCHIVE_MONTHS = 12;
@@ -53,6 +53,37 @@ async function withTimeout<T>(run: (signal: AbortSignal) => Promise<T>): Promise
  * wins — a later game with an equal `end_time` does not replace it. chess.com's own array order
  * is itself unspecified for same-second finishes, so this is "deterministic given the array
  * chess.com returned," not "deterministic given the pair of games" (reviewer, 2026-09-17). */
+/** chess.com's `time_class` -> our `GameSpeed`: the three timed classes keep their name,
+ * `daily` (untimed, correspondence-style play) maps to `correspondence`; anything else
+ * (an undocumented future value) is left undefined rather than guessed. */
+function speedFromTimeClass(timeClass: string | undefined): GameSpeed | undefined {
+  switch (timeClass) {
+    case 'bullet':
+    case 'blitz':
+    case 'rapid':
+      return timeClass;
+    case 'daily':
+      return 'correspondence';
+    default:
+      return undefined;
+  }
+}
+
+/** chess.com's own JSON fields win over whatever the game's PGN headers say (parse.ts's
+ * ImportedGameOverrides doc): `time_class`/`rated` are always present per ChesscomGame's own
+ * (partial) typing being optional only because this app doesn't strictly validate them, and
+ * white/black ratings come from the per-colour result objects. Exported (2026-09-17) so
+ * sync.ts's month-by-month chess.com sync can build the same per-game overrides this file's own
+ * fetchers use, without duplicating the mapping. */
+export function chesscomMetaOverrides(game: ChesscomGame): ImportedGameOverrides['meta'] {
+  return {
+    speed: speedFromTimeClass(game.time_class),
+    rated: game.rated,
+    whiteElo: game.white?.rating,
+    blackElo: game.black?.rating,
+  };
+}
+
 function latestStandardGame(games: ChesscomGame[]): ChesscomGame | undefined {
   let best: ChesscomGame | undefined;
   for (const game of games) {
@@ -89,6 +120,7 @@ export async function fetchLatestChesscomGame(
     const game = toImportedGame('chess.com', latest.pgn, username, {
       url: latest.url,
       playedAt: new Date(latest.end_time * 1000).toISOString(),
+      meta: chesscomMetaOverrides(latest),
     });
     if (game.ucis.length === 0) {
       throw new Error(`${username}'s latest game on chess.com has no moves`);
@@ -143,6 +175,7 @@ export async function fetchRecentChesscomGames(
           toImportedGame('chess.com', g.pgn, username, {
             url: g.url,
             playedAt: new Date(g.end_time * 1000).toISOString(),
+            meta: chesscomMetaOverrides(g),
           }),
         );
       } catch (err) {
