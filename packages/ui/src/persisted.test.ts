@@ -9,18 +9,26 @@ const parse = (raw: unknown): { moves: string[] } | undefined => (isRecord(raw) 
 afterEach(() => localStorage.clear());
 
 describe('usePersistedState', () => {
-  it('starts from the initial value and writes changes', () => {
+  it('starts from the initial value, writes it at once, then writes changes', () => {
     const { result } = renderHook(() => usePersistedState(KEY, { moves: [] }, { parse }));
     expect(result.current[0]).toEqual({ moves: [] });
-    expect(localStorage.getItem(KEY)).toBeNull(); // no write on mount
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ moves: [] }); // seeded value survives an immediate reload
     act(() => result.current[1]({ moves: ['e2e4'] }));
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ moves: ['e2e4'] });
   });
 
-  it('restores a stored value on mount', () => {
-    localStorage.setItem(KEY, JSON.stringify({ moves: ['e2e4', 'e7e5'] }));
+  it('restores a stored value on mount without rewriting it', () => {
+    const raw = JSON.stringify({ moves: ['e2e4', 'e7e5'] });
+    localStorage.setItem(KEY, raw);
     const { result } = renderHook(() => usePersistedState(KEY, { moves: [] }, { parse }));
     expect(result.current[0]).toEqual({ moves: ['e2e4', 'e7e5'] });
+    expect(localStorage.getItem(KEY)).toBe(raw);
+  });
+
+  it('replaces a rejected entry with the initial value on mount', () => {
+    localStorage.setItem(KEY, JSON.stringify({ moves: [1] }));
+    renderHook(() => usePersistedState(KEY, { moves: ['x'] }, { parse }));
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ moves: ['x'] });
   });
 
   it('falls back to the initial value on corrupt or rejected entries', () => {

@@ -70,18 +70,24 @@ export function clearPersisted(key: string, storage: PersistedStorage = 'local')
  */
 export function usePersistedState<T>(key: string, initial: T | (() => T), options: PersistedStateOptions<T>): [T, Dispatch<SetStateAction<T>>] {
   const { parse, storage = 'local', serialize } = options;
+  const restored = useRef(false);
   const [value, setValue] = useState<T>(() => {
     const stored = readPersisted(key, parse, storage);
-    if (stored !== undefined) return stored;
+    if (stored !== undefined) {
+      restored.current = true;
+      return stored;
+    }
     return typeof initial === 'function' ? (initial as () => T)() : initial;
   });
-  // Skip the write on mount: the value came from storage or the default, and writing the
-  // default would clobber an entry a different key version might still want to migrate.
+  // On mount, a value that came back from storage needs no write. A value that did not (first
+  // visit, rejected entry, or a caller that seeded `initial` from a hand-off and cleared the
+  // old snapshot) is written at once, so a reload before the first interaction still lands on
+  // it rather than on the default.
   const mounted = useRef(false);
   useEffect(() => {
     if (!mounted.current) {
       mounted.current = true;
-      return;
+      if (restored.current) return;
     }
     writePersisted(key, serialize ? serialize(value) : value, storage);
   }, [key, value, storage, serialize]);
