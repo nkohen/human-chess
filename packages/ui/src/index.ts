@@ -40,3 +40,6 @@ export { fitSquare } from './fit';
 export { useFitSquare } from './useFitSquare';
 
 export { handoffHash, navigateWithHandoff, readHandoffParams, routeOf } from './handoff';
+
+export { clearPersisted, isBoolean, isFiniteNumber, isOneOf, isRecord, isString, isStringArray, readPersisted, usePersistedState, writePersisted } from './persisted';
+export type { PersistedStateOptions, PersistedStorage } from './persisted';
