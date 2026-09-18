@@ -95,6 +95,18 @@ buckets) and "Add replies played ≥ 5%" — the 5% threshold and the band defau
 the user has not weighed in on. Speeds fixed to blitz+rapid+classical. Explorer responses cached
 7 days per position/band through `packages/lichess`.
 
+**Built 2026-09-17: multi-opening drill.** Drill mode now takes a scope — this opening, several
+(checkbox list of same-colour openings), or all of the current colour — picked in
+`OpeningsBuilder.tsx` and persisted as the last scope choice (not the checkbox picks, which are a
+fresh decision each session). `drill.ts` (pure, unit-tested) implements the union rule: a move
+wrong for one selected opening is accepted whenever another selected opening still calls it
+right, evaluated against the union of the selected position graphs; an opening silently drops out
+of the "still live" set the moment the path leaves its own graph, and only a move absent from
+every live opening stops the drill. `DrillView.tsx` shows which openings are still live as a
+muted line and names the accepted openings next to each move in the wrong-move message when more
+than one is in scope. Still not built: the SRS queue that picks positions instead of a fixed
+scope, and weighting opponent replies by real-opponent frequency instead of uniform random.
+
 ## Open questions (not yet asked)
 - How the user's played games are pulled in (openingtree's importer is the candidate).
 - Whether repertoires are shared between users.

@@ -110,3 +110,33 @@ export function saveExplorerBand(band: ExplorerBand): void {
     // storage unavailable: band choice lives for this page only
   }
 }
+
+// Drill scope: one opening, several picked by checkbox, or every opening of the current
+// colour (memory/subprojects/openings-builder-trainer.md, "Deviation handling in drill mode").
+// Only the scope choice itself is persisted, same guarded-localStorage pattern as depth above —
+// the task calls for persisting "the last scope choice", not the specific checkbox picks within
+// 'several', which are reasonably a fresh decision each session.
+export type DrillScope = 'one' | 'several' | 'all';
+const DRILL_SCOPE_KEY = 'human-chess.openings.drillScope.v1';
+export const DEFAULT_DRILL_SCOPE: DrillScope = 'one';
+
+function isDrillScope(value: unknown): value is DrillScope {
+  return value === 'one' || value === 'several' || value === 'all';
+}
+
+export function loadDrillScope(): DrillScope {
+  try {
+    const raw = globalThis.localStorage?.getItem(DRILL_SCOPE_KEY);
+    return isDrillScope(raw) ? raw : DEFAULT_DRILL_SCOPE;
+  } catch {
+    return DEFAULT_DRILL_SCOPE;
+  }
+}
+
+export function saveDrillScope(scope: DrillScope): void {
+  try {
+    globalThis.localStorage?.setItem(DRILL_SCOPE_KEY, scope);
+  } catch {
+    // storage unavailable: scope choice lives for this page only
+  }
+}

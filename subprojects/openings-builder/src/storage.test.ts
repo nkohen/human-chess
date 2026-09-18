@@ -1,18 +1,22 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_DEPTH,
+  DEFAULT_DRILL_SCOPE,
   DEFAULT_EXPLORER_MAX,
   DEFAULT_EXPLORER_MIN,
   loadDepth,
+  loadDrillScope,
   loadExplorerBand,
   MAX_DEPTH,
   MIN_DEPTH,
   saveDepth,
+  saveDrillScope,
   saveExplorerBand,
 } from './storage';
 
 const DEPTH_KEY = 'human-chess.openings.depth.v1';
 const EXPLORER_BAND_KEY = 'human-chess.openings.explorerBand.v1';
+const DRILL_SCOPE_KEY = 'human-chess.openings.drillScope.v1';
 
 // The test environment (plain Node, no jsdom) has no global localStorage, which is exactly
 // the "storage missing" case storage.ts is guarded against — so tests that need storage to
@@ -128,5 +132,35 @@ describe('saveExplorerBand', () => {
     // @ts-expect-error simulating a non-browser environment
     delete globalThis.localStorage;
     expect(() => saveExplorerBand({ min: 1600, max: 2000 })).not.toThrow();
+  });
+});
+
+describe('loadDrillScope / saveDrillScope', () => {
+  it('defaults to "one" when nothing is stored', () => {
+    expect(loadDrillScope()).toBe(DEFAULT_DRILL_SCOPE);
+  });
+
+  it('defaults when storage itself is unavailable (no throw)', () => {
+    // @ts-expect-error simulating a non-browser environment
+    delete globalThis.localStorage;
+    expect(loadDrillScope()).toBe(DEFAULT_DRILL_SCOPE);
+  });
+
+  it('round-trips what saveDrillScope wrote', () => {
+    saveDrillScope('all');
+    expect(loadDrillScope()).toBe('all');
+    saveDrillScope('several');
+    expect(loadDrillScope()).toBe('several');
+  });
+
+  it('falls back to the default on garbage', () => {
+    globalThis.localStorage.setItem(DRILL_SCOPE_KEY, 'whichever');
+    expect(loadDrillScope()).toBe(DEFAULT_DRILL_SCOPE);
+  });
+
+  it('does not throw saving when storage is unavailable', () => {
+    // @ts-expect-error simulating a non-browser environment
+    delete globalThis.localStorage;
+    expect(() => saveDrillScope('all')).not.toThrow();
   });
 });

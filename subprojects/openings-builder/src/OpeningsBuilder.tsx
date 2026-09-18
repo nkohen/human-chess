@@ -2,7 +2,7 @@
 // Build tab (interactive building with the multi-line engine) and the Drill tab (practice
 // against the tree). Priorities per memory/subprojects/openings-builder-trainer.md: interactive
 // building first, drilling third.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { UciEngine } from '@human-chess/engine';
 import type { Color, SquareName } from '@human-chess/rules';
 import { Board } from '@human-chess/board';
@@ -10,7 +10,7 @@ import { Button, Field, SegmentedControl, Status, Workbench } from '@human-chess
 import { BuilderView } from './BuilderView';
 import { DrillView } from './DrillView';
 import { createOpening, START_FEN, type Opening } from './repertoire';
-import { loadRepertoire, saveRepertoire } from './storage';
+import { loadDrillScope, loadRepertoire, saveDrillScope, saveRepertoire, type DrillScope } from './storage';
 import './openings-builder.css';
 
 export interface OpeningsBuilderProps {
@@ -29,10 +29,32 @@ export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Ele
   const [mode, setMode] = useState<Mode>('build');
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState<Color>('white');
+  const [drillScope, setDrillScope] = useState<DrillScope>(() => loadDrillScope());
+  // Which openings are checked for the 'several' drill scope, by id. Only the scope choice
+  // itself is persisted (storage.ts); this selection is a fresh decision each session.
+  const [severalIds, setSeveralIds] = useState<Set<string>>(new Set());
 
   useEffect(() => saveRepertoire(openings), [openings]);
+  useEffect(() => saveDrillScope(drillScope), [drillScope]);
 
   const selected = openings.find(o => o.id === selectedId);
+
+  // The same-colour siblings the 'several'/'all' drill scopes offer, and the openings actually
+  // drilled for the current scope choice — recomputed only when its real inputs change, so
+  // DrillView's opponent-move effect (keyed on this array) doesn't see a "new" list every render
+  // (see DrillView.tsx's `live` comment).
+  const sameColorOpenings = useMemo(() => (selected ? openings.filter(o => o.color === selected.color) : []), [openings, selected]);
+  const drillOpenings = useMemo(() => {
+    if (!selected) return [];
+    if (drillScope === 'all') return sameColorOpenings;
+    if (drillScope === 'several') {
+      const picked = sameColorOpenings.filter(o => severalIds.has(o.id));
+      // An empty checkbox list would drill nothing; fall back to just the picker's current
+      // opening rather than showing an empty drill (a first guess — not spec'd either way).
+      return picked.length > 0 ? picked : [selected];
+    }
+    return [selected];
+  }, [selected, drillScope, sameColorOpenings, severalIds]);
 
   const updateOpening = (updated: Opening): void => {
     setOpenings(prev => prev.map(o => (o.id === updated.id ? updated : o)));
@@ -61,7 +83,21 @@ export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Ele
   const controls = (
     <div className="ob-controls">
       <Field label="Opening" htmlFor="ob-opening-select">
-        <select id="ob-opening-select" value={selectedId ?? ''} onChange={e => setSelectedId(e.target.value || undefined)}>
+        <select
+          id="ob-opening-select"
+          value={selectedId ?? ''}
+          onChange={e => {
+            const id = e.target.value || undefined;
+            // The 'several' checkbox list is filtered to the picker's colour, so switching to an
+            // opening of the other colour can leave it with nothing checked while the drill falls
+            // back to `[selected]`; reseed with the new opening so the list and the drill agree.
+            const next = openings.find(o => o.id === id);
+            if (next && drillScope === 'several' && !openings.some(o => o.color === next.color && severalIds.has(o.id))) {
+              setSeveralIds(new Set([next.id]));
+            }
+            setSelectedId(id);
+          }}
+        >
           <option value="">Choose an opening…</option>
           {openings.map(o => (
             <option key={o.id} value={o.id}>
@@ -105,6 +141,48 @@ export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Ele
           />
         </Field>
       )}
+      {selected && mode === 'drill' && (
+        <Field label="Drill scope">
+          <SegmentedControl
+            ariaLabel="Drill scope"
+            options={[
+              { value: 'one', label: 'This opening' },
+              { value: 'several', label: 'Several' },
+              { value: 'all', label: `All (${selected.color})` },
+            ]}
+            value={drillScope}
+            onChange={scope => {
+              // Seed the checkbox list with the current opening when 'several' is picked and
+              // nothing of this colour is checked yet, so it never starts empty; the user can
+              // uncheck it afterwards.
+              if (scope === 'several' && !sameColorOpenings.some(o => severalIds.has(o.id))) setSeveralIds(new Set([selected.id]));
+              setDrillScope(scope);
+            }}
+          />
+        </Field>
+      )}
+      {selected && mode === 'drill' && drillScope === 'several' && (
+        <fieldset className="ob-drill-several">
+          <legend>Openings to drill ({selected.color})</legend>
+          {sameColorOpenings.map(o => (
+            <label key={o.id}>
+              <input
+                type="checkbox"
+                checked={severalIds.has(o.id)}
+                onChange={e =>
+                  setSeveralIds(prev => {
+                    const next = new Set(prev);
+                    if (e.target.checked) next.add(o.id);
+                    else next.delete(o.id);
+                    return next;
+                  })
+                }
+              />
+              {o.name}
+            </label>
+          ))}
+        </fieldset>
+      )}
     </div>
   );
 
@@ -114,7 +192,7 @@ export function OpeningsBuilder({ engine }: OpeningsBuilderProps): React.JSX.Ele
     return <BuilderView opening={selected} onOpeningChange={updateOpening} engine={readyEngine} controls={controls} status={engineStatus} />;
   }
   if (selected && mode === 'drill') {
-    return <DrillView opening={selected} controls={controls} status={engineStatus} />;
+    return <DrillView openings={drillOpenings} controls={controls} status={engineStatus} />;
   }
 
   return (
