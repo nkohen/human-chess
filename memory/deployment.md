@@ -1,8 +1,10 @@
 # Deployment: GitHub Pages under nkohen.github.io/human-chess/
 
-Prepared 2026-09-18 (user request: "put this project up on my website like ~/dev/taskmaster is",
-to iterate from a phone). Not yet published: the first push needs the user's go-ahead and a
-public source URL (below).
+Prepared and first published 2026-09-18 (user request: "put this project up on my website like
+~/dev/taskmaster is", to iterate from a phone). Source is public at
+https://github.com/nkohen/human-chess (git remote `origin`, branch master); publish with
+`HC_SOURCE_URL=https://github.com/nkohen/human-chess npx pnpm@10 deploy` after pushing master.
+The user authorised pushing to both repos on 2026-09-18.
 
 ## How it works
 
@@ -40,8 +42,7 @@ human-chess is AGPL-3.0-or-later and the shipped Stockfish wasm is GPL-3.0
 (memory/reuse-library.md). Serving the site to the public triggers the source offer (AGPL §13 and
 GPL §6), so the deploy script refuses to run without `HC_SOURCE_URL`, and the home page's
 colophon (`.app-colophon` in App.tsx, styled in `apps/web/src/app.css`) links that URL plus
-chessops, chessground and stockfish.js. The repo has no git remote as of 2026-09-18; a public
-GitHub repo (e.g. github.com/nkohen/human-chess) is the obvious choice and is the user's call.
+chessops, chessground and stockfish.js. The public repo github.com/nkohen/human-chess was created by the user on 2026-09-18.
 
 Reviewed 2026-09-18 by the code-reviewer (revision check, commit scoping and stockfish.js version added on
 its findings). The bearer token from a lichess login is readable by the other apps on the same
