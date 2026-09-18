@@ -13,6 +13,7 @@ import { BotRatingTest } from '@human-chess/bot-rating-test';
 import { Puzzles } from '@human-chess/puzzles';
 import { Chessitout } from '@human-chess/chessitout';
 import { GameReviewer } from '@human-chess/game-reviewer';
+import { LessonBuilder } from '@human-chess/lesson-builder';
 import { loadBrowserEngine } from './engine';
 import './app.css';
 
@@ -35,6 +36,7 @@ const routes: { hash: string; title: string; blurb: string }[] = [
   { hash: '#/puzzles', title: 'Puzzles', blurb: 'Solve lichess puzzles, one after another.' },
   { hash: '#/chessitout', title: 'Chessitout (solo)', blurb: 'Judge an imbalanced position, then play your side out against a rated engine.' },
   { hash: '#/review', title: 'Game reviewer', blurb: 'Import a game and see every move evaluated, classified, and compared with the best.' },
+  { hash: '#/lesson-builder', title: 'Lesson Builder', blurb: 'Author a lesson: a sequence of positions, notes, arrows and move-challenges. No code needed.' },
 ];
 
 // Module-level (not component state) so React 19 StrictMode's dev-only double-invoke of the
@@ -123,6 +125,8 @@ export function App(): React.JSX.Element {
         <GameReviewer key={hash} engine={engine} />
       ) : route === '#/openings' ? (
         <OpeningsBuilder engine={engine} />
+      ) : route === '#/lesson-builder' ? (
+        <LessonBuilder />
       ) : (
         <Page width="wide">
           <CardGrid>

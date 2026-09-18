@@ -18,6 +18,7 @@
     "@human-chess/endgames-intro": "workspace:*",
     "@human-chess/engine": "workspace:*",
     "@human-chess/game-reviewer": "workspace:*",
+    "@human-chess/lesson-builder": "workspace:*",
     "@human-chess/guess-the-eval": "workspace:*",
     "@human-chess/hand-and-brain": "workspace:*",
     "@human-chess/lichess": "workspace:*",

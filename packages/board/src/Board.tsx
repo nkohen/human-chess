@@ -8,12 +8,45 @@ import { Chessground } from 'chessground';
 import type { Api } from 'chessground/api';
 import type { Config } from 'chessground/config';
 import { isPromotionMove, positionFromFen, type Color, type Role, type SquareName } from '@human-chess/rules';
+import type { DrawShape } from 'chessground/draw';
 import { promotionSquareLayout } from './promotionPicker';
 import 'chessground/assets/chessground.base.css';
 import 'chessground/assets/chessground.brown.css';
 import 'chessground/assets/chessground.cburnett.css';
 import './coords.css';
 import './board.css';
+
+/** A board annotation: an arrow (both squares) or a circle over one square (`dest` omitted),
+ * in one of chessground's four brush colours. This is the chessground-agnostic shape the rest of
+ * the app passes around (the Lesson Builder's saved annotations are exactly this shape); Board is
+ * still the only place that translates it into chessground's own `DrawShape`. */
+export type BoardBrush = 'green' | 'red' | 'blue' | 'yellow';
+export interface BoardShape {
+  orig: SquareName;
+  dest?: SquareName;
+  brush: BoardBrush;
+}
+
+const BOARD_BRUSHES: readonly BoardBrush[] = ['green', 'red', 'blue', 'yellow'];
+const SQUARE_RE = /^[a-h][1-8]$/;
+
+function toCgShapes(shapes: readonly BoardShape[]): DrawShape[] {
+  return shapes.map(s => (s.dest ? { orig: s.orig, dest: s.dest, brush: s.brush } : { orig: s.orig, brush: s.brush }));
+}
+
+/** chessground reports raw `DrawShape`s (arbitrary brush string, possibly a piece/svg shape from
+ * a future chessground); keep only plain square arrows/circles in our four brushes so a captured
+ * annotation is always something we can store and re-render. */
+function fromCgShapes(shapes: readonly DrawShape[]): BoardShape[] {
+  const out: BoardShape[] = [];
+  for (const s of shapes) {
+    if (typeof s.orig !== 'string' || !SQUARE_RE.test(s.orig)) continue;
+    if (s.dest !== undefined && (typeof s.dest !== 'string' || !SQUARE_RE.test(s.dest))) continue;
+    const brush = (BOARD_BRUSHES as readonly string[]).includes(s.brush ?? '') ? (s.brush as BoardBrush) : 'green';
+    out.push(s.dest ? { orig: s.orig as SquareName, dest: s.dest as SquareName, brush } : { orig: s.orig as SquareName, brush });
+  }
+  return out;
+}
 
 export interface BoardProps {
   fen: string;
@@ -37,6 +70,16 @@ export interface BoardProps {
    * `drawable`); right-click again on a shape removes it. Default true — lichess allows drawing
    * on every board, not just ones the viewer can move on. */
   drawable?: boolean;
+  /** Saved annotations (arrows/circles) to show on the board. When `onShapesChange` is given
+   * these seed the *editable* user shapes (the author draws and revises them); otherwise they
+   * render as read-only presentation shapes (chessground `autoShapes`) that reflect this prop
+   * exactly, which is what a lesson player wants. Reseeded from this prop whenever the position
+   * (`fen`) or the shapes themselves change. */
+  shapes?: readonly BoardShape[];
+  /** When present, the board is in annotation-authoring mode: whatever the person draws (or
+   * erases) with the right mouse button is reported here as the full current shape set, already
+   * narrowed to storable square arrows/circles. `shapes` seeds the initial set. */
+  onShapesChange?: (shapes: BoardShape[]) => void;
 }
 
 /** A promotion move awaiting the picker's answer: chessground has already moved the pawn
@@ -69,6 +112,14 @@ export function Board(props: BoardProps): React.JSX.Element {
   // that installed the handler.
   const propsRef = useRef(props);
   propsRef.current = props;
+  // Authoring mode is on exactly when the caller wants drawn shapes reported back. The handler is
+  // read through a ref so the closure chessground keeps always calls the latest callback.
+  const editShapes = props.onShapesChange !== undefined;
+  const onShapesChangeRef = useRef(props.onShapesChange);
+  onShapesChangeRef.current = props.onShapesChange;
+  // Reseed annotations whenever the position or the shapes change (see the update effect); a plain
+  // serialisation is enough of a change key for the handful of shapes a step ever has.
+  const shapesKey = JSON.stringify(props.shapes ?? []);
 
   const config = (): Config => ({
     fen: props.fen,
@@ -107,7 +158,17 @@ export function Board(props: BoardProps): React.JSX.Element {
     // visible: true so a drawn circle/arrow actually renders (enabled alone only turns on the
     // right-click/right-drag input handling). Keys checked against chessground's own
     // config.d.ts/draw.d.ts (node_modules/chessground) rather than guessed.
-    drawable: { enabled: props.drawable ?? true, visible: true },
+    drawable: {
+      enabled: props.drawable ?? true,
+      visible: true,
+      // Editor mode: saved shapes are the *editable* user shapes, and edits are reported through
+      // onChange (chessground fires it only on right-button draw/erase, never on a config set —
+      // node_modules/chessground/dist/draw.js — so echoing the captured shapes back into `shapes`
+      // never loops). Player mode: saved shapes are read-only `autoShapes` that mirror the prop.
+      shapes: editShapes ? toCgShapes(props.shapes ?? []) : [],
+      autoShapes: editShapes ? [] : toCgShapes(props.shapes ?? []),
+      ...(editShapes ? { onChange: (s: DrawShape[]) => onShapesChangeRef.current?.(fromCgShapes(s)) } : {}),
+    },
   });
 
   useEffect(() => {
@@ -142,11 +203,14 @@ export function Board(props: BoardProps): React.JSX.Element {
       setPending(null);
     }
     const cfg = config();
-    const keep = shownFen.current === props.fen ? api.current.state.drawable.shapes : [];
+    // Same fen: keep whatever shapes are live (a user drawing survives an unrelated re-render, and
+    // player autoShapes are reapplied from cfg anyway). New fen: seed the editor's user shapes from
+    // this step's saved annotations (player mode carries them as autoShapes via cfg, so []).
+    const keep = shownFen.current === props.fen ? api.current.state.drawable.shapes : editShapes ? toCgShapes(props.shapes ?? []) : [];
     shownFen.current = props.fen;
     api.current.set({ ...cfg, drawable: { ...cfg.drawable, shapes: keep } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.fen, props.orientation, props.turnColor, props.check, props.lastMove, props.dests, props.movableColor, props.drawable]);
+  }, [props.fen, props.orientation, props.turnColor, props.check, props.lastMove, props.dests, props.movableColor, props.drawable, shapesKey]);
 
   // Cancel the picker: snap the pawn back by re-applying the current (unchanged) props, and
   // forget the pending move. Nothing outside this component is told anything happened. The fen

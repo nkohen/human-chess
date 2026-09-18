@@ -1,0 +1,17 @@
+{
+  "name": "@human-chess/lesson-builder",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@human-chess/board": "workspace:*",
+    "@human-chess/lessons": "workspace:*",
+    "@human-chess/rules": "workspace:*",
+    "@human-chess/ui": "workspace:*",
+    "react": "^19.0.0"
+  }
+}

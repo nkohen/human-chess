@@ -71,6 +71,9 @@ importers:
       '@human-chess/hand-and-brain':
         specifier: workspace:*
         version: link:../../subprojects/hand-and-brain
+      '@human-chess/lesson-builder':
+        specifier: workspace:*
+        version: link:../../subprojects/lesson-builder
       '@human-chess/lichess':
         specifier: workspace:*
         version: link:../../packages/lichess
@@ -165,6 +168,12 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.3.0
+
+  packages/lessons:
+    dependencies:
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../rules
 
   packages/lichess:
     dependencies:
@@ -352,6 +361,24 @@ importers:
       '@human-chess/board':
         specifier: workspace:*
         version: link:../../packages/board
+      '@human-chess/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      '@human-chess/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+
+  subprojects/lesson-builder:
+    dependencies:
+      '@human-chess/board':
+        specifier: workspace:*
+        version: link:../../packages/board
+      '@human-chess/lessons':
+        specifier: workspace:*
+        version: link:../../packages/lessons
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules
