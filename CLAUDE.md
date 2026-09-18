@@ -28,7 +28,7 @@ npm 10.9.2 on this machine crashes resolving modern peer sets, so pnpm is used, 
 (or `corepack pnpm` once corepack's cache is repaired):
 
 ```
-npx pnpm@10 install      # once, and after any package.json change
+npx pnpm@10 install      # once, and after any package.json change (then restart `dev`: a running Vite caches unresolved workspace links)
 npx pnpm@10 check        # tsc --noEmit over the workspace, then vitest
 npx pnpm@10 dev          # web app on http://localhost:5173 (copies the wasm engine first)
 npx pnpm@10 build        # production build into apps/web/dist

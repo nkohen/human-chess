@@ -53,7 +53,7 @@ subprojects, apps/web. Reserved (named, not created): the rest.
 | `packages/review` | per-move engine review (eval before/after, loss from the mover's side, classification by first-guess cutoffs, best move) with provenance; report prose, what-if and findability still to come | standard review shape |
 | `packages/rooms` (reserved) | rooms, clocks, sealed votes, matchmaking | multiplayer |
 | `packages/srs` (reserved) | spaced-repetition scheduler | SRS |
-| `packages/opening-tree` (built 2026-09-17) | folds `ImportedGame[]` into a position-graph tree from one username+colour's perspective, keyed by `repetitionKey` (EPD) so transpositions merge; each edge carries a move count, W/D/L from the tracked player's side, and traceable game refs (url, playedAt, opponent); caps folding depth per game (`maxPliesPerSide`, default 20); `mostPlayed`/`moveScore` helpers; own implementation, not a port of openingtree's GPL code (explicit instruction, separate from the interview's reuse directive) | opening tree half of the row above; explorer stats (the other half) still not built |
+| `packages/opening-tree` (built 2026-09-17; rebuilt to v2 2026-09-17) | folds `ImportedGame[]` into a position-graph tree (`buildTree`) from multiple accounts' one username+colour perspective, keyed by `repetitionKey` (EPD, `Map`-backed, not the v1 `Record`) so transpositions merge; each node carries `parents` (>1 marks a transposition) and each edge carries games/W-D-L/score/performance-rating/avgOpponentRating/lastPlayedAt, traceable to a deduplicated `tree.games: TrackedGame[]`; `filters.ts` (`GameFilter`/`matchesFilter`) and `diagnostics.ts` (`worstMoves`/`mostLostPositions`/`openingSummary`) sit on top; `buildGamesTree`/`childrenOf`/`mostPlayed`/`moveScore`/`fenAt` kept as v1-signature wrappers so GamesTreeView (the only consumer) compiles unchanged; still an own implementation, not a port of openingtree.com's GPL code | opening tree half of the shared-layer row above; explorer stats (the other half) still not built |
 | `subprojects/<name>` | one tool each; consumes packages | the 13 subprojects |
 | `apps/web` | Vite + React host, hash routes, owns the browser engine instance | — |
 
@@ -78,3 +78,43 @@ over the destination square instead of auto-queening; `BoardProps.onMove` is now
 picker is cancelled). All six former auto-queen call sites (play/react.ts, memory-trainer,
 hand-and-brain, puzzles, openings-builder's Drill/Builder views) now pass the picked role
 through instead of hard-coding `'queen'`.
+
+Built 2026-09-17: opening-tree v2. `buildTree(games, { players, color, filter?,
+maxPliesPerSide? })` replaces the v1 single-username fold with multi-account matching (any
+listed username, case-insensitively), an optional `GameFilter` applied before folding (so
+`tree.skipped.filteredOut` stays honest), and a `Map<epd, TreeNode>` in place of v1's `Record`
+(edge lookup during folding is now `Map.get`, not the old `.find` scan, so folding thousands of
+games stays fast — tested at 2000). Each node now records `parents` (distinct incoming EPDs;
+>1 = transposition) and each edge carries `score`, `avgOpponentRating`, `performance`, and
+`lastPlayedAt`, all computed once at build time from a deduplicated `tree.games: TrackedGame[]`
+(an edge's `GameRef` just indexes into it). `filters.ts` (`matchesFilter`) and `diagnostics.ts`
+(`worstMoves`, `mostLostPositions`, `openingSummary`) sit on top, all pure aggregations over the
+already-folded tree (A1/V3 — nothing here calls an engine or free-form-generates a judgement).
+First guesses, none measured: `DEFAULT_MAX_PLIES_PER_SIDE` raised 20 → 30; the performance-rating
+formula (avg opponent rating + 400·(wins−losses)/games, FIDE-style linear approximation,
+computed only over an edge's games with a known opponent rating) is a common simplification,
+openingtree.com's own use of it unverified; `lineTo`'s "most-played path" is a greedy
+breadth-first choice at each branch, not a global optimum. One deliberate deviation from the
+task's literal type spec: `TreeMove.games` stays `GameRef[]` (with a new `gameIndex` into
+`tree.games`) rather than becoming a bare `number[]` — GamesTreeView's `GameRefList` component
+(unchanged, per the task) destructures `.url`/`.opponent`/`.playedAt` straight off each element,
+which a bare index can't satisfy without editing that file. `GamesTree` also carries `color`,
+`maxPliesPerSide`, `gamesFolded`, `gamesSkipped` beyond the spec's minimum, for the same reason
+(GamesTreeView reads them directly). `fenAt` stays single-argument (`fenAt(epd)`, not
+`fenAt(tree, epd)`) since an EPD alone determines its FEN and GamesTreeView calls it with one
+argument.
+
+Fixed 2026-09-17 (code review on 1fa4b55, 2 blocking + 8 minor): (1) a game that repeats a
+position within itself (e.g. `1.Nf3 Nf6 2.Ng1 Ng8 3.Nf3 Nf6`, back to the start) no longer
+double-counts that node/edge — folding now tracks per-game `seenNodes`/`seenEdges` and only bumps
+a node's `games`/edge's `count` on that node/edge's first visit within the current game. (2)
+`players` matching now prefers the fetcher's own `ImportedGame.username`/`.playedAs` attribution
+when present, and its pasted-PGN/no-attribution header-matching fallback is now restricted to
+players whose `site` matches the game's own derived source — previously a same-named stranger on
+a different site could be folded in as the tracked player. A game where both sides match a
+listed username is now its own skip bucket, `skipped.selfPlay`, rather than defaulting to White.
+Also restored: a zero-move game is skipped as `unparsable` (dropped by accident in the original
+v2 rewrite; v1 had it). `worstMoves`/`mostLostPositions` now build one BFS `cameFrom` map per
+call and reuse it for every entry instead of re-running `lineTo`'s whole-tree BFS per entry;
+`mostLostPositions`' (and now `worstMoves`') `minGames` is clamped to at least 1 so `minGames: 0`
+can't let a 0-games node through into a 0/0 loss-rate comparison.
