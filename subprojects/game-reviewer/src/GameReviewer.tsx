@@ -253,7 +253,18 @@ function ReviewScreen({
   let primary: React.ReactNode;
   let showAnotherGame = false;
 
-  if (engine instanceof Error) {
+  // A restored review (phase 'done') is shown on its own merits even when the engine failed to
+  // load: the review itself does not need a live engine, only a fresh one would. The engine
+  // error still needs to be visible (A1: never hide that an engine call failed), but as the
+  // status alongside the review rather than a full-screen substitute for it — otherwise a
+  // reload that also lost the engine would silently swap a finished review for an error page.
+  if (review && phase === 'done') {
+    primary = move ? <MoveSummary move={move} /> : <p className="gr-status">Starting position.</p>;
+    showAnotherGame = true;
+    if (engine instanceof Error) {
+      status = <Status kind="error">The engine could not be loaded: {engine.message}</Status>;
+    }
+  } else if (engine instanceof Error) {
     status = <Status kind="error">The engine could not be loaded: {engine.message}</Status>;
     showAnotherGame = true;
   } else if (phase === 'waiting-for-engine') {
@@ -290,9 +301,6 @@ function ReviewScreen({
         <p className="gr-settings-hint">Changing a setting retries the review.</p>
       </>
     );
-    showAnotherGame = true;
-  } else if (review) {
-    primary = move ? <MoveSummary move={move} /> : <p className="gr-status">Starting position.</p>;
     showAnotherGame = true;
   }
 

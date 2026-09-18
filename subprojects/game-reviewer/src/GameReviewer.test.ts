@@ -81,6 +81,36 @@ const REVIEW: GameReview = {
       classification: 'good',
       provenance: { engine: 'stockfish', depthBefore: 20, depthAfter: 20 },
     },
+    {
+      ply: 3,
+      san: 'Nf3',
+      uci: 'g1f3',
+      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
+      fenAfter: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2',
+      evalBefore: { type: 'cp', value: 15 },
+      bestMove: 'g1f3',
+      bestSan: 'Nf3',
+      evalAfterBest: { type: 'cp', value: 15 },
+      evalAfterPlayed: { type: 'cp', value: 15 },
+      lossCp: 0,
+      classification: 'best',
+      provenance: { engine: 'stockfish', depthBefore: 20, depthAfter: 20 },
+    },
+    {
+      ply: 4,
+      san: 'Nc6',
+      uci: 'b8c6',
+      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2',
+      fenAfter: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+      evalBefore: { type: 'cp', value: 15 },
+      bestMove: 'b8c6',
+      bestSan: 'Nc6',
+      evalAfterBest: { type: 'cp', value: 15 },
+      evalAfterPlayed: { type: 'cp', value: 15 },
+      lossCp: 0,
+      classification: 'best',
+      provenance: { engine: 'stockfish', depthBefore: 20, depthAfter: 20 },
+    },
   ],
   end: undefined,
 };
@@ -96,13 +126,13 @@ function seedRestoredReview(): void {
 describe('GameReviewer reload survival', () => {
   it('restores the review screen and selected ply from a persisted snapshot with no network calls', () => {
     seedRestoredReview();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.reject(new Error('network disabled in this test')));
 
     const { container } = render(createElement(GameReviewer, { engine: undefined }));
 
     // The restored review's move table is on screen — no re-import, no re-analysis.
     const rows = container.querySelectorAll('.gr-move-table tbody tr');
-    expect(rows.length).toBe(2);
+    expect(rows.length).toBe(4);
     expect(container.textContent).toContain('e4');
     expect(container.textContent).toContain('e5');
     // selectedPly 1 → the first move's row is selected and its summary is the primary content.
@@ -110,6 +140,21 @@ describe('GameReviewer reload survival', () => {
     expect(container.textContent).toContain('Played');
 
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows the restored review even when the engine failed to load, with the error as status', () => {
+    seedRestoredReview();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.reject(new Error('network disabled in this test')));
+
+    const { container } = render(createElement(GameReviewer, { engine: new Error('wasm init failed') }));
+
+    // The restored review's move table is still the primary content...
+    const rows = container.querySelectorAll('.gr-move-table tbody tr');
+    expect(rows.length).toBe(4);
+    expect(container.textContent).toContain('Played');
+    // ...while the engine error is surfaced too, rather than one hiding the other (A1: never
+    // hide that an engine call failed).
+    expect(container.textContent).toContain('wasm init failed');
   });
 
   it('a fresh hand-off overrides the persisted snapshot and strips the query string from the URL', () => {

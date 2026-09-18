@@ -61,6 +61,24 @@ function isStoredSolveProgress(v: unknown): v is StoredSolveProgress {
   );
 }
 
+/**
+ * Cross-checks `status` against `index`/`everFailed` per solve.ts's own state machine
+ * (`attemptMove`/`replaySolve`), so a corrupt or hand-edited combination that `isStoredSolveProgress`
+ * alone would let through (right shapes, impossible combination — e.g. status 'solved' with
+ * `index` short of the end) is rejected rather than replayed into a state `attemptMove` itself
+ * could never produce.
+ */
+function isConsistentSolveProgress(progress: StoredSolveProgress, solutionLength: number): boolean {
+  const { index, everFailed, status } = progress;
+  const isTerminal = status === 'solved' || status === 'failed-solved';
+  if (isTerminal !== (index === solutionLength)) return false;
+  if (status === 'solved' && everFailed) return false;
+  if ((status === 'failed-solved' || status === 'wrong') && !everFailed) return false;
+  if (status === 'thinking' && index !== 0) return false;
+  if (status === 'correct' && !(index > 0 && index < solutionLength)) return false;
+  return true;
+}
+
 export interface PuzzlesSnapshot {
   puzzle: ParsedPuzzle | undefined;
   solve: SolveState | undefined;
@@ -91,9 +109,14 @@ export function parsePuzzlesSnapshot(raw: unknown): PuzzlesSnapshot | undefined 
   if (!isParsedPuzzle(raw.puzzle)) return undefined;
   const puzzle = raw.puzzle;
 
-  if (raw.solve === undefined) return { puzzle, solve: undefined, idInput, tally };
+  // A loaded puzzle always has solve progress (startSolve runs as soon as a puzzle is fetched or
+  // restored, Puzzles.tsx) — `solve: undefined` alongside a defined `puzzle` is not a reachable
+  // live state, only a corrupt or hand-edited one, so it is rejected rather than silently
+  // accepted.
+  if (raw.solve === undefined) return undefined;
   if (!isStoredSolveProgress(raw.solve)) return undefined;
   if (raw.solve.index > puzzle.solution.length) return undefined;
+  if (!isConsistentSolveProgress(raw.solve, puzzle.solution.length)) return undefined;
 
   let solve: SolveState;
   try {

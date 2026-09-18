@@ -54,7 +54,7 @@ describe('MemoryTrainer reload survival', () => {
       replayIndex: 0,
     };
     localStorage.setItem(STATE_KEY, JSON.stringify(stored));
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.reject(new Error('network disabled in this test')));
 
     const { container } = render(createElement(MemoryTrainer));
 
@@ -70,7 +70,7 @@ describe('MemoryTrainer reload survival', () => {
       replayIndex: 0,
     };
     localStorage.setItem(STATE_KEY, JSON.stringify(stored));
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.reject(new Error('network disabled in this test')));
 
     const { container } = render(createElement(MemoryTrainer));
 

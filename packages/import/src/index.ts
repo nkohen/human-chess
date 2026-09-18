@@ -23,6 +23,7 @@ export {
   type SyncSourceGamesResult,
 } from './sync';
 export { fnv1aHash, gameId, normaliseGameUrl, toStoredGame, type StoredImportedGame } from './hash';
+export { isImportedGame } from './validate';
 import { toImportedGame } from './parse';
 import type { ImportedGame } from './types';
 

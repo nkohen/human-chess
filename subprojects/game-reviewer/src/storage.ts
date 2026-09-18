@@ -9,6 +9,11 @@
 // position's search so the engine stops at whichever of depth/movetime comes first; the depth
 // actually reached is read back from the engine's own report (ReviewedMove.provenance), never
 // assumed to be the requested depth.
+import { gameId, isImportedGame, type ImportedGame } from '@human-chess/import';
+import type { Score } from '@human-chess/engine';
+import type { Classification, EvalOrEnd, GameReview, ReviewedMove } from '@human-chess/review';
+import type { Color, GameEnd } from '@human-chess/rules';
+import { isBoolean, isFiniteNumber, isOneOf, isRecord, isString } from '@human-chess/ui';
 
 const DEPTH_KEY = 'human-chess.game-reviewer.depth';
 export const DEFAULT_DEPTH = 20;
@@ -74,44 +79,10 @@ export function saveMovetimeSeconds(seconds: number): void {
 // Two keys rather than one "per screen" object: the outer screen choice changes rarely (import
 // vs review) while selectedPly/flipped change on every click, and splitting keeps a rapid click
 // from re-serialising the (potentially large) ImportedGame alongside the review every time.
-import { gameId, type ImportedGame } from '@human-chess/import';
-import type { Score } from '@human-chess/engine';
-import type { Classification, EvalOrEnd, GameReview, ReviewedMove } from '@human-chess/review';
-import type { Color, GameEnd } from '@human-chess/rules';
-import { isBoolean, isFiniteNumber, isOneOf, isRecord, isString, isStringArray } from '@human-chess/ui';
-
+// `isImportedGame` itself is validated by the shared `@human-chess/import` validator (imported
+// above) rather than a local duplicate — same shape memory-trainer's storage.ts needs, moved to
+// packages/import once a second caller needed it.
 const isColor = isOneOf(['white', 'black'] as const);
-const isSource = isOneOf(['lichess', 'chess.com', 'pgn'] as const);
-
-function isHeaders(v: unknown): v is Record<string, string> {
-  return isRecord(v) && Object.values(v).every(isString);
-}
-
-/**
- * Validates an `ImportedGame` (packages/import) before trusting it out of storage. Duplicated in
- * memory-trainer's storage.ts (same shape, same reasoning) rather than added to packages/import:
- * this task's scope is the three subprojects only, not the shared layer — a shared validator
- * would be the natural next move if a third caller needs it.
- */
-export function isImportedGame(v: unknown): v is ImportedGame {
-  if (!isRecord(v)) return false;
-  return (
-    isSource(v.source) &&
-    (v.username === undefined || isString(v.username)) &&
-    isString(v.pgn) &&
-    isHeaders(v.headers) &&
-    isString(v.startFen) &&
-    isStringArray(v.ucis) &&
-    isStringArray(v.sans) &&
-    (v.white === undefined || isString(v.white)) &&
-    (v.black === undefined || isString(v.black)) &&
-    (v.result === undefined || isString(v.result)) &&
-    (v.playedAs === undefined || isColor(v.playedAs)) &&
-    (v.url === undefined || isString(v.url)) &&
-    (v.playedAt === undefined || isString(v.playedAt)) &&
-    (v.meta === undefined || isRecord(v.meta))
-  );
-}
 
 export const SCREEN_KEY = 'human-chess.game-reviewer.screen.v1';
 export const REVIEW_KEY = 'human-chess.game-reviewer.review.v1';
@@ -235,6 +206,15 @@ export function parseReviewSnapshot(raw: unknown, game: ImportedGame): ReviewSna
   }
   const stored = parseStoredGameReview(raw.review);
   if (!stored) return undefined;
+  // gameKey alone under-constrains the match: it's URL-based whenever the game has a URL
+  // (gameId, packages/import), and two ImportedGames can share a URL but differ in ucis — a
+  // truncated paste, or a re-fetch of a game that was still in progress when first fetched. A
+  // stale review would otherwise restore under the wrong move list and never re-run. Requiring
+  // the stored move list to match `game.ucis` move-for-move (and the end ply, when set) closes
+  // that gap without needing a richer key.
+  if (stored.moves.length !== game.ucis.length) return undefined;
+  if (!stored.moves.every((m, i) => m.uci === game.ucis[i] && m.ply === i + 1)) return undefined;
+  if (stored.end !== undefined && stored.end.ply !== stored.moves.length) return undefined;
   const review = fromStoredGameReview(stored, game.startFen);
   if (raw.selectedPly > review.moves.length) return undefined; // cursor out of range for this review
   return { gameKey: raw.gameKey, review, selectedPly: raw.selectedPly, flipped: raw.flipped };

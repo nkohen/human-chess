@@ -2,44 +2,15 @@
 // — import/reconstruct/review, the fetched game, the reconstruction so far, and the per-screen
 // cursor state (flipped, replayIndex) — as one snapshot object, since there is exactly one
 // screen active at a time and none of its pieces make sense without the others.
-import type { ImportedGame } from '@human-chess/import';
-import { isBoolean, isFiniteNumber, isOneOf, isRecord, isString, isStringArray } from '@human-chess/ui';
+import { isImportedGame, type ImportedGame } from '@human-chess/import';
+import { isBoolean, isFiniteNumber, isRecord, isStringArray } from '@human-chess/ui';
 import { reconstructedUcis, replayReconstruction, type Reconstruction } from './reconstruction';
 
 export const STATE_KEY = 'human-chess.memory-trainer.state.v1';
 
-const isColor = isOneOf(['white', 'black'] as const);
-const isSource = isOneOf(['lichess', 'chess.com', 'pgn'] as const);
-
-function isHeaders(v: unknown): v is Record<string, string> {
-  return isRecord(v) && Object.values(v).every(isString);
-}
-
-/**
- * Validates an `ImportedGame` (packages/import) before trusting it out of storage. Duplicated in
- * game-reviewer's storage.ts (same shape, same reasoning) rather than added to packages/import:
- * this task's scope is the three subprojects only, not the shared layer — a shared validator
- * would be the natural next move if a third caller needs it.
- */
-export function isImportedGame(v: unknown): v is ImportedGame {
-  if (!isRecord(v)) return false;
-  return (
-    isSource(v.source) &&
-    (v.username === undefined || isString(v.username)) &&
-    isString(v.pgn) &&
-    isHeaders(v.headers) &&
-    isString(v.startFen) &&
-    isStringArray(v.ucis) &&
-    isStringArray(v.sans) &&
-    (v.white === undefined || isString(v.white)) &&
-    (v.black === undefined || isString(v.black)) &&
-    (v.result === undefined || isString(v.result)) &&
-    (v.playedAs === undefined || isColor(v.playedAs)) &&
-    (v.url === undefined || isString(v.url)) &&
-    (v.playedAt === undefined || isString(v.playedAt)) &&
-    (v.meta === undefined || isRecord(v.meta))
-  );
-}
+// `isImportedGame` itself comes from the shared `@human-chess/import` validator (imported
+// above) rather than a local duplicate — same shape game-reviewer's storage.ts needs, moved to
+// packages/import once a second caller needed it.
 
 export type Screen =
   | { kind: 'import' }
@@ -76,6 +47,11 @@ export function parseTrainerSnapshot(raw: unknown): TrainerSnapshot | undefined 
     return { screen: { kind: 'import' }, flipped, replayIndex };
   }
   if ((s.kind === 'reconstruct' || s.kind === 'review') && isImportedGame(s.game) && isStringArray(s.ucis)) {
+    // replayIndex only ever means something against the real game's move list (ReviewScreen's
+    // replay board, MemoryTrainer.tsx) — bound it here rather than trusting whatever the outer
+    // non-negative-integer check above let through, which has no notion of this particular
+    // game's length.
+    if (replayIndex > s.game.ucis.length) return undefined;
     let reconstruction: Reconstruction;
     try {
       reconstruction = replayReconstruction(s.game.startFen, s.ucis);

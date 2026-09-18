@@ -80,4 +80,17 @@ describe('parseTrainerSnapshot', () => {
     expect(parseTrainerSnapshot({ screen: { kind: 'import' }, flipped: 'nope', replayIndex: 0 })).toBeUndefined();
     expect(parseTrainerSnapshot({ screen: { kind: 'import' }, flipped: false, replayIndex: -1 })).toBeUndefined();
   });
+
+  it('rejects a replayIndex beyond the game\'s own move list on a reconstruct/review screen', () => {
+    // GAME.ucis has 4 moves: replayIndex only ever means "how far into GAME.ucis the replay
+    // board is" (MemoryTrainer.tsx's ReviewScreen), so anything past that length is corrupt or
+    // stale, not just a generic non-negative integer.
+    const reconstruct = { screen: { kind: 'reconstruct', game: GAME, ucis: ['e2e4'] }, flipped: false, replayIndex: 5 };
+    expect(parseTrainerSnapshot(reconstruct)).toBeUndefined();
+    const review = { screen: { kind: 'review', game: GAME, ucis: ['e2e4', 'e7e5'], claimedComplete: true }, flipped: false, replayIndex: 5 };
+    expect(parseTrainerSnapshot(review)).toBeUndefined();
+    // Exactly at the bound (GAME.ucis.length) is still accepted.
+    const atBound = { screen: { kind: 'review', game: GAME, ucis: ['e2e4', 'e7e5'], claimedComplete: true }, flipped: false, replayIndex: 4 };
+    expect(parseTrainerSnapshot(atBound)).not.toBeUndefined();
+  });
 });

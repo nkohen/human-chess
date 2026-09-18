@@ -60,6 +60,36 @@ const REVIEW: GameReview = {
       classification: 'good',
       provenance: { engine: 'stockfish', depthBefore: 20, depthAfter: 20 },
     },
+    {
+      ply: 3,
+      san: 'Nf3',
+      uci: 'g1f3',
+      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
+      fenAfter: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2',
+      evalBefore: { type: 'cp', value: 15 },
+      bestMove: 'g1f3',
+      bestSan: 'Nf3',
+      evalAfterBest: { type: 'cp', value: 15 },
+      evalAfterPlayed: { type: 'cp', value: 15 },
+      lossCp: 0,
+      classification: 'best',
+      provenance: { engine: 'stockfish', depthBefore: 20, depthAfter: 20 },
+    },
+    {
+      ply: 4,
+      san: 'Nc6',
+      uci: 'b8c6',
+      fenBefore: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2',
+      fenAfter: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+      evalBefore: { type: 'cp', value: 15 },
+      bestMove: 'b8c6',
+      bestSan: 'Nc6',
+      evalAfterBest: { type: 'cp', value: 15 },
+      evalAfterPlayed: { type: 'cp', value: 15 },
+      lossCp: 0,
+      classification: 'best',
+      provenance: { engine: 'stockfish', depthBefore: 20, depthAfter: 20 },
+    },
   ],
   end: undefined,
 };
@@ -141,5 +171,23 @@ describe('parseReviewSnapshot', () => {
   it('rejects a corrupt overall shape', () => {
     expect(parseReviewSnapshot(undefined, GAME)).toBeUndefined();
     expect(parseReviewSnapshot({ gameKey, selectedPly: 0 }, GAME)).toBeUndefined(); // missing flipped
+  });
+
+  it('rejects a stored review whose move list does not match the game (same url, different ucis)', () => {
+    // Two ImportedGames sharing a URL (a truncated paste, or a re-fetch of a game that was still
+    // in progress) collide on gameId even though their move lists differ — parseReviewSnapshot
+    // must not restore a review bound to a URL under a game whose actual moves have diverged.
+    const urlGame: ImportedGame = { ...GAME, url: 'https://lichess.org/abcd1234' };
+    const differentMovesGame: ImportedGame = {
+      ...urlGame,
+      ucis: ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5'], // one extra move beyond the stored review
+      sans: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5'],
+    };
+    const snapshot: ReviewSnapshot = { gameKey: gameId(urlGame), review: REVIEW, selectedPly: 1, flipped: false };
+    const stored = serializeReviewSnapshot(snapshot);
+    // Same gameKey (both derived from the same url), but the stored review's moves don't match
+    // differentMovesGame.ucis — must be rejected rather than restored under the wrong game.
+    expect(gameId(differentMovesGame)).toBe(stored.gameKey);
+    expect(parseReviewSnapshot(stored, differentMovesGame)).toBeUndefined();
   });
 });

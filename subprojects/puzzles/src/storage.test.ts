@@ -75,6 +75,55 @@ describe('parsePuzzlesSnapshot', () => {
     expect(parsePuzzlesSnapshot(stored)).toBeUndefined();
   });
 
+  it('rejects a puzzle with no solve progress (not a reachable live state)', () => {
+    const stored = { puzzle: PUZZLE, solve: undefined, idInput: '', tally: EMPTY_TALLY };
+    expect(parsePuzzlesSnapshot(stored)).toBeUndefined();
+  });
+
+  describe('status/index/everFailed consistency', () => {
+    it('rejects a terminal status whose index is short of the solution length', () => {
+      const solved = { puzzle: PUZZLE, solve: { index: 2, everFailed: false, status: 'solved' }, idInput: '', tally: EMPTY_TALLY };
+      expect(parsePuzzlesSnapshot(solved)).toBeUndefined();
+      const failedSolved = { puzzle: PUZZLE, solve: { index: 2, everFailed: true, status: 'failed-solved' }, idInput: '', tally: EMPTY_TALLY };
+      expect(parsePuzzlesSnapshot(failedSolved)).toBeUndefined();
+    });
+
+    it('rejects a non-terminal status whose index has already reached the solution length', () => {
+      const stored = { puzzle: PUZZLE, solve: { index: 3, everFailed: false, status: 'correct' }, idInput: '', tally: EMPTY_TALLY };
+      expect(parsePuzzlesSnapshot(stored)).toBeUndefined();
+    });
+
+    it("rejects status 'solved' with everFailed true", () => {
+      const stored = { puzzle: PUZZLE, solve: { index: 3, everFailed: true, status: 'solved' }, idInput: '', tally: EMPTY_TALLY };
+      expect(parsePuzzlesSnapshot(stored)).toBeUndefined();
+    });
+
+    it("rejects status 'failed-solved' with everFailed false", () => {
+      const stored = { puzzle: PUZZLE, solve: { index: 3, everFailed: false, status: 'failed-solved' }, idInput: '', tally: EMPTY_TALLY };
+      expect(parsePuzzlesSnapshot(stored)).toBeUndefined();
+    });
+
+    it("rejects status 'wrong' with everFailed false", () => {
+      const stored = { puzzle: PUZZLE, solve: { index: 0, everFailed: false, status: 'wrong' }, idInput: '', tally: EMPTY_TALLY };
+      expect(parsePuzzlesSnapshot(stored)).toBeUndefined();
+    });
+
+    it("accepts status 'wrong' with everFailed true, at index 0", () => {
+      const stored = { puzzle: PUZZLE, solve: { index: 0, everFailed: true, status: 'wrong' }, idInput: '', tally: EMPTY_TALLY };
+      expect(parsePuzzlesSnapshot(stored)).not.toBeUndefined();
+    });
+
+    it("rejects status 'thinking' with a non-zero index", () => {
+      const stored = { puzzle: PUZZLE, solve: { index: 1, everFailed: false, status: 'thinking' }, idInput: '', tally: EMPTY_TALLY };
+      expect(parsePuzzlesSnapshot(stored)).toBeUndefined();
+    });
+
+    it("rejects status 'correct' at index 0", () => {
+      const stored = { puzzle: PUZZLE, solve: { index: 0, everFailed: false, status: 'correct' }, idInput: '', tally: EMPTY_TALLY };
+      expect(parsePuzzlesSnapshot(stored)).toBeUndefined();
+    });
+  });
+
   it('rejects a corrupt overall shape', () => {
     expect(parsePuzzlesSnapshot(undefined)).toBeUndefined();
     expect(parsePuzzlesSnapshot({ puzzle: undefined, solve: undefined, idInput: 3, tally: EMPTY_TALLY })).toBeUndefined();

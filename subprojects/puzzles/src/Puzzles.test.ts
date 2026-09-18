@@ -50,7 +50,7 @@ describe('Puzzles reload survival', () => {
       tally: { solvedFirstTry: 2, solvedAfterMistake: 1, total: 3 },
     };
     localStorage.setItem(STATE_KEY, JSON.stringify(stored));
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.reject(new Error('network disabled in this test')));
 
     const { container } = render(createElement(Puzzles));
 
@@ -76,7 +76,7 @@ describe('Puzzles reload survival', () => {
       tally: EMPTY_TALLY,
     };
     localStorage.setItem(STATE_KEY, JSON.stringify(stored));
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.reject(new Error('network disabled in this test')));
 
     const { container } = render(createElement(Puzzles));
 
@@ -89,7 +89,12 @@ describe('Puzzles reload survival', () => {
     // guard (hadRestoredPuzzleRef) is exercised on both sides, not just "never fetches". The
     // client's own serial queue (packages/site-client) dispatches asynchronously, so this waits
     // for the call rather than asserting synchronously right after render.
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {})); // never resolves; only call-count matters here
+    // Rejects rather than hanging or resolving: only the call itself is under test here, and a
+    // rejection (rather than a never-resolving promise) means a spy left unmocked by a future
+    // regression would fail loudly against the real network instead of silently succeeding.
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() => Promise.reject(new Error('network disabled in this test')));
     render(createElement(Puzzles));
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
   });

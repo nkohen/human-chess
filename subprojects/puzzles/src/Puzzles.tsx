@@ -236,7 +236,7 @@ export function Puzzles(): React.JSX.Element {
         )
       }
     >
-      <h3 className="puzzles-section-title">This session</h3>
+      <h3 className="puzzles-section-title">Your tally</h3>
       <p>Solved first try: {tally.solvedFirstTry}</p>
       <p>Solved after a mistake: {tally.solvedAfterMistake}</p>
       <p>Total: {tally.total}</p>
