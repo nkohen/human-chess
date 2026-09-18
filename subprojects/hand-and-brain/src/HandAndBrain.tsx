@@ -9,20 +9,36 @@
 // player or an engine side — both roles alternate automatically with the side to move, and there
 // is no engine opponent in this variant yet. Adding either would be a behaviour change, out of
 // scope for a design pass (docs/design/2026-09-17-ui.md, adoption rule 6).
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Board } from '@human-chess/board';
 import type { Role, SquareName } from '@human-chess/rules';
-import { Button, Panel, Status, Toolbar, Workbench } from '@human-chess/ui';
+import { Button, Panel, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import {
   call, callableRoles, currentFen, describeEnd, handDests, isInCheck, lastMove, move, moveLines,
   sideToMove, startGame, type HandAndBrainGame,
 } from './game';
+import { defaultScreen, replayGame, SCREEN_KEY, SCREEN_OPTIONS } from './screen';
 import './hand-and-brain.css';
 
 const label = (color: string): string => color[0]!.toUpperCase() + color.slice(1);
 
+const sameUcis = (a: string[], b: string[]): boolean => a.length === b.length && a.every((u, i) => u === b[i]);
+
 export function HandAndBrain(): React.JSX.Element {
-  const [game, setGame] = useState<HandAndBrainGame>(() => startGame());
+  // The persisted snapshot (ucis + calledRole) is the source of truth across a reload; `game` is
+  // rebuilt from it once at mount (replayGame throws on a corrupt/illegal snapshot, but
+  // usePersistedState's `parse` already rejected anything replayGame would reject, so this
+  // never half-restores a game — docs/design/2026-09-18-reload-survival.md).
+  const [screen, setScreen] = usePersistedState(SCREEN_KEY, defaultScreen, SCREEN_OPTIONS);
+  const [game, setGame] = useState<HandAndBrainGame>(() => replayGame(screen));
+
+  // Mirrors `game` back into the persisted snapshot after every call/move. The equality check
+  // keeps the mount-time render (whose `game` already matches `screen`) from writing storage
+  // again — React bails out of a state update whose updater returns the same reference.
+  useEffect(() => {
+    const ucis = game.moves.map(m => m.uci);
+    setScreen(s => (s.calledRole === game.calledRole && sameUcis(s.ucis, ucis) ? s : { ucis, calledRole: game.calledRole }));
+  }, [game, setScreen]);
 
   // call()/move() throw on an invalid action (wrong phase, stale click after the state already
   // advanced, etc). A setState updater must stay pure and side-effect free, so an invalid action

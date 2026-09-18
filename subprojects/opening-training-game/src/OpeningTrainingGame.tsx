@@ -6,7 +6,7 @@
 // Start Button); once a game is underway the screen is a Workbench, board left, with the
 // current status line and (once the game ends) the engine's verdict as `primary` throughout —
 // that content is unchanged from before this restyle, only its container is.
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Board } from '@human-chess/board';
 import { formatScore, whitePerspective, type Analysis, type PvLine, type Score, type UciEngine } from '@human-chess/engine';
 import {
@@ -20,11 +20,13 @@ import {
   playerDests,
   result as gameResult,
   sideToMove,
+  uciMoves,
   type PlayedMove,
 } from '@human-chess/play';
 import { useEngineGame } from '@human-chess/play/react';
 import { START_FEN, type Color } from '@human-chess/rules';
-import { Button, Field, Page, SegmentedControl, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
+import { Button, Field, Page, SegmentedControl, Status, Toolbar, usePersistedState, Workbench, type StatusKind } from '@human-chess/ui';
+import { defaultScreen, SCREEN_KEY, SCREEN_OPTIONS, type ColorChoice, type Screen } from './screen';
 import { verdict as computeVerdict, type Verdict } from './verdict';
 import './opening-training-game.css';
 
@@ -44,13 +46,6 @@ ELO_OPTIONS.push(MAX_UCI_ELO);
 const DEFAULT_ELO = MIN_UCI_ELO;
 const VERDICT_DEPTH = 18;
 
-interface Settings {
-  movesN: number;
-  playerColor: Color;
-  elo: number;
-}
-
-type ColorChoice = Color | 'random';
 const COLOR_CHOICES: ColorChoice[] = ['white', 'black', 'random'];
 
 type VerdictState =
@@ -64,10 +59,14 @@ const outcomeWord = (v: Verdict): string => (v === 'won' ? 'You win' : v === 'lo
 export function OpeningTrainingGame({ engine }: OpeningTrainingGameProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
 
-  const [settings, setSettings] = useState<Settings | undefined>(undefined);
-  const [movesN, setMovesN] = useState<number>(MOVE_PRESETS[0]!);
-  const [colorChoice, setColorChoice] = useState<ColorChoice>('random');
-  const [elo, setElo] = useState<number>(DEFAULT_ELO);
+  // The whole screen — setup fields, and once Start is pressed the round's fixed settings plus
+  // the UCI moves played — lives in one persisted snapshot (screen.ts), read synchronously here
+  // so a page reload lands back on the same setup or the same round in progress
+  // (docs/design/2026-09-18-reload-survival.md). The verdict is cheap to recompute (below) and
+  // deliberately not part of the snapshot.
+  const [screen, setScreen] = usePersistedState<Screen>(SCREEN_KEY, () => defaultScreen(MOVE_PRESETS[0]!, DEFAULT_ELO), SCREEN_OPTIONS);
+  const updateScreen = useCallback((patch: Partial<Screen>) => setScreen(s => ({ ...s, ...patch })), [setScreen]);
+  const { movesN, colorChoice, elo, settings } = screen;
 
   // Stable per elo, so useEngineGame's engine-move effect (keyed on this reference) doesn't
   // re-run on every render — see @human-chess/play's react.ts for why that matters.
@@ -78,6 +77,7 @@ export function OpeningTrainingGame({ engine }: OpeningTrainingGameProps): React
     playerColor: settings?.playerColor ?? 'white',
     engine: readyEngine,
     opponent,
+    initialMoves: screen.ucis,
     // exactOptionalPropertyTypes: omit the key entirely pre-Start rather than passing undefined.
     ...(settings ? { maxPlies: 2 * settings.movesN } : {}),
   });
@@ -85,6 +85,15 @@ export function OpeningTrainingGame({ engine }: OpeningTrainingGameProps): React
   // Reached the N-move cap without the position itself ending (checkmate etc. is handled by
   // game.end directly, via describeEnd, per the spec: that natural result stands).
   const plyLimitReached = finished && !game.end;
+
+  // Mirrors the played moves back into the persisted snapshot. The equality check keeps the
+  // mount-time render (whose `game` was just rebuilt from screen.ucis) from writing storage
+  // again — React bails out of a state update whose updater returns the same reference.
+  useEffect(() => {
+    if (!settings) return;
+    const ucis = uciMoves(game);
+    setScreen(s => (s.ucis.length === ucis.length && s.ucis.every((u, i) => u === ucis[i]) ? s : { ...s, ucis }));
+  }, [settings, game, setScreen]);
 
   const [verdictState, setVerdictState] = useState<VerdictState>({ kind: 'idle' });
 
@@ -119,16 +128,17 @@ export function OpeningTrainingGame({ engine }: OpeningTrainingGameProps): React
 
   const start = (): void => {
     const resolvedColor: Color = colorChoice === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : colorChoice;
-    setSettings({ movesN, playerColor: resolvedColor, elo });
+    updateScreen({ settings: { movesN, playerColor: resolvedColor, elo }, ucis: [] });
     restart({ startFen: START_FEN, playerColor: resolvedColor });
   };
 
   const rematch = (): void => {
     if (!settings) return;
+    updateScreen({ ucis: [] });
     restart({ startFen: START_FEN, playerColor: settings.playerColor });
   };
 
-  const newGame = (): void => setSettings(undefined);
+  const newGame = (): void => updateScreen({ settings: undefined, ucis: [] });
 
   if (!settings) {
     const engineStatus: { kind: StatusKind; text: string } =
@@ -147,7 +157,7 @@ export function OpeningTrainingGame({ engine }: OpeningTrainingGameProps): React
           <SegmentedControl
             options={MOVE_PRESETS.map(n => ({ value: n, label: String(n) }))}
             value={movesN}
-            onChange={setMovesN}
+            onChange={n => updateScreen({ movesN: n })}
             ariaLabel="Moves each side"
           />
         </Field>
@@ -155,12 +165,12 @@ export function OpeningTrainingGame({ engine }: OpeningTrainingGameProps): React
           <SegmentedControl
             options={COLOR_CHOICES.map(c => ({ value: c, label: c }))}
             value={colorChoice}
-            onChange={setColorChoice}
+            onChange={c => updateScreen({ colorChoice: c })}
             ariaLabel="Your colour"
           />
         </Field>
         <Field label="Opponent Elo" htmlFor="otg-elo">
-          <select id="otg-elo" value={elo} onChange={e => setElo(Number(e.target.value))}>
+          <select id="otg-elo" value={elo} onChange={e => updateScreen({ elo: Number(e.target.value) })}>
             {ELO_OPTIONS.map(o => (
               <option key={o} value={o}>
                 {o} — {limitedStrength(o).description}

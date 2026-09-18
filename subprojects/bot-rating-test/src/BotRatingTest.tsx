@@ -35,9 +35,23 @@ import {
   type Color,
   type Position,
 } from '@human-chess/rules';
-import { Button, cx, Field, Page, readHandoffParams, SegmentedControl, Status, Toolbar, Workbench, type StatusKind } from '@human-chess/ui';
+import {
+  Button,
+  clearPersisted,
+  consumeHandoffParams,
+  cx,
+  Field,
+  Page,
+  SegmentedControl,
+  Status,
+  Toolbar,
+  usePersistedState,
+  Workbench,
+  type StatusKind,
+} from '@human-chess/ui';
 import { appendRecord, clearRecords, loadRecords, type BotRatingRecord, type GameOutcome } from './records';
-import { ELO_LEVELS, suggestNextElo, suggestedStartingElo } from './suggest';
+import { defaultScreen, screenFromHandoff, SCREEN_KEY, SCREEN_OPTIONS, type ColorChoice, type Screen } from './screen';
+import { ELO_LEVELS, suggestNextElo } from './suggest';
 import { highestWin, summarize } from './summary';
 import './bot-rating-test.css';
 
@@ -48,18 +62,11 @@ export interface BotRatingTestProps {
 
 const STANDARD_START_FEN = START_FEN;
 
-type ColorChoice = 'white' | 'black' | 'random';
 const COLOR_CHOICES: { value: ColorChoice; label: string }[] = [
   { value: 'white', label: 'White' },
   { value: 'black', label: 'Black' },
   { value: 'random', label: 'Random' },
 ];
-
-interface ActiveGame {
-  elo: number;
-  playerColor: Color;
-  startFen: string;
-}
 
 function pickColor(choice: ColorChoice): Color {
   if (choice === 'random') return Math.random() < 0.5 ? 'white' : 'black';
@@ -115,20 +122,36 @@ function SummaryTable({ records }: { records: BotRatingRecord[] }): React.JSX.El
 export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element {
   const readyEngine = engine instanceof Error ? undefined : engine;
   const [records, setRecords] = useState<BotRatingRecord[]>(() => loadRecords());
-  const [elo, setElo] = useState(() => suggestedStartingElo(loadRecords()));
 
   // Cross-tool hand-off (packages/ui/src/handoff.ts): the game reviewer's "Play from this
   // position against the engine" and puzzles' "Practice this against the engine" both land here
-  // with ?fen=...&color=.... Read once, from the hash this component was routed in on (App.tsx
-  // only ever mounts BotRatingTest fresh per route change). `handoffFen` is kept around, not just
-  // consumed, so the "handed over" notice below can tell whether the user has since changed it.
-  const [handoff] = useState(() => readHandoffParams(window.location.hash));
-  const handoffFen = handoff.get('fen') ?? undefined;
-  const [colorChoice, setColorChoice] = useState<ColorChoice>(() => {
-    const c = handoff.get('color');
-    return c === 'black' || c === 'white' ? c : 'white';
+  // with ?fen=...&color=.... consumeHandoffParams reads it once, from the hash this component
+  // was routed in on, and strips it from the URL so a reload doesn't replay it. `handoffFen` is
+  // kept around, not just consumed, so the "handed over" notice below can tell whether the user
+  // has since changed it.
+  const [handoff] = useState(() => {
+    const params = consumeHandoffParams(window.location.hash);
+    // A fresh hand-off wins over whatever this screen had persisted: clear the snapshot before
+    // usePersistedState below reads storage, so it falls through to the hand-off-seeded value
+    // instead (docs/design/2026-09-18-reload-survival.md).
+    if (params.toString() !== '') clearPersisted(SCREEN_KEY);
+    return params;
   });
-  const [fenText, setFenText] = useState(() => handoffFen ?? STANDARD_START_FEN);
+  const handoffFen = handoff.get('fen') ?? undefined;
+  const isFreshHandoff = handoff.toString() !== '';
+
+  // The whole screen — setup fields, and once Start is pressed the in-flight/finished game plus
+  // whether it has been recorded — lives in one persisted snapshot (screen.ts), read
+  // synchronously here so a reload lands back on the same setup or the same game
+  // (docs/design/2026-09-18-reload-survival.md).
+  const [screen, setScreen] = usePersistedState<Screen>(
+    SCREEN_KEY,
+    () => (isFreshHandoff ? screenFromHandoff(handoff) : defaultScreen()),
+    SCREEN_OPTIONS,
+  );
+  const updateScreen = useCallback((patch: Partial<Screen>) => setScreen(s => ({ ...s, ...patch })), [setScreen]);
+  const { elo, colorChoice, fenText, boardMode, active, resigned, blindfold } = screen;
+
   // A handed-over FEN is checked right away, the same check Start runs, so the "handed over"
   // notice never sits next to a position that will only be rejected once the user clicks.
   const [fenError, setFenError] = useState<string | undefined>(() => {
@@ -140,16 +163,9 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
       return err instanceof Error ? err.message : String(err);
     }
   });
-  const [boardMode, setBoardMode] = useState(false);
-  const [active, setActive] = useState<ActiveGame | undefined>(undefined);
-  const [resigned, setResigned] = useState(false);
-  // First guess: "blindfold" only ever hides pieces via CSS on the live board (see
-  // bot-rating-test.css's .brt-blindfold) — no Board change, so anything can link here with
-  // blindfold=1 (a future visualization-trainer hand-off is the named example) and get the same
-  // treatment for free. It's a checkbox, not tied to `active`, so it stays in effect (and stays
-  // toggleable) across "Play suggested level" / restarts within the same visit.
-  const [blindfold, setBlindfold] = useState(() => handoff.get('blindfold') === '1');
-  const recordedRef = useRef(false);
+  // Restores the recordedRef guard across a reload (screen.recorded) so a finished-but-already-
+  // recorded game is never recorded twice; beginGame resets it for each new attempt.
+  const recordedRef = useRef(screen.recorded);
 
   // The notice clears the moment the user changes the FEN away from what was handed off — a
   // derived boolean rather than its own state/effect, so there is nothing to keep in sync: it is
@@ -174,14 +190,14 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
 
   const applyFenParts = useCallback((newPlacement: string, newTurn: Color, newCastling: string) => {
     try {
-      setFenText(composeFen(newPlacement, newTurn, newCastling));
+      updateScreen({ fenText: composeFen(newPlacement, newTurn, newCastling) });
       setFenError(undefined);
     } catch (err) {
       // A half-typed placement in the FEN field makes the turn/castling controls unable to
       // rebuild the FEN; say so rather than silently doing nothing.
       setFenError(err instanceof Error ? err.message : String(err));
     }
-  }, []);
+  }, [updateScreen]);
 
   const handleEditorChange = useCallback(
     (newPlacement: string) => {
@@ -211,7 +227,7 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
   );
 
   const handleClearBoard = useCallback(() => applyFenParts(EMPTY_PLACEMENT_FEN, 'white', ''), [applyFenParts]);
-  const handleResetBoard = useCallback(() => setFenText(STANDARD_START_FEN), []);
+  const handleResetBoard = useCallback(() => updateScreen({ fenText: STANDARD_START_FEN }), [updateScreen]);
 
   const opponent: Opponent | undefined = useMemo(() => (active ? limitedStrength(active.elo) : undefined), [active?.elo]);
 
@@ -219,11 +235,21 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
     startFen: active?.startFen ?? STANDARD_START_FEN,
     playerColor: active?.playerColor ?? 'white',
     engine: active ? readyEngine : undefined,
+    initialMoves: screen.ucis,
     ...(opponent ? { opponent } : {}),
   });
 
   const outcome: GameOutcome | undefined = resigned ? 'lost' : gameResult(game);
   const ended = finished || resigned;
+
+  // Mirrors the played moves back into the persisted snapshot. The equality check keeps the
+  // mount-time render (whose `game` was just rebuilt from screen.ucis) from writing storage
+  // again — React bails out of a state update whose updater returns the same reference.
+  useEffect(() => {
+    if (!active) return;
+    const ucis = uciMoves(game);
+    setScreen(s => (s.ucis.length === ucis.length && s.ucis.every((u, i) => u === ucis[i]) ? s : { ...s, ucis }));
+  }, [active, game, setScreen]);
 
   // Gated on the played game actually belonging to `active` (not just recordedRef, which alone
   // was found to still race: beginGame's restart and setActive land in the same batch, but this
@@ -242,20 +268,21 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
       moves: uciMoves(game),
     });
     setRecords(updated);
-  }, [active, ended, outcome, opponent, game]);
+    updateScreen({ recorded: true });
+  }, [active, ended, outcome, opponent, game, updateScreen]);
 
-  // Resets the underlying game synchronously, in the same event-handler batch as setActive —
-  // mirroring subprojects/chessitout/src/Chessitout.tsx's onVote/onChooseSide — so the render
-  // where `active` first reflects the new attempt never still holds the previous, finished game.
+  // Resets the underlying game synchronously, in the same event-handler batch as the screen
+  // update — mirroring subprojects/chessitout/src/Chessitout.tsx's onVote/onChooseSide — so the
+  // render where `active` first reflects the new attempt never still holds the previous,
+  // finished game.
   const beginGame = useCallback(
     (nextElo: number, choice: ColorChoice, startFenValue: string) => {
       recordedRef.current = false;
-      setResigned(false);
       const playerColor = pickColor(choice);
-      setActive({ elo: nextElo, playerColor, startFen: startFenValue });
+      updateScreen({ active: { elo: nextElo, playerColor, startFen: startFenValue }, resigned: false, recorded: false, ucis: [] });
       restart({ startFen: startFenValue, playerColor });
     },
-    [restart],
+    [restart, updateScreen],
   );
 
   const handleStart = useCallback(() => {
@@ -308,7 +335,7 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
         primary={
           <>
             <Field label="Bot level (UCI_Elo)" htmlFor="brt-elo">
-              <select id="brt-elo" value={elo} onChange={e => setElo(Number(e.target.value))}>
+              <select id="brt-elo" value={elo} onChange={e => updateScreen({ elo: Number(e.target.value) })}>
                 {ELO_LEVELS.map(l => (
                   <option key={l} value={l}>
                     {l}
@@ -325,17 +352,17 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
           <>
             {handoffNoticeVisible && <Status kind="info">Position handed over from another human-chess tool.</Status>}
             <Field label="Your colour">
-              <SegmentedControl options={COLOR_CHOICES} value={colorChoice} onChange={setColorChoice} ariaLabel="Your colour" />
+              <SegmentedControl options={COLOR_CHOICES} value={colorChoice} onChange={c => updateScreen({ colorChoice: c })} ariaLabel="Your colour" />
             </Field>
             <Field label="Start position (FEN)" htmlFor="brt-fen">
-              <input id="brt-fen" type="text" value={fenText} onChange={e => setFenText(e.target.value)} />
+              <input id="brt-fen" type="text" value={fenText} onChange={e => updateScreen({ fenText: e.target.value })} />
             </Field>
             <label className="brt-board-toggle">
-              <input type="checkbox" checked={boardMode} onChange={e => setBoardMode(e.target.checked)} />
+              <input type="checkbox" checked={boardMode} onChange={e => updateScreen({ boardMode: e.target.checked })} />
               Set up on a board
             </label>
             <label className="brt-board-toggle">
-              <input type="checkbox" checked={blindfold} onChange={e => setBlindfold(e.target.checked)} />
+              <input type="checkbox" checked={blindfold} onChange={e => updateScreen({ blindfold: e.target.checked })} />
               Blindfold (pieces hidden)
             </label>
             {boardMode && (
@@ -421,7 +448,7 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
         <>
           <Status kind={statusKind}>{statusText()}</Status>
           <label className="brt-board-toggle">
-            <input type="checkbox" checked={blindfold} onChange={e => setBlindfold(e.target.checked)} />
+            <input type="checkbox" checked={blindfold} onChange={e => updateScreen({ blindfold: e.target.checked })} />
             Blindfold (pieces hidden)
           </label>
           {ended && (
@@ -434,12 +461,12 @@ export function BotRatingTest({ engine }: BotRatingTestProps): React.JSX.Element
       footer={
         !ended ? (
           <Toolbar>
-            <Button onClick={() => setResigned(true)}>Resign</Button>
+            <Button onClick={() => updateScreen({ resigned: true })}>Resign</Button>
           </Toolbar>
         ) : (
           <Toolbar>
             <Button onClick={() => beginGame(suggested, colorChoice, fenText)}>Play suggested level</Button>
-            <Button onClick={() => setActive(undefined)}>Change settings</Button>
+            <Button onClick={() => updateScreen({ active: undefined, ucis: [], resigned: false })}>Change settings</Button>
             <Button
               onClick={() => {
                 const ok = typeof confirm === 'function' ? confirm('Clear all recorded bot-rating-test games? This cannot be undone.') : false;
