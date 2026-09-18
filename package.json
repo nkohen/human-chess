@@ -11,7 +11,7 @@
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm test",
     "screenshots": "node scripts/screenshots.mjs",
-    "deploy": "bash scripts/deploy-web.sh"
+    "deploy-web": "bash scripts/deploy-web.sh"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.2",
