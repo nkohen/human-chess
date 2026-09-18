@@ -4,6 +4,7 @@
 // same mount, not restarted with a fresh full-length countdown; one still in the future restores
 // with the real remaining time.
 import { renderHook } from '@testing-library/react';
+import { createElement, StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useCountdown } from './useCountdown';
 
@@ -54,5 +55,21 @@ describe('useCountdown with a persisted endAt', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // React StrictMode (apps/web/src/main.tsx) deliberately double-invokes every effect
+  // (mount -> cleanup -> mount) in development/test builds. Before firedEndRef replaced a simple
+  // "have we fired" boolean, this double mount re-armed the same already-expired endAt and called
+  // onExpire twice — the root cause of the SoloRound/PvpRound hot-loop bug
+  // (see SoloRound.tsx/PvpRound.tsx's analysis-failure handling and the review it came from).
+  it('under StrictMode double-invocation, an already-past endAt still fires onExpire exactly once', () => {
+    const onExpire = vi.fn();
+    const endAt = Date.now() - 5_000;
+    const { result, unmount: u } = renderHook(() => useCountdown(30_000, true, onExpire, endAt), {
+      wrapper: ({ children }) => createElement(StrictMode, null, children),
+    });
+    unmount = u;
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    expect(result.current.remainingMs).toBe(0);
   });
 });

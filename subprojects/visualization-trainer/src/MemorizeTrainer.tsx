@@ -22,7 +22,7 @@
 import { useEffect, useState } from 'react';
 import { Board, BoardEditor } from '@human-chess/board';
 import { EMPTY_PLACEMENT_FEN, inCheck, positionFromFen, turn, type SquareName } from '@human-chess/rules';
-import { Button, Field, Page, SegmentedControl, Status, usePersistedState, Workbench } from '@human-chess/ui';
+import { Button, clearPersisted, Field, Page, readPersisted, SegmentedControl, Status, usePersistedState, Workbench } from '@human-chess/ui';
 import {
   DEFAULT_MEMORIZE_SOURCE,
   DEFAULT_STUDY_SECONDS,
@@ -71,7 +71,29 @@ export interface MemorizeTrainerProps {
 }
 
 export function MemorizeTrainer({ firstFen }: MemorizeTrainerProps = {}): React.JSX.Element {
-  const [snap, setSnap] = usePersistedState(VT_MEMORIZE_KEY, () => freshMemorizeSnapshot(DEFAULT_STUDY_SECONDS, DEFAULT_MEMORIZE_SOURCE), { parse: parseMemorizeSnapshot });
+  // A fresh hand-off (VisualizationTrainer.tsx's `firstFen`, from #/visualization?fen=...) must
+  // win over whatever Memorize session this screen had persisted — otherwise a reload or remount
+  // right after the hand-off would silently restore the old mid-session snapshot instead of
+  // landing on settings with the handed-over position queued up
+  // (docs/design/2026-09-18-reload-survival.md). Mirrors bot-rating-test/src/BotRatingTest.tsx's
+  // hand-off-wins-over-snapshot pattern: study preferences (studySeconds/source) are the learner's
+  // own settings and carry over, but the session itself restarts. This useState must stay
+  // textually above the usePersistedState call below so the clear runs, in hook order, before
+  // usePersistedState's own initializer ever reads storage.
+  const [handoffSettings] = useState(() => {
+    if (firstFen === undefined) return undefined;
+    const prior = readPersisted(VT_MEMORIZE_KEY, parseMemorizeSnapshot);
+    clearPersisted(VT_MEMORIZE_KEY);
+    return { studySeconds: prior?.studySeconds ?? DEFAULT_STUDY_SECONDS, source: prior?.source ?? DEFAULT_MEMORIZE_SOURCE };
+  });
+
+  // freshMemorizeSnapshot already seeds `phase: { kind: 'settings' }` (a fresh session always
+  // starts there), so the hand-off case only needs its own studySeconds/source carried into it.
+  const [snap, setSnap] = usePersistedState(
+    VT_MEMORIZE_KEY,
+    () => (handoffSettings ? freshMemorizeSnapshot(handoffSettings.studySeconds, handoffSettings.source) : freshMemorizeSnapshot(DEFAULT_STUDY_SECONDS, DEFAULT_MEMORIZE_SOURCE)),
+    { parse: parseMemorizeSnapshot },
+  );
   const { studySeconds, source, sessionFens, results, phase } = snap;
 
   // Ticks while a clock (study countdown or rebuild count-up) is running, purely so the displayed

@@ -34,7 +34,16 @@ export function useCountdown(limitMs: number | undefined, running: boolean, onEx
     if (!running) return limitMs;
     return Math.max(0, (endAt ?? Date.now() + limitMs) - Date.now());
   });
-  const expiredRef = useRef(false);
+  // Remembers which *deadline* (not just "have we fired at all") has already reported expiry, so
+  // seeing the same still-expired `endAt` again — the effect re-running because a caller's own
+  // state churned without the clock itself restarting, or React StrictMode's deliberate double
+  // mount/cleanup/mount of every effect — never calls `onExpire` a second time for it. A callback
+  // that *does* advance to a genuinely new deadline (a fresh round, `endAt` undefined and
+  // recomputed from `Date.now()`) gets a different `end` value and so is never mistaken for a
+  // repeat. This is what breaks the failure loop where an expired clock kept re-arming and
+  // re-firing every time the caller's phase bounced back to "running" without ever getting a new
+  // deadline (see SoloRound.tsx/PvpRound.tsx's analysis-failure handling).
+  const firedEndRef = useRef<number | undefined>(undefined);
   const startRef = useRef(0);
   // A ref, not a dependency: `onExpire` is typically a fresh closure every render, and this
   // effect must not restart the clock just because its identity changed.
@@ -46,14 +55,13 @@ export function useCountdown(limitMs: number | undefined, running: boolean, onEx
       setRemainingMs(limitMs ?? Infinity);
       return;
     }
-    expiredRef.current = false;
     const end = endAt ?? Date.now() + limitMs;
     startRef.current = end - limitMs;
     const tick = (): void => {
       const left = Math.max(0, end - Date.now());
       setRemainingMs(left);
-      if (left <= 0 && !expiredRef.current) {
-        expiredRef.current = true;
+      if (left <= 0 && firedEndRef.current !== end) {
+        firedEndRef.current = end;
         onExpireRef.current();
       }
     };

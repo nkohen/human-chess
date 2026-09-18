@@ -22,14 +22,14 @@ import { Board, MoveLine } from '@human-chess/board';
 import { EngineError, formatPawns, formatScore, whitePerspective, type UciEngine } from '@human-chess/engine';
 import { generateRecipePosition, pickRecipe } from '@human-chess/positions';
 import { inCheck, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
-import { Button, Field, Page, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
+import { Button, clearPersisted, Field, Page, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import { AnalysisBoard } from './AnalysisBoard';
 import { Countdown } from './Countdown';
 import { EvalScale } from './EvalScale';
 import { idleBoard } from './idleBoard';
 import { ROUNDS } from './rounds';
 import { band, describeBand, grade, MAX_POINTS, points, SLIDER_MAX_CP, SLIDER_MIN_CP } from './scoring';
-import { freshSoloSnapshot, GTE_SOLO_KEY, parseSoloSnapshot } from './snapshot';
+import { freshSoloSnapshot, GTE_ANALYSIS_BOARD_KEY, GTE_SOLO_KEY, parseSoloSnapshot } from './snapshot';
 import { useCountdown } from './useCountdown';
 import './guess-the-eval.css';
 
@@ -107,13 +107,17 @@ export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): Rea
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readyEngine, phase, generation]);
 
+  // Guarded on `s.phase === 'guessing'` so a second call for the same guess — React StrictMode's
+  // deliberate double-invoke of an effect/handler, or a countdown that reports the same already-
+  // fired deadline twice — is a no-op rather than re-locking-in (and, for PvP's equivalent,
+  // silently overwriting an already-recorded guess).
   const lockIn = useCallback(() => {
     if (!readyEngine || !position) return;
-    setSnap(s => ({ ...s, phase: 'evaluating' }));
+    setSnap(s => (s.phase === 'guessing' ? { ...s, phase: 'evaluating' } : s));
   }, [readyEngine, position, setSnap]);
 
   const onTimeExpired = useCallback(() => {
-    setSnap(s => ({ ...s, timedOut: true, phase: 'evaluating' }));
+    setSnap(s => (s.phase === 'guessing' ? { ...s, timedOut: true, phase: 'evaluating' } : s));
   }, [setSnap]);
 
   const { remainingMs } = useCountdown(limitMs, phase === 'guessing', onTimeExpired, endAt);
@@ -131,8 +135,14 @@ export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): Rea
         if (cancelled) return;
         const line = a.lines[0];
         if (!line) {
+          // Leave `phase` at 'evaluating': the top-level `error` guard above already covers this
+          // screen, and its "Try again" button resets everything via startGeneration. Bouncing
+          // `phase` back to 'guessing' here used to re-arm useCountdown against the same
+          // already-expired `endAt` on every render, firing onTimeExpired again and looping
+          // straight back into another failed analyse() call. A reload while this error is
+          // showing honestly re-analyses (phase is still 'evaluating', `error` itself is
+          // transient state that does not survive the reload) rather than silently resolving.
           setError(`The engine failed: ${a.engine} returned no evaluation line for this position`);
-          setSnap(s => ({ ...s, phase: 'guessing' }));
           return;
         }
         const sideToMove = turn(positionFromFen(position.fen));
@@ -146,8 +156,9 @@ export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): Rea
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        // Same reasoning as the `!line` branch above: leave `phase` at 'evaluating' rather than
+        // bouncing back to 'guessing', so an already-expired countdown never re-arms itself.
         setError(`The engine failed: ${err instanceof Error ? err.message : String(err)}`);
-        setSnap(s => ({ ...s, phase: 'guessing' }));
       });
     return () => {
       cancelled = true;
@@ -290,7 +301,18 @@ export function SoloRound({ engine, timeLimitSec, onExit }: SoloRoundProps): Rea
       <Button variant="primary" onClick={advance}>
         {roundIndex + 1 >= ROUNDS ? 'See results' : 'Next position'}
       </Button>
-      <Button variant="secondary" onClick={() => setSnap(s => ({ ...s, phase: 'analysing' }))}>
+      <Button
+        variant="secondary"
+        onClick={() => {
+          // A fresh "Analyse this position" click always starts from the untouched, just-revealed
+          // position (AnalysisBoard's own `initialFen` doc comment) — even when the fen happens to
+          // match what a previous visit to this same round left behind, which AnalysisBoard's own
+          // render-time reset (seedFen !== initialFen) would not otherwise catch. A plain reload
+          // mid-analysis never runs this handler, so it still restores the in-progress history.
+          clearPersisted(GTE_ANALYSIS_BOARD_KEY);
+          setSnap(s => ({ ...s, phase: 'analysing' }));
+        }}
+      >
         Analyse this position
       </Button>
       <EvalScale guessCp={guessCp} truth={truth} />

@@ -65,7 +65,11 @@ describe('parseSoloSnapshot', () => {
       guessCp: 150,
       timedOut: false,
       roundIndex: 2,
-      results: [{ truth: SCORE, guessCp: 100, points: 8, timedOut: false, recipeDescription: 'a rook endgame' }],
+      // results.length must equal roundIndex (2) before this round's own reveal exists.
+      results: [
+        { truth: SCORE, guessCp: 100, points: 8, timedOut: false, recipeDescription: 'a rook endgame' },
+        { truth: SCORE, guessCp: 90, points: 7, timedOut: false, recipeDescription: 'a bishop endgame' },
+      ],
       endAt: Date.now() + 10_000,
       analysis: undefined,
     };
@@ -79,7 +83,8 @@ describe('parseSoloSnapshot', () => {
       guessCp: 150,
       timedOut: false,
       roundIndex: 0,
-      results: [],
+      // results.length must equal roundIndex + 1 (1) once this round's own reveal exists.
+      results: [{ truth: SCORE, guessCp: 100, points: 8, timedOut: false, recipeDescription: 'a king and king endgame' }],
       endAt: undefined,
       analysis: ANALYSIS,
     };
@@ -98,6 +103,52 @@ describe('parseSoloSnapshot', () => {
     // 'revealed' needs the analysis that produced it — never silently recomputed.
     expect(parseSoloSnapshot({ ...freshSoloSnapshot(), phase: 'revealed', position: POSITION, analysis: undefined })).toBeUndefined();
   });
+
+  it('rejects a position with a corrupt FEN or an illegal last move (never reaches positionFromFen/uciSquares unguarded)', () => {
+    expect(parseSoloSnapshot({ ...freshSoloSnapshot(), phase: 'guessing', position: { ...POSITION, fen: 'not a fen' } })).toBeUndefined();
+    expect(parseSoloSnapshot({ ...freshSoloSnapshot(), phase: 'guessing', position: { ...POSITION, moves: ['zz99'] } })).toBeUndefined();
+  });
+
+  it('rejects an analysis whose fen does not match the stored position', () => {
+    expect(
+      parseSoloSnapshot({
+        ...freshSoloSnapshot(),
+        phase: 'revealed',
+        position: POSITION,
+        analysis: { ...ANALYSIS, fen: '8/8/8/8/8/8/8/7k w - - 0 1' },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('rejects results.length inconsistent with roundIndex/phase', () => {
+    // 'guessing' (pre-reveal) needs results.length === roundIndex; one entry when roundIndex is 2
+    // is short by one.
+    expect(
+      parseSoloSnapshot({
+        ...freshSoloSnapshot(),
+        phase: 'guessing',
+        position: POSITION,
+        roundIndex: 2,
+        results: [{ truth: SCORE, guessCp: 100, points: 8, timedOut: false, recipeDescription: 'x' }],
+      }),
+    ).toBeUndefined();
+    // 'summary' needs results.length === ROUNDS exactly.
+    expect(parseSoloSnapshot({ ...freshSoloSnapshot(), phase: 'summary', results: [] })).toBeUndefined();
+  });
+
+  it('rejects a guessCp/points value outside the shape scoring.ts could have produced', () => {
+    expect(parseSoloSnapshot({ ...freshSoloSnapshot(), guessCp: 100000 })).toBeUndefined(); // outside SLIDER_MIN_CP..SLIDER_MAX_CP
+    expect(
+      parseSoloSnapshot({
+        ...freshSoloSnapshot(),
+        phase: 'revealed',
+        position: POSITION,
+        analysis: ANALYSIS,
+        roundIndex: 0,
+        results: [{ truth: SCORE, guessCp: 100, points: 1.5, timedOut: false, recipeDescription: 'x' }], // not an integer
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe('parsePvpSnapshot', () => {
@@ -111,7 +162,21 @@ describe('parsePvpSnapshot', () => {
       position: POSITION,
       phase: 'handover',
       roundIndex: 1,
-      results: [],
+      // results.length must equal roundIndex (1) before this round's own reveal exists.
+      results: [
+        {
+          fen: POSITION.fen,
+          lastMove: ['a1', 'a2'],
+          truth: SCORE,
+          guess1Cp: 80,
+          guess2Cp: 60,
+          points1: 7,
+          points2: 6,
+          timedOut1: false,
+          timedOut2: false,
+          recipeDescription: 'a king and king endgame',
+        },
+      ],
       endAt: undefined,
       analysis: undefined,
       turnPlayer: 2,
@@ -125,23 +190,33 @@ describe('parsePvpSnapshot', () => {
     expect(parsePvpSnapshot(JSON.parse(JSON.stringify(snap)))).toEqual(snap);
   });
 
+  function pvpResult(recipeDescription: string): PvpSnapshot['results'][number] {
+    return {
+      fen: POSITION.fen,
+      lastMove: ['a1', 'a2'],
+      truth: SCORE,
+      guess1Cp: 100,
+      guess2Cp: 90,
+      points1: 8,
+      points2: 9,
+      timedOut1: false,
+      timedOut2: true,
+      recipeDescription,
+    };
+  }
+
   it('round-trips a results snapshot with an open AnalysisBoard index', () => {
     const snap: PvpSnapshot = {
       ...freshPvpSnapshot(),
       phase: 'results',
+      // results.length must equal ROUNDS (5) at the terminal screen, independent of roundIndex
+      // (advance() leaves roundIndex at ROUNDS - 1 rather than incrementing past it).
       results: [
-        {
-          fen: POSITION.fen,
-          lastMove: ['a1', 'a2'],
-          truth: SCORE,
-          guess1Cp: 100,
-          guess2Cp: 90,
-          points1: 8,
-          points2: 9,
-          timedOut1: false,
-          timedOut2: true,
-          recipeDescription: 'a king and king endgame',
-        },
+        pvpResult('a king and king endgame'),
+        pvpResult('a rook endgame'),
+        pvpResult('a bishop endgame'),
+        pvpResult('a knight endgame'),
+        pvpResult('a queen endgame'),
       ],
       analysingIndex: 0,
     };
@@ -159,6 +234,40 @@ describe('parsePvpSnapshot', () => {
     expect(parsePvpSnapshot({ ...freshPvpSnapshot(), phase: 'reveal', position: POSITION, analysis: undefined })).toBeUndefined();
     expect(parsePvpSnapshot({ ...freshPvpSnapshot(), analysingIndex: -1 })).toBeUndefined();
   });
+
+  it('rejects a position with a corrupt FEN or an illegal last move', () => {
+    expect(parsePvpSnapshot({ ...freshPvpSnapshot(), phase: 'guessing', position: { ...POSITION, fen: 'not a fen' } })).toBeUndefined();
+    expect(parsePvpSnapshot({ ...freshPvpSnapshot(), phase: 'guessing', position: { ...POSITION, moves: ['zz99'] } })).toBeUndefined();
+  });
+
+  it('rejects an analysis whose fen does not match the stored position', () => {
+    expect(
+      parsePvpSnapshot({
+        ...freshPvpSnapshot(),
+        phase: 'reveal',
+        position: POSITION,
+        analysis: { ...ANALYSIS, fen: '8/8/8/8/8/8/8/7k w - - 0 1' },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('rejects results.length inconsistent with roundIndex/phase', () => {
+    expect(
+      parsePvpSnapshot({
+        ...freshPvpSnapshot(),
+        phase: 'handover',
+        position: POSITION,
+        roundIndex: 1,
+        results: [], // needs one entry when roundIndex is 1
+      }),
+    ).toBeUndefined();
+    expect(parsePvpSnapshot({ ...freshPvpSnapshot(), phase: 'results', results: [] })).toBeUndefined(); // needs ROUNDS entries
+  });
+
+  it('rejects a sliderCp/guess1Cp outside the slider range', () => {
+    expect(parsePvpSnapshot({ ...freshPvpSnapshot(), sliderCp: -100000 })).toBeUndefined();
+    expect(parsePvpSnapshot({ ...freshPvpSnapshot(), guess1Cp: 100000 })).toBeUndefined();
+  });
 });
 
 describe('parseAnalysisBoardSnapshot', () => {
@@ -175,5 +284,10 @@ describe('parseAnalysisBoardSnapshot', () => {
     expect(parseAnalysisBoardSnapshot({})).toBeUndefined();
     expect(parseAnalysisBoardSnapshot({ seedFen: POSITION.fen, history: [] })).toBeUndefined(); // empty history
     expect(parseAnalysisBoardSnapshot({ seedFen: POSITION.fen, history: [{ fen: 1 }] })).toBeUndefined();
+  });
+
+  it('rejects a corrupt seedFen or a corrupt history entry fen (never reaches positionFromFen unguarded)', () => {
+    expect(parseAnalysisBoardSnapshot({ seedFen: 'not a fen', history: [{ fen: POSITION.fen }] })).toBeUndefined();
+    expect(parseAnalysisBoardSnapshot({ seedFen: POSITION.fen, history: [{ fen: POSITION.fen }, { fen: 'not a fen' }] })).toBeUndefined();
   });
 });

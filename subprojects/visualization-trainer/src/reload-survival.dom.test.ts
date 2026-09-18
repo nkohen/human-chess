@@ -168,3 +168,39 @@ describe('MemorizeTrainer: a restored phase paints on the very first render, wit
     expect(screen.getByText('Play again')).toBeTruthy();
   });
 });
+
+// Review item 2: a fresh #/visualization?fen=... hand-off (puzzles' "Memorize this position", or
+// any future sender) must win over a persisted mid-session Memorize snapshot — not be silently
+// dropped in favour of restoring the old session, which is what happened before firstFen wired
+// into a clearPersisted-above-usePersistedState hook (BotRatingTest.tsx's own pattern for the
+// same problem).
+describe('VisualizationTrainer: a fresh hand-off wins over a persisted mid-session Memorize snapshot', () => {
+  afterEach(() => {
+    window.location.hash = '';
+  });
+
+  it('lands on the Memorize settings screen with the hand-off notice, and strips the query string', () => {
+    const midSession: MemorizeSnapshot = {
+      studySeconds: 20,
+      source: 'curated',
+      sessionFens: [START_FEN],
+      results: [],
+      phase: { kind: 'studying', index: 0, fen: START_FEN, studySeconds: 20, endAt: Date.now() + 15_000 },
+    };
+    localStorage.setItem(VT_MEMORIZE_KEY, JSON.stringify(midSession));
+    window.location.hash = `#/visualization?fen=${encodeURIComponent(START_FEN)}`;
+
+    render(createElement(VisualizationTrainer, { engine: undefined }));
+
+    // Settings, not the restored studying phase: the hand-off won.
+    expect(screen.getByText('Visualization trainer — Memorize')).toBeTruthy();
+    expect(screen.getByText('Start')).toBeTruthy();
+    expect(screen.queryByText(/Study it:/)).toBeNull();
+    expect(screen.getByText('The position handed over from the other tool will be the first one to memorize.')).toBeTruthy();
+    // consumeHandoffParams strips the query string via history.replaceState as it reads it.
+    expect(window.location.hash).toBe('#/visualization');
+    // Study preferences carry over from the old session (the learner's own setting), even though
+    // the session itself restarted.
+    expect(screen.getByText('Curated (your games)').closest('button')?.getAttribute('aria-pressed')).toBe('true');
+  });
+});

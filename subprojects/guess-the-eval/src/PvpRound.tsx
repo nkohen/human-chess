@@ -25,14 +25,14 @@ import { Board, MoveLine } from '@human-chess/board';
 import { EngineError, formatPawns, formatScore, whitePerspective, type UciEngine } from '@human-chess/engine';
 import { generateRecipePosition, pickRecipe } from '@human-chess/positions';
 import { inCheck, positionFromFen, turn, uciSquares, type SquareName } from '@human-chess/rules';
-import { Button, Field, Page, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
+import { Button, clearPersisted, Field, Page, Status, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
 import { AnalysisBoard } from './AnalysisBoard';
 import { Countdown } from './Countdown';
 import { EvalScale } from './EvalScale';
 import { idleBoard } from './idleBoard';
 import { ROUNDS } from './rounds';
 import { MAX_POINTS, points, SLIDER_MAX_CP, SLIDER_MIN_CP } from './scoring';
-import { freshPvpSnapshot, GTE_PVP_KEY, parsePvpSnapshot } from './snapshot';
+import { freshPvpSnapshot, GTE_ANALYSIS_BOARD_KEY, GTE_PVP_KEY, parsePvpSnapshot } from './snapshot';
 import { pvpSecondPlayerLimitMs, type TimeLimitSec } from './timing';
 import { useCountdown } from './useCountdown';
 import './guess-the-eval.css';
@@ -117,15 +117,20 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readyEngine, phase, generation]);
 
+  // Reads `s.turnPlayer`/`s.phase` from the functional update, not the outer closure, and is a
+  // no-op unless `s.phase === 'guessing'` — a second call for the same guess (React StrictMode's
+  // deliberate double-invoke, or an already-fired countdown deadline reported again) must not
+  // overwrite an already-recorded guess1Cp/guess1UsedMs or advance turnPlayer/roundIndex twice.
   const lockInActive = useCallback(
     (usedMs: number, timedOut: boolean) => {
-      if (turnPlayer === 1) {
-        setSnap(s => ({ ...s, guess1Cp: s.sliderCp, guess1UsedMs: usedMs, timedOut1: timedOut, sliderCp: 0, turnPlayer: 2, phase: 'handover', endAt: undefined }));
-      } else {
-        setSnap(s => ({ ...s, timedOut2: timedOut, phase: 'evaluating' }));
-      }
+      setSnap(s => {
+        if (s.phase !== 'guessing') return s;
+        return s.turnPlayer === 1
+          ? { ...s, guess1Cp: s.sliderCp, guess1UsedMs: usedMs, timedOut1: timedOut, sliderCp: 0, turnPlayer: 2, phase: 'handover', endAt: undefined }
+          : { ...s, timedOut2: timedOut, phase: 'evaluating' };
+      });
     },
-    [turnPlayer, setSnap],
+    [setSnap],
   );
 
   const activeLimitMs = turnPlayer === 1 ? limitSec * 1000 : pvpSecondPlayerLimitMs(limitSec, guess1UsedMs);
@@ -153,8 +158,10 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
         if (cancelled) return;
         const line = a.lines[0];
         if (!line) {
+          // Leave `phase` at 'evaluating' — see SoloRound.tsx's matching comment. Bouncing back to
+          // 'guessing' here used to re-arm useCountdown against the same already-expired `endAt`
+          // and loop straight into another failed analyse() call.
           setError(`The engine failed: ${a.engine} returned no evaluation line for this position`);
-          setSnap(s => ({ ...s, phase: 'guessing' }));
           return;
         }
         const sideToMove = turn(positionFromFen(position.fen));
@@ -184,7 +191,6 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
       .catch((err: unknown) => {
         if (cancelled) return;
         setError(`The engine failed: ${err instanceof Error ? err.message : String(err)}`);
-        setSnap(s => ({ ...s, phase: 'guessing' }));
       });
     return () => {
       cancelled = true;
@@ -295,7 +301,17 @@ export function PvpRound({ engine, player1, player2, limitSec, onExit }: PvpRoun
             <li key={i} className="gte-summary-row" title={r.recipeDescription}>
               <div className="gte-pvp-row-header">
                 <span>Position {i + 1}</span>
-                <Button variant="secondary" size="sm" onClick={() => setSnap(s => ({ ...s, analysingIndex: i }))}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    // Same reasoning as SoloRound's "Analyse this position": a fresh click always
+                    // starts from the untouched position for this row, even when it happens to
+                    // share a fen with whatever the board was last showing.
+                    clearPersisted(GTE_ANALYSIS_BOARD_KEY);
+                    setSnap(s => ({ ...s, analysingIndex: i }));
+                  }}
+                >
                   Analyse
                 </Button>
               </div>

@@ -63,6 +63,27 @@ describe('parseLinesSnapshot', () => {
     // 'revealed' needs the exercise that produced it — never silently re-mined (A1).
     expect(parseLinesSnapshot({ ...freshLinesSnapshot(), revealed: true, exercise: undefined })).toBeUndefined();
   });
+
+  it('rejects a corrupt startPosition fen or an illegal last move (never reaches positionFromFen/uciSquares unguarded)', () => {
+    expect(parseLinesSnapshot({ ...freshLinesSnapshot(), startPosition: { fen: 'not a fen', moves: ['a1a2'] } })).toBeUndefined();
+    expect(parseLinesSnapshot({ ...freshLinesSnapshot(), startPosition: { fen: START_POSITION.fen, moves: ['zz99'] } })).toBeUndefined();
+  });
+
+  it('rejects an exercise whose ucis do not replay legally from startFen', () => {
+    expect(
+      parseLinesSnapshot({ ...freshLinesSnapshot(), startPosition: START_POSITION, exercise: { startFen: START_POSITION.fen, ucis: ['a1a9'] } }),
+    ).toBeUndefined();
+  });
+
+  it('rejects a stored exercise whose startFen differs from startPosition.fen', () => {
+    expect(
+      parseLinesSnapshot({
+        ...freshLinesSnapshot(),
+        startPosition: START_POSITION,
+        exercise: { startFen: '7k/8/8/8/8/8/8/K7 w - - 0 1', ucis: ['a1a2'] },
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe('parseMemorizeSnapshot', () => {
@@ -75,7 +96,7 @@ describe('parseMemorizeSnapshot', () => {
     const snap: MemorizeSnapshot = {
       studySeconds: 20,
       source: 'random',
-      sessionFens: [START_POSITION.fen, '8/8/8/8/8/8/8/7k w - - 0 1'],
+      sessionFens: [START_POSITION.fen, '7k/8/8/8/8/8/8/K7 w - - 0 1'],
       results: [],
       phase: { kind: 'studying', index: 0, fen: START_POSITION.fen, studySeconds: 20, endAt: Date.now() + 15_000 },
     };
@@ -138,6 +159,46 @@ describe('parseMemorizeSnapshot', () => {
         ...fresh,
         sessionFens: [START_POSITION.fen],
         phase: { kind: 'studying', index: 0, fen: '8/8/8/8/8/8/8/7k w - - 0 1', studySeconds: 10, endAt: Date.now() + 1000 },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('rejects a corrupt sessionFens entry (never reaches positionFromFen unguarded)', () => {
+    expect(
+      parseMemorizeSnapshot({
+        ...freshMemorizeSnapshot(10, 'random'),
+        sessionFens: ['not a fen'],
+        phase: { kind: 'studying', index: 0, fen: 'not a fen', studySeconds: 10, endAt: Date.now() + 1000 },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('rejects results.length inconsistent with a mid-session phase.index', () => {
+    // 'studying'/'rebuilding' haven't recorded this round's result yet: results.length must equal
+    // phase.index, not phase.index + 1.
+    expect(
+      parseMemorizeSnapshot({
+        ...freshMemorizeSnapshot(10, 'random'),
+        sessionFens: [START_POSITION.fen],
+        results: [{ studySeconds: 10, rebuildMs: 4200, score: SCORE }],
+        phase: { kind: 'studying', index: 0, fen: START_POSITION.fen, studySeconds: 10, endAt: Date.now() + 1000 },
+      }),
+    ).toBeUndefined();
+    // 'reviewed' has recorded it: results.length must equal phase.index + 1, not phase.index.
+    expect(
+      parseMemorizeSnapshot({
+        ...freshMemorizeSnapshot(10, 'random'),
+        sessionFens: [START_POSITION.fen],
+        results: [],
+        phase: {
+          kind: 'reviewed',
+          index: 0,
+          fen: START_POSITION.fen,
+          studySeconds: 10,
+          rebuildMs: 4200,
+          placement: '8/8/8/8/8/8/8/K7',
+          score: SCORE,
+        },
       }),
     ).toBeUndefined();
   });

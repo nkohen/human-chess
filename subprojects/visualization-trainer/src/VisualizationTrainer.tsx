@@ -46,7 +46,14 @@ function handoffFen(): string | undefined {
 export function VisualizationTrainer({ engine }: VisualizationTrainerProps): React.JSX.Element {
   const [firstFen] = useState(handoffFen);
   // A handed-over position is only meaningful to Memorize, so it wins over the remembered mode.
-  const [mode, setMode] = useState<TrainerMode>(() => (firstFen ? 'memorize' : loadTrainerMode()));
+  const [mode, setMode] = useState<TrainerMode>(() => {
+    if (!firstFen) return loadTrainerMode();
+    // Persisted immediately, not just held in this render's state: a reload right after landing
+    // here (before the learner touches the mode switch) must stay on Memorize too, not fall back
+    // to whatever mode was last remembered before this hand-off arrived.
+    saveTrainerMode('memorize');
+    return 'memorize';
+  });
 
   const changeMode = (next: TrainerMode): void => {
     setMode(next);

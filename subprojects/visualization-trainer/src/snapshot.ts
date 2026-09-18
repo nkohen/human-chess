@@ -10,9 +10,24 @@
 // effect (MemorizeTrainer.tsx) re-evaluates that deadline against `Date.now()` on the very first
 // render after a restore exactly the way it does on every other tick, so a clock that expired
 // while the tab was away moves straight on to rebuilding without any extra code here.
+import { endPosition } from '@human-chess/facts';
+import { positionFromFen, uciSquares } from '@human-chess/rules';
 import { isBoolean, isFiniteNumber, isOneOf, isRecord, isString, isStringArray } from '@human-chess/ui';
 import { randomStartPosition, ROUNDS } from './exercise';
 import { MEMORIZE_ROUNDS, STUDY_SECONDS_OPTIONS, type MemorizeScore, type MemorizeSource, type SquareDiff, type StudySeconds } from './memorize';
+
+/** A FEN that fails to parse (corrupt storage, a hand-edited value) would otherwise throw deep
+ * inside a render (positionFromFen/endPosition are called unguarded by every screen); rejecting it
+ * here means the screen starts fresh instead of white-screening
+ * (docs/design/2026-09-18-reload-survival.md). */
+function isLegalFen(fen: string): boolean {
+  try {
+    positionFromFen(fen);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function isStudySeconds(v: unknown): v is StudySeconds {
   return isFiniteNumber(v) && (STUDY_SECONDS_OPTIONS as readonly number[]).includes(v);
@@ -84,11 +99,30 @@ export interface LinesSnapshot {
 }
 
 function isStartPositionSnapshot(v: unknown): v is StartPositionSnapshot {
-  return isRecord(v) && isString(v.fen) && isStringArray(v.moves);
+  if (!isRecord(v) || !isString(v.fen) || !isStringArray(v.moves)) return false;
+  if (!isLegalFen(v.fen)) return false;
+  // Only the last move is ever read back out (uciSquares, for the "previous move" highlight), but
+  // it is read unguarded, so a corrupt entry there needs the same rejection as a corrupt fen.
+  const lastMove = v.moves[v.moves.length - 1];
+  if (lastMove === undefined) return true;
+  try {
+    uciSquares(lastMove);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isExerciseSnapshot(v: unknown): v is ExerciseSnapshot {
-  return isRecord(v) && isString(v.startFen) && isStringArray(v.ucis) && v.ucis.length > 0;
+  if (!isRecord(v) || !isString(v.startFen) || !isStringArray(v.ucis) || v.ucis.length === 0) return false;
+  // The line must actually replay legally from startFen (A1: never a re-mined/fabricated line);
+  // an illegal or corrupt uci list would otherwise throw inside endPosition/questionsFor at render.
+  try {
+    endPosition(v.startFen, v.ucis);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isAnswersSnapshot(v: unknown): v is AnswersSnapshot {
@@ -118,6 +152,9 @@ export function parseLinesSnapshot(raw: unknown): LinesSnapshot | undefined {
   if (!isBoolean(revealed) || !isTally(tally) || !isRound(round) || !isBoolean(sessionDone)) return undefined;
   // A revealed exercise must carry the line that produced the reveal, never a re-mined one (A1).
   if (revealed && !exercise) return undefined;
+  // An exercise from a previous startPosition (stale storage, a hand-edited value) would otherwise
+  // show as this position's own line.
+  if (exercise && exercise.startFen !== startPosition.fen) return undefined;
   return { startPosition, exercise, answers, revealed, tally, round, sessionDone };
 }
 
@@ -187,13 +224,22 @@ export function parseMemorizeSnapshot(raw: unknown): MemorizeSnapshot | undefine
   if (!isRecord(raw)) return undefined;
   const { studySeconds, source, sessionFens, results, phase } = raw;
   if (!isStudySeconds(studySeconds) || !isMemorizeSource(source)) return undefined;
-  if (!isStringArray(sessionFens) || sessionFens.length > MEMORIZE_ROUNDS) return undefined;
+  if (!isStringArray(sessionFens) || sessionFens.length > MEMORIZE_ROUNDS || !sessionFens.every(isLegalFen)) return undefined;
   if (!Array.isArray(results) || !results.every(isMemorizeResult)) return undefined;
   if (!isMemorizePhase(phase)) return undefined;
   // Every mid-session phase needs an index inside the stored sessionFens, and the position it
   // names to match — a stale/corrupt combination is rejected as a whole, never half-restored.
   if (phase.kind !== 'settings' && phase.kind !== 'summary') {
     if (phase.index < 0 || phase.index >= sessionFens.length || sessionFens[phase.index] !== phase.fen) return undefined;
+  }
+  // results is built up one entry per completed round as the session progresses: studying/
+  // rebuilding haven't recorded this round's result yet (results.length === phase.index), while
+  // reviewed has (results.length === phase.index + 1). A mismatch means a stale/corrupt snapshot.
+  if (phase.kind === 'studying' || phase.kind === 'rebuilding') {
+    if (results.length !== phase.index) return undefined;
+  }
+  if (phase.kind === 'reviewed') {
+    if (results.length !== phase.index + 1) return undefined;
   }
   return { studySeconds, source, sessionFens, results, phase };
 }
