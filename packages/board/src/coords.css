@@ -13,3 +13,26 @@
   padding-right: 3px;
   box-sizing: border-box;
 }
+
+/* Legibility of the rank/file labels. chessground's brown theme alternates each coord between a
+   dark and a light colour so it contrasts with the square beneath on lichess's bordered layout;
+   on our bare (marginless) board the labels can land on a same-tone square — the rank numbers in
+   particular render dark-on-dark / light-on-light (verified 2026-09-18, black-oriented board).
+   Rather than depend on getting chessground's per-orientation parity to line up with our squares,
+   give each coord a thin halo in the OPPOSITE tone to its text, matched to the theme's own dark
+   and light selector sets, so every label stays legible on any square in either orientation. */
+.orientation-white .ranks :nth-child(odd),
+.orientation-white .files :nth-child(even),
+.orientation-black .ranks :nth-child(even),
+.orientation-black .files :nth-child(odd) {
+  /* dark-coloured labels: light halo */
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.9), 0 0 2px rgba(255, 255, 255, 0.7);
+}
+
+.orientation-white .ranks :nth-child(even),
+.orientation-white .files :nth-child(odd),
+.orientation-black .ranks :nth-child(odd),
+.orientation-black .files :nth-child(even) {
+  /* light-coloured labels: dark halo */
+  text-shadow: 0 0 1px rgba(0, 0, 0, 0.8), 0 0 2px rgba(0, 0, 0, 0.6);
+}

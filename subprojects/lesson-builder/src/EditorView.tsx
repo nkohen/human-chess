@@ -343,28 +343,29 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
     </Panel>
   );
 
+  const lessonMetaPanel = (
+    <Panel title="Lesson">
+      <Field label="Title" htmlFor="lb-lesson-title">
+        <input
+          id="lb-lesson-title"
+          value={lesson.title}
+          onChange={e => onLessonChange({ ...lesson, title: e.target.value, updatedAt: Date.now() })}
+        />
+      </Field>
+      <Field label="Description" htmlFor="lb-lesson-desc">
+        <textarea
+          id="lb-lesson-desc"
+          rows={3}
+          value={lesson.description}
+          onChange={e => onLessonChange({ ...lesson, description: e.target.value, updatedAt: Date.now() })}
+        />
+      </Field>
+    </Panel>
+  );
+
   return (
     <Workbench
       title={lesson.title || 'Untitled lesson'}
-      aside={
-        <Panel title="Lesson">
-          <Field label="Title" htmlFor="lb-lesson-title">
-            <input
-              id="lb-lesson-title"
-              value={lesson.title}
-              onChange={e => onLessonChange({ ...lesson, title: e.target.value, updatedAt: Date.now() })}
-            />
-          </Field>
-          <Field label="Description" htmlFor="lb-lesson-desc">
-            <textarea
-              id="lb-lesson-desc"
-              rows={3}
-              value={lesson.description}
-              onChange={e => onLessonChange({ ...lesson, description: e.target.value, updatedAt: Date.now() })}
-            />
-          </Field>
-        </Panel>
-      }
       footer={
         <Toolbar>
           <Button variant="quiet" onClick={onBack}>
@@ -400,6 +401,7 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
         </Button>
       </Panel>
       {step ? renderStepPanel(step) : <Status kind="info">No steps yet — add one to begin.</Status>}
+      {lessonMetaPanel}
     </Workbench>
   );
 }
