@@ -8,6 +8,7 @@ import {
   parseLessonFile,
   parseLessonList,
   parseLessonStep,
+  parsePlayOut,
   sanOfMove,
   serializeLesson,
   type Lesson,
@@ -79,6 +80,36 @@ describe('step validation', () => {
   it('rejects a shape with a bad square or brush', () => {
     expect(parseLessonStep({ id: 's', fen: TWO_ROOKS, orientation: 'white', text: '', shapes: [{ orig: 'z9', brush: 'green' }] })).toBeUndefined();
     expect(parseLessonStep({ id: 's', fen: TWO_ROOKS, orientation: 'white', text: '', shapes: [{ orig: 'a1', brush: 'purple' }] })).toBeUndefined();
+  });
+});
+
+describe('play-out validation', () => {
+  it('accepts a valid full-strength play-out', () => {
+    expect(parsePlayOut({ strength: { kind: 'max' } })).toEqual({ strength: { kind: 'max' } });
+  });
+
+  it('accepts a valid elo play-out', () => {
+    expect(parsePlayOut({ strength: { kind: 'elo', elo: 1500 } })).toEqual({ strength: { kind: 'elo', elo: 1500 } });
+  });
+
+  it('rejects a malformed strength', () => {
+    expect(parsePlayOut(undefined)).toBeUndefined();
+    expect(parsePlayOut({})).toBeUndefined();
+    expect(parsePlayOut({ strength: { kind: 'weak' } })).toBeUndefined();
+    expect(parsePlayOut({ strength: { kind: 'elo', elo: 'high' } })).toBeUndefined();
+    expect(parsePlayOut({ strength: { kind: 'elo', elo: NaN } })).toBeUndefined();
+  });
+
+  it('parseLessonStep accepts a step with a valid playOut', () => {
+    const step = parseLessonStep({ id: 's', fen: TWO_ROOKS, orientation: 'white', text: '', shapes: [], playOut: { strength: { kind: 'elo', elo: 1800 } } });
+    expect(step?.playOut).toEqual({ strength: { kind: 'elo', elo: 1800 } });
+  });
+
+  it('serialize -> parse round-trips a step with playOut', () => {
+    const lesson = sampleLesson();
+    lesson.steps.push({ id: 's3', fen: TWO_ROOKS, orientation: 'black', text: 'Play it out.', shapes: [], playOut: { strength: { kind: 'max' } } });
+    const restored = parseLessonFile(serializeLesson(lesson));
+    expect(restored).toEqual(lesson);
   });
 });
 

@@ -3,7 +3,7 @@
 // board already offered as a legal destination, or validated with @human-chess/lessons'
 // isLegalMoveFrom before being stored), and is careful about exactOptionalPropertyTypes — an
 // absent `prompt` is an omitted key, never an explicit `prompt: undefined`.
-import { isLegalMoveFrom, type LessonChallenge, type LessonStep } from '@human-chess/lessons';
+import { isLegalMoveFrom, type LessonChallenge, type LessonPlayOut, type LessonStep } from '@human-chess/lessons';
 
 /** True when `uci` is one of the challenge's accepted answers — what the player uses to judge a
  * played move. */
@@ -35,13 +35,29 @@ export function withChallengePrompt(challenge: LessonChallenge, prompt: string):
   return { ...challenge, prompt: trimmed };
 }
 
+/** Sets the step's challenge, clearing any play-out — the learner task is mutually exclusive
+ * (spec: play-out replaces the one-move challenge). */
 export function withChallenge(step: LessonStep, challenge: LessonChallenge): LessonStep {
-  return { ...step, challenge };
+  const next = withoutPlayOut(step);
+  return { ...next, challenge };
 }
 
 /** Removes the `challenge` key entirely (never sets it to `undefined` — exactOptionalPropertyTypes). */
 export function withoutChallenge(step: LessonStep): LessonStep {
   const { challenge: _drop, ...rest } = step;
+  return rest;
+}
+
+/** Sets the step's play-out setting, clearing any challenge — the learner task is mutually
+ * exclusive (spec: play-out replaces the one-move challenge). */
+export function withPlayOut(step: LessonStep, playOut: LessonPlayOut): LessonStep {
+  const next = withoutChallenge(step);
+  return { ...next, playOut };
+}
+
+/** Removes the `playOut` key entirely (never sets it to `undefined` — exactOptionalPropertyTypes). */
+export function withoutPlayOut(step: LessonStep): LessonStep {
+  const { playOut: _drop, ...rest } = step;
   return rest;
 }
 

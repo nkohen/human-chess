@@ -126,7 +126,7 @@ export function App(): React.JSX.Element {
       ) : route === '#/openings' ? (
         <OpeningsBuilder engine={engine} />
       ) : route === '#/lesson-builder' ? (
-        <LessonBuilder />
+        <LessonBuilder engine={engine} />
       ) : (
         <Page width="wide">
           <CardGrid>

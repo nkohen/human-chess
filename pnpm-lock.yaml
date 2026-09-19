@@ -379,9 +379,15 @@ importers:
       '@human-chess/board':
         specifier: workspace:*
         version: link:../../packages/board
+      '@human-chess/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@human-chess/lessons':
         specifier: workspace:*
         version: link:../../packages/lessons
+      '@human-chess/play':
+        specifier: workspace:*
+        version: link:../../packages/play
       '@human-chess/rules':
         specifier: workspace:*
         version: link:../../packages/rules

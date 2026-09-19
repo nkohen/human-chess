@@ -34,4 +34,14 @@ describe('parseViewState', () => {
   it('truncates a fractional stepIndex', () => {
     expect(parseViewState({ view: 'library', stepIndex: 2.9, solved: false })?.stepIndex).toBe(2);
   });
+
+  it('round-trips a valid moves list', () => {
+    const state = parseViewState({ view: 'player', lessonId: 'l1', stepIndex: 0, solved: false, moves: ['e2e4', 'e7e5'] });
+    expect(state?.moves).toEqual(['e2e4', 'e7e5']);
+  });
+
+  it('rejects a non-array-of-strings moves', () => {
+    expect(parseViewState({ view: 'player', stepIndex: 0, solved: false, moves: 'e2e4' })).toBeUndefined();
+    expect(parseViewState({ view: 'player', stepIndex: 0, solved: false, moves: [1, 2] })).toBeUndefined();
+  });
 });

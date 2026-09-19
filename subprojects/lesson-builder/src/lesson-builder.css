@@ -98,13 +98,8 @@
   letter-spacing: 0.04em;
 }
 
-.lb-challenge-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--hc-space-2);
-}
-
-.lb-challenge {
+.lb-challenge,
+.lb-playout {
   display: flex;
   flex-direction: column;
   gap: var(--hc-space-2);
@@ -189,5 +184,10 @@
 
 .lb-player-text {
   white-space: pre-wrap;
+  margin: 0 0 var(--hc-space-2);
+}
+
+.lb-player-colour {
+  color: var(--hc-text-muted);
   margin: 0 0 var(--hc-space-2);
 }

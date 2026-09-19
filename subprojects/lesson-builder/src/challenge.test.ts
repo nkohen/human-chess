@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { LessonChallenge, LessonStep } from '@human-chess/lessons';
-import { addChallengeAnswer, checkChallengeAnswer, removeChallengeAnswer, withChallenge, withChallengePrompt, withoutChallenge, withStepFen } from './challenge';
+import type { LessonChallenge, LessonPlayOut, LessonStep } from '@human-chess/lessons';
+import {
+  addChallengeAnswer,
+  checkChallengeAnswer,
+  removeChallengeAnswer,
+  withChallenge,
+  withChallengePrompt,
+  withoutChallenge,
+  withoutPlayOut,
+  withPlayOut,
+  withStepFen,
+} from './challenge';
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const STEP: LessonStep = { id: 's1', fen: START, orientation: 'white', text: '', shapes: [] };
@@ -46,6 +56,27 @@ describe('withChallenge / withoutChallenge', () => {
     expect(withC.challenge?.answers).toEqual(['e2e4']);
     const withoutC = withoutChallenge(withC);
     expect('challenge' in withoutC).toBe(false);
+  });
+});
+
+describe('withPlayOut / withoutPlayOut', () => {
+  it('attaches and removes the playOut key without ever assigning undefined', () => {
+    const playOut: LessonPlayOut = { strength: { kind: 'max' } };
+    const withP = withPlayOut(STEP, playOut);
+    expect(withP.playOut).toEqual(playOut);
+    const withoutP = withoutPlayOut(withP);
+    expect('playOut' in withoutP).toBe(false);
+  });
+
+  it('the learner task is mutually exclusive: withPlayOut clears a challenge, withChallenge clears a play-out', () => {
+    const withC = withChallenge(STEP, { answers: ['e2e4'] });
+    const swapped = withPlayOut(withC, { strength: { kind: 'max' } });
+    expect('challenge' in swapped).toBe(false);
+    expect(swapped.playOut).toEqual({ strength: { kind: 'max' } });
+
+    const backToChallenge = withChallenge(swapped, { answers: ['d2d4'] });
+    expect('playOut' in backToChallenge).toBe(false);
+    expect(backToChallenge.challenge?.answers).toEqual(['d2d4']);
   });
 });
 

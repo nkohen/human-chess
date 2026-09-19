@@ -20,12 +20,28 @@
 // uses for its own path state (subprojects/openings-builder/src/BuilderView.tsx).
 import { useState, type ReactNode } from 'react';
 import { Board, BoardEditor, PiecePalette, type EditorTool } from '@human-chess/board';
-import { composeFen, emptyStep, isLegalFen, sanOfMove, type Lesson, type LessonStep } from '@human-chess/lessons';
+import { composeFen, emptyStep, isLegalFen, sanOfMove, type Lesson, type LessonStep, type LessonStrength } from '@human-chess/lessons';
+import { MAX_UCI_ELO, MIN_UCI_ELO } from '@human-chess/play';
 import { inCheck, legalDests, playMove, positionFromFen, START_FEN, turn, type Color, type Role, type SquareName } from '@human-chess/rules';
 import { Button, Field, Panel, SegmentedControl, Status, Toolbar, Workbench } from '@human-chess/ui';
-import { addChallengeAnswer, removeChallengeAnswer, withChallenge, withChallengePrompt, withoutChallenge, withStepFen } from './challenge';
+import {
+  addChallengeAnswer,
+  removeChallengeAnswer,
+  withChallenge,
+  withChallengePrompt,
+  withoutChallenge,
+  withoutPlayOut,
+  withPlayOut,
+  withStepFen,
+} from './challenge';
 import { genStepId } from './ids';
 import { insertStep, moveStep, removeStep } from './steps';
+
+/** A reasonable starting Elo to offer when the author first switches to "Limited" — well inside
+ * Stockfish's own UCI_Elo range (MIN_UCI_ELO..MAX_UCI_ELO), not a claim about any player's rating. */
+const DEFAULT_LIMITED_ELO = 1500;
+
+type LearnerTask = 'none' | 'challenge' | 'playout';
 
 export interface EditorViewProps {
   lesson: Lesson;
@@ -153,15 +169,40 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
     setAddingChallenge(false);
   };
 
-  const toggleChallenge = (checked: boolean): void => {
+  // The learner task is mutually exclusive (product decision: play-out replaces the one-move
+  // challenge). `withChallenge`/`withPlayOut` each already clear the other key, so this only has
+  // to manage the transient "adding a challenge but no answer recorded yet" UI state.
+  const learnerTask: LearnerTask = step?.playOut ? 'playout' : step?.challenge !== undefined || addingChallenge ? 'challenge' : 'none';
+
+  const setLearnerTask = (task: LearnerTask): void => {
     if (!step) return;
-    if (checked) {
+    setRecordingAnswer(false);
+    if (task === 'none') {
+      setAddingChallenge(false);
+      if (step.challenge) updateStep(withoutChallenge(step));
+      else if (step.playOut) updateStep(withoutPlayOut(step));
+    } else if (task === 'challenge') {
       setAddingChallenge(true);
+      if (step.playOut) updateStep(withoutPlayOut(step));
     } else {
       setAddingChallenge(false);
-      setRecordingAnswer(false);
-      if (step.challenge) updateStep(withoutChallenge(step));
+      updateStep(withPlayOut(step, step.playOut ?? { strength: { kind: 'max' } }));
     }
+  };
+
+  const setDifficulty = (kind: LessonStrength['kind']): void => {
+    if (!step?.playOut) return;
+    updateStep(
+      withPlayOut(
+        step,
+        kind === 'max' ? { strength: { kind: 'max' } } : { strength: { kind: 'elo', elo: step.playOut.strength.kind === 'elo' ? step.playOut.strength.elo : DEFAULT_LIMITED_ELO } },
+      ),
+    );
+  };
+
+  const setEloTarget = (elo: number): void => {
+    if (!step?.playOut || Number.isNaN(elo)) return;
+    updateStep(withPlayOut(step, { strength: { kind: 'elo', elo } }));
   };
 
   const removeAnswer = (uci: string): void => {
@@ -305,12 +346,18 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
       )}
 
       <fieldset className="lb-challenge-block">
-        <legend>Challenge</legend>
-        <label className="lb-challenge-toggle">
-          <input type="checkbox" checked={s.challenge !== undefined || addingChallenge} onChange={e => toggleChallenge(e.target.checked)} />
-          Ask the learner to play a move
-        </label>
-        {(s.challenge !== undefined || addingChallenge) && (
+        <legend>Learner task</legend>
+        <SegmentedControl
+          ariaLabel="Learner task"
+          options={[
+            { value: 'none', label: 'None' },
+            { value: 'challenge', label: 'Play one move' },
+            { value: 'playout', label: 'Play it out' },
+          ]}
+          value={learnerTask}
+          onChange={setLearnerTask}
+        />
+        {learnerTask === 'challenge' && (
           <div className="lb-challenge">
             {s.challenge && s.challenge.answers.length > 0 && (
               <ul className="lb-challenge-answers">
@@ -345,6 +392,34 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
                     const challenge = s.challenge;
                     if (challenge) updateStep(withChallenge(s, withChallengePrompt(challenge, e.target.value)));
                   }}
+                />
+              </Field>
+            )}
+          </div>
+        )}
+        {learnerTask === 'playout' && s.playOut && (
+          <div className="lb-playout">
+            <Field label="Difficulty">
+              <SegmentedControl
+                ariaLabel="Play-out difficulty"
+                options={[
+                  { value: 'max', label: 'Full strength' },
+                  { value: 'elo', label: 'Limited' },
+                ]}
+                value={s.playOut.strength.kind}
+                onChange={setDifficulty}
+              />
+            </Field>
+            {s.playOut.strength.kind === 'elo' && (
+              <Field label="Target Elo" htmlFor="lb-playout-elo">
+                <input
+                  id="lb-playout-elo"
+                  type="number"
+                  min={MIN_UCI_ELO}
+                  max={MAX_UCI_ELO}
+                  step={10}
+                  value={s.playOut.strength.elo}
+                  onChange={e => setEloTarget(e.target.valueAsNumber)}
                 />
               </Field>
             )}

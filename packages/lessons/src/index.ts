@@ -32,6 +32,16 @@ export interface LessonChallenge {
   prompt?: string;
 }
 
+/** The author's chosen engine difficulty for a play-out step: full strength, or a target UCI
+ * Elo. `elo` is only validated here as a finite number — clamping to the engine's actual
+ * UCI_Elo range (@human-chess/play's MIN_UCI_ELO/MAX_UCI_ELO) is the Player's job when it builds
+ * the opponent, so this package never depends on @human-chess/play. */
+export type LessonStrength = { kind: 'max' } | { kind: 'elo'; elo: number };
+
+export interface LessonPlayOut {
+  strength: LessonStrength;
+}
+
 export interface LessonStep {
   id: string;
   /** Full FEN of the position shown; always a legal position (validated through the rules library). */
@@ -42,6 +52,10 @@ export interface LessonStep {
   shapes: LessonShape[];
   /** Present exactly when this step asks the learner to play a move before continuing. */
   challenge?: LessonChallenge;
+  /** Present exactly when this step asks the learner to play the position out to completion
+   * against the engine, as the `orientation` side. Takes precedence over `challenge` — a step
+   * with both set is played out, not challenged (enforced by the editor/player, not here). */
+  playOut?: LessonPlayOut;
 }
 
 export interface Lesson {
@@ -101,8 +115,14 @@ export function composeFen(placement: string, turn: Color): string {
 
 // --- validation ------------------------------------------------------------------------------
 
+// Kept local (not imported from @human-chess/ui) so this schema package stays rules-only: its
+// role is validation + JSON import/export usable outside a React/DOM context, and @human-chess/ui's
+// barrel pulls in React and presentation CSS. Two one-line guards are not worth that dependency.
 function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null && !Array.isArray(x);
+}
+function isFiniteNumber(x: unknown): x is number {
+  return typeof x === 'number' && Number.isFinite(x);
 }
 function isSquare(x: unknown): x is SquareName {
   return typeof x === 'string' && SQUARE_RE.test(x);
@@ -136,6 +156,19 @@ function parseChallenge(raw: unknown, fen: string): LessonChallenge | undefined 
   return challenge;
 }
 
+/** Validate a play-out difficulty setting. `strength.kind` must be `'max'` or `'elo'`; for
+ * `'elo'`, `elo` must be a finite number — the actual UCI_Elo range is @human-chess/play's
+ * concern (this package does not depend on it), so the Player clamps it when building the
+ * opponent. */
+export function parsePlayOut(raw: unknown): LessonPlayOut | undefined {
+  if (!isRecord(raw)) return undefined;
+  const strength = raw.strength;
+  if (!isRecord(strength)) return undefined;
+  if (strength.kind === 'max') return { strength: { kind: 'max' } };
+  if (strength.kind === 'elo' && isFiniteNumber(strength.elo)) return { strength: { kind: 'elo', elo: strength.elo } };
+  return undefined;
+}
+
 /** Validate one step: a legal FEN, a real orientation, storable shapes, and — if present — a
  * challenge whose answers are all legal moves from that position. Returns undefined (reject) on
  * anything that doesn't fit the current shape, so a stale or hand-edited entry never crashes a
@@ -162,6 +195,10 @@ export function parseLessonStep(raw: unknown): LessonStep | undefined {
     // realistic edit can never make an author's saved lesson vanish on reload.
     const challenge = parseChallenge(raw.challenge, raw.fen);
     if (challenge) step.challenge = challenge;
+  }
+  if (raw.playOut !== undefined) {
+    const p = parsePlayOut(raw.playOut);
+    if (p) step.playOut = p;
   }
   return step;
 }

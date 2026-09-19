@@ -4,6 +4,7 @@
 // initialiser (never an effect) and validated on read via @human-chess/lessons/viewState.ts, so a
 // reload lands back exactly where the author or learner left off.
 import { useEffect } from 'react';
+import type { UciEngine } from '@human-chess/engine';
 import { emptyLesson, parseLessonList, type Lesson } from '@human-chess/lessons';
 import { usePersistedState } from '@human-chess/ui';
 import { genLessonId } from './ids';
@@ -14,7 +15,13 @@ import { PlayerView } from './PlayerView';
 import { INITIAL_VIEW_STATE, parseViewState, type LessonBuilderViewState } from './viewState';
 import './lesson-builder.css';
 
-export function LessonBuilder(): React.JSX.Element {
+export interface LessonBuilderProps {
+  /** A ready (initialised) engine, or undefined while it loads; or an Error when it could not
+   * load. Only needed by a play-out step in the player. */
+  engine: UciEngine | Error | undefined;
+}
+
+export function LessonBuilder({ engine }: LessonBuilderProps): React.JSX.Element {
   const [lessons, setLessons] = usePersistedState<Lesson[]>(LESSONS_STORAGE_KEY, [], { parse: parseLessonList });
   const [view, setView] = usePersistedState<LessonBuilderViewState>(VIEW_STORAGE_KEY, INITIAL_VIEW_STATE, { parse: parseViewState });
 
@@ -25,13 +32,13 @@ export function LessonBuilder(): React.JSX.Element {
   // nothing forever. The render below already falls back to LibraryView in the meantime.
   useEffect(() => {
     if (view.view !== 'library' && view.lessonId !== undefined && !lessons.some(l => l.id === view.lessonId)) {
-      setView({ view: 'library', stepIndex: 0, solved: false });
+      setView({ view: 'library', stepIndex: 0, solved: false, moves: [] });
     }
   }, [view.view, view.lessonId, lessons, setView]);
 
-  const goLibrary = (): void => setView({ view: 'library', stepIndex: 0, solved: false });
-  const goEditor = (lessonId: string, stepIndex: number): void => setView({ view: 'editor', lessonId, stepIndex, solved: false });
-  const goPlayer = (lessonId: string, stepIndex: number): void => setView({ view: 'player', lessonId, stepIndex, solved: false });
+  const goLibrary = (): void => setView({ view: 'library', stepIndex: 0, solved: false, moves: [] });
+  const goEditor = (lessonId: string, stepIndex: number): void => setView({ view: 'editor', lessonId, stepIndex, solved: false, moves: [] });
+  const goPlayer = (lessonId: string, stepIndex: number): void => setView({ view: 'player', lessonId, stepIndex, solved: false, moves: [] });
 
   const handleNewLesson = (): void => {
     const lesson = emptyLesson(genLessonId(), Date.now());
@@ -57,17 +64,22 @@ export function LessonBuilder(): React.JSX.Element {
   if (view.view === 'player' && currentLesson) {
     const stepIndex = Math.min(view.stepIndex, Math.max(currentLesson.steps.length - 1, 0));
     // If a reload (or a lesson edited/re-imported to fewer steps) clamps the index onto a
-    // *different* step than was saved, the persisted `solved` belonged to the old step — carrying
-    // it over would show an unsolved challenge as already solved. Only trust it when the index
-    // didn't move.
-    const solved = stepIndex === view.stepIndex && view.solved;
+    // *different* step than was saved, the persisted `solved`/`moves` belonged to the old step —
+    // carrying them over would show an unsolved challenge as already solved, or resume a play-out
+    // game on the wrong position. Only trust them when the index didn't move.
+    const indexUnchanged = stepIndex === view.stepIndex;
+    const solved = indexUnchanged && view.solved;
+    const moves = indexUnchanged ? (view.moves ?? []) : [];
     return (
       <PlayerView
         lesson={currentLesson}
         stepIndex={stepIndex}
         solved={solved}
-        onStepChange={(i, solved) => setView(v => ({ ...v, stepIndex: i, solved }))}
+        onStepChange={(i, solved) => setView(v => ({ ...v, stepIndex: i, solved, moves: [] }))}
+        moves={moves}
+        onMovesChange={m => setView(v => ({ ...v, moves: m }))}
         onBack={goLibrary}
+        engine={engine}
       />
     );
   }
