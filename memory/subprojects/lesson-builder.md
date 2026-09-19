@@ -23,8 +23,18 @@ the user's direct request is the new information that reopened it.
   `BoardBrush`). Editor mode seeds editable user shapes and reports drawn ones; player mode renders
   read-only autoShapes. `BoardEditor` (placement palette) + a side-to-move toggle + `composeFen`
   set up a step's position. Board is still the only chessground importer.
-- **Subproject:** subprojects/lesson-builder — three views (library, editor, player). No engine, no
-  network. Route `#/lesson-builder`.
+- **Subproject:** subprojects/lesson-builder — three views (library, editor, player). Route
+  `#/lesson-builder`. Takes an `engine` prop (from apps/web, like Chessitout/openings) used only by
+  a play-out step; no network.
+- **Play-out step (added 2026-09-18, commit 1563a4e):** a step's learner task can be "play it out
+  vs engine" instead of a one-move challenge (mutually exclusive). Learner plays the orientation
+  side at an author-set difficulty (full strength or a UCI Elo). Player uses `@human-chess/play`'s
+  `useEngineGame` + `maximalResistance`/`limitedStrength`; result/describeEnd come from the engine,
+  never fabricated (A1/V3). Moves persist as a UCI list and resume mid-game on reload; Next is never
+  gated by a play-out. Schema (`LessonPlayOut`/`LessonStrength`, `parsePlayOut`) lives in
+  packages/lessons and stays rules-only — elo range clamping is deferred to @human-chess/play, and
+  the `isRecord`/`isFiniteNumber` guards are kept local (importing them from @human-chess/ui would
+  drag React+CSS into the schema package — caught in review).
 - **Reload survival:** `human-chess.lesson-builder.lessons.v1` (the `Lesson[]` library, parsed with
   `parseLessonList`) and `human-chess.lesson-builder.view.v1` (view + selected lesson id + step
   index), both via `usePersistedState`, seeded in the initialiser and validated on read.
