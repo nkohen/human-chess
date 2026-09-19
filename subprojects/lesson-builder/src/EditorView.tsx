@@ -19,7 +19,7 @@
 // progress" on every step change, using the same render-time identity-change reset BuilderView
 // uses for its own path state (subprojects/openings-builder/src/BuilderView.tsx).
 import { useState, type ReactNode } from 'react';
-import { Board, BoardEditor } from '@human-chess/board';
+import { Board, BoardEditor, PiecePalette, type EditorTool } from '@human-chess/board';
 import { composeFen, emptyStep, isLegalFen, sanOfMove, type Lesson, type LessonStep } from '@human-chess/lessons';
 import { inCheck, legalDests, playMove, positionFromFen, START_FEN, turn, type Color, type Role, type SquareName } from '@human-chess/rules';
 import { Button, Field, Panel, SegmentedControl, Status, Toolbar, Workbench } from '@human-chess/ui';
@@ -52,6 +52,10 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
   const [pasteError, setPasteError] = useState<string | undefined>(undefined);
   const [recordingAnswer, setRecordingAnswer] = useState(false);
   const [addingChallenge, setAddingChallenge] = useState(false);
+  // The setup-mode palette selection. Rendered by this view (in the scrolling side column, not
+  // the board slot) so the board stays a bare square in the fit-to-square Workbench layout; the
+  // BoardEditor consumes it as a controlled tool. Transient UI, not part of the saved lesson.
+  const [tool, setTool] = useState<EditorTool | null>(null);
 
   if (uiStepId !== step?.id) {
     setUiStepId(step?.id);
@@ -61,6 +65,7 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
     setPasteError(undefined);
     setRecordingAnswer(false);
     setAddingChallenge(false);
+    setTool(null);
     setDraftPlacement(step ? step.fen.split(' ')[0]! : START_PLACEMENT);
     setToMove(step ? turn(positionFromFen(step.fen)) : 'white');
   }
@@ -203,6 +208,9 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
             commitDraft(placement, toMove);
           }}
           size={`${sizePx}px`}
+          tool={tool}
+          onToolChange={setTool}
+          renderPalette={false}
         />
       );
     }
@@ -251,6 +259,9 @@ export function EditorView({ lesson, stepIndex, onLessonChange, onStepIndexChang
 
       {positionMode === 'setup' ? (
         <div className="lb-setup">
+          <Field label="Pieces">
+            <PiecePalette value={tool} onChange={setTool} />
+          </Field>
           <Field label="Side to move">
             <SegmentedControl
               ariaLabel="Side to move"

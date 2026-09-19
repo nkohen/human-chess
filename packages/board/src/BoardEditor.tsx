@@ -46,6 +46,10 @@ import './board.css';
 // unrecognized (seen in the browser smoke run, 2026-09-16). The markup is built only from the
 // typed colour and role unions, never from user input.
 
+/** A palette selection: a piece to place, or the eraser. Exported so a caller can host the
+ * palette itself (via `PiecePalette`) and drive BoardEditor's tool as a controlled value. */
+export type EditorTool = { color: Color; role: Role } | 'erase';
+
 export interface BoardEditorProps {
   /** Piece placement, or a full FEN (chessground's own fen reader stops at the first space either way). */
   fen: string;
@@ -54,9 +58,19 @@ export interface BoardEditorProps {
   onChange: (placementFen: string) => void;
   /** CSS size of the square board; defaults to 100% of the parent's width. */
   size?: string;
+  /** Controlled active tool. When provided (with `onToolChange`), BoardEditor stops owning the
+   * tool state, so the caller can render the palette elsewhere — see `PiecePalette`. The board
+   * slot then holds only the square board, which is what the fit-to-square Workbench layout
+   * expects (a palette below the board inflates that square and clips its top rank on a phone). */
+  tool?: EditorTool | null;
+  /** Notified whenever the active tool changes (palette click, or a place/erase deselect). */
+  onToolChange?: (tool: EditorTool | null) => void;
+  /** Whether BoardEditor draws its own palette below the board. Default true (self-contained);
+   * pass false when the caller renders `PiecePalette` itself. */
+  renderPalette?: boolean;
 }
 
-type Tool = { color: Color; role: Role } | 'erase';
+type Tool = EditorTool;
 
 const PALETTE_ROLES: Role[] = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn'];
 const PALETTE: Tool[] = [
@@ -88,12 +102,47 @@ function PaletteButton({ tool, selected, onSelect }: { tool: Tool; selected: boo
   );
 }
 
+export interface PiecePaletteProps {
+  /** The currently selected tool, or null for none. */
+  value: Tool | null;
+  /** Called with the next tool: the clicked one, or null when the clicked tool was already active
+   * (clicking the active swatch toggles it off, back to free drag/select). */
+  onChange: (tool: Tool | null) => void;
+}
+
+/** The place/erase palette on its own. BoardEditor renders this below the board by default; a
+ * caller that needs the palette outside the board's square (e.g. the lesson builder, whose
+ * Workbench sizes the board to a fit-to-square slot) can render it wherever it likes and feed
+ * the selection back through BoardEditor's `tool`/`onToolChange`. */
+export function PiecePalette({ value, onChange }: PiecePaletteProps): React.JSX.Element {
+  return (
+    <div className="hc-editor-palette">
+      {PALETTE.map(t => (
+        <PaletteButton
+          key={toolId(t)}
+          tool={t}
+          selected={value !== null && toolId(value) === toolId(t)}
+          onSelect={() => onChange(value !== null && toolId(value) === toolId(t) ? null : t)}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function BoardEditor(props: BoardEditorProps): React.JSX.Element {
   const el = useRef<HTMLDivElement>(null);
   const api = useRef<Api | null>(null);
   const onChange = useRef(props.onChange);
   onChange.current = props.onChange;
-  const [tool, setTool] = useState<Tool | null>(null);
+  // Uncontrolled by default (own the tool state); controlled when the caller passes `tool`, so it
+  // can host the palette itself. `onToolChange` fires either way.
+  const [internalTool, setInternalTool] = useState<Tool | null>(null);
+  const controlled = props.tool !== undefined;
+  const tool = controlled ? props.tool ?? null : internalTool;
+  const setTool = (next: Tool | null): void => {
+    if (!controlled) setInternalTool(next);
+    props.onToolChange?.(next);
+  };
   const toolRef = useRef<Tool | null>(null);
   toolRef.current = tool;
 
@@ -163,16 +212,7 @@ export function BoardEditor(props: BoardEditorProps): React.JSX.Element {
   return (
     <div className="hc-board-editor">
       <div ref={el} style={{ width: size, aspectRatio: '1 / 1' }} onContextMenu={e => e.preventDefault()} />
-      <div className="hc-editor-palette">
-        {PALETTE.map(t => (
-          <PaletteButton
-            key={toolId(t)}
-            tool={t}
-            selected={tool !== null && toolId(tool) === toolId(t)}
-            onSelect={() => setTool(prev => (prev !== null && toolId(prev) === toolId(t) ? null : t))}
-          />
-        ))}
-      </div>
+      {props.renderPalette !== false && <PiecePalette value={tool} onChange={setTool} />}
     </div>
   );
 }
