@@ -90,6 +90,20 @@ happening here" fact extraction. Decompose that into the shared layer before bot
   "Fetch again" button that discards the reconstruction and re-runs the exact same fetch —
   `fetchLatestGameFrom` was pulled out of `packages/import/src/react.tsx` so ImportScreen's own
   button and this one share the one fetch path rather than duplicating it.
+- User report 2026-09-22: fetching the latest lichess game was consistently slow. Cause: lichess's
+  bulk export `/api/games/user` opens a filtered archive cursor even for `max=1`. Fix (commit
+  2cb1ef9, in `@human-chess/import`): `fetchLatestLichessGameFast` tries lichess's per-user
+  point lookup `/api/user/{username}/current-game` first, returning it only when it's a finished,
+  standard-variant game with moves (`isFinishedResult` on the PGN Result + a `Variant` check to
+  match the bulk path's `perfType` filter), else falls back to the old bulk export; a
+  `LichessRateLimited` is rethrown, not retried. `FETCHERS.lichess` in react.tsx points at it, so
+  every single-latest lichess fetch (memory trainer, game reviewer, …) gets it; chess.com has no
+  equivalent endpoint and keeps the archive fetcher. Plus an opt-in `prefetch` prop on
+  ImportScreen (the memory trainer passes it) that starts the fetch on mount for the remembered
+  username so lichess's latency overlaps the learner reading the screen — fires once, never in
+  PGN mode, no-op without a remembered username (so the screenshot/reload harnesses never hit the
+  network). Endpoint semantics were NOT live-probed (no-live-lichess-probing); the finished/
+  variant guard + fallback make an unexpected shape safe rather than wrong.
 
 ## Status
 Interview closed 2026-09-16; the user may add more later.
