@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LichessRateLimited, configureLichessFetch, type LichessFetchImpl } from '@human-chess/lichess';
-import { fetchLatestLichessGame, fetchLichessGames, fetchRecentLichessGames } from './lichess';
+import { fetchCurrentLichessGame, fetchLatestLichessGame, fetchLatestLichessGameFast, fetchLichessGames, fetchRecentLichessGames } from './lichess';
 
 const CANNED_PGN = `[Event "Rated Blitz game"]
 [Site "https://lichess.org/abcd1234"]
@@ -301,5 +301,143 @@ describe('fetchLichessGames', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+const IN_PROGRESS_PGN = `[Event "Rated Blitz game"]
+[Site "https://lichess.org/inprog99"]
+[White "nadavk"]
+[Black "opponent"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 *
+`;
+
+const EXPORT_PGN = `[Event "Rated Blitz game"]
+[Site "https://lichess.org/export77"]
+[White "nadavk"]
+[Black "opponent"]
+[Result "0-1"]
+[UTCDate "2026.03.09"]
+[UTCTime "12:00:00"]
+
+1. d4 d5 0-1
+`;
+
+/** A fetchImpl that answers the current-game and bulk-export URLs differently, recording which
+ * URLs were hit so a test can assert the fallback fired (or didn't). Each route is either a
+ * {status, body} response or a function that throws (to model lichessFetch throwing). */
+function routingFetch(
+  routes: {
+    current: { status: number; body: string } | (() => never);
+    export?: { status: number; body: string };
+  },
+  calls: string[],
+): typeof fetch {
+  return (async (url: string | URL | Request) => {
+    const u = String(url);
+    calls.push(u);
+    const route = u.includes('/current-game') ? routes.current : routes.export;
+    if (!route) throw new Error(`unexpected fetch: ${u}`);
+    if (typeof route === 'function') {
+      route();
+      throw new Error('route() should have thrown');
+    }
+    return {
+      ok: route.status >= 200 && route.status < 300,
+      status: route.status,
+      text: async () => route.body,
+      headers: new Headers(),
+    } as unknown as Response;
+  }) as unknown as typeof fetch;
+}
+
+describe('fetchCurrentLichessGame', () => {
+  it('hits the per-user current-game endpoint and parses the PGN', async () => {
+    const calls: string[] = [];
+    const game = await fetchCurrentLichessGame('NadavK', routingFetch({ current: { status: 200, body: CANNED_PGN } }, calls));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/api/user/NadavK/current-game');
+    expect(game.result).toBe('1-0');
+    expect(game.ucis).toEqual(['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5']);
+  });
+
+  it('rejects with a clear message on a 404 (no such user)', async () => {
+    await expect(fetchCurrentLichessGame('nosuchuser', routingFetch({ current: { status: 404, body: '' } }, []))).rejects.toThrow(/no lichess user/);
+  });
+
+  it('rejects with a clear message on an empty body (no current or recent game)', async () => {
+    await expect(fetchCurrentLichessGame('nadavk', routingFetch({ current: { status: 200, body: '' } }, []))).rejects.toThrow(/no current or recent game/);
+  });
+});
+
+describe('fetchLatestLichessGameFast', () => {
+  it('returns the current game directly when it is finished, without touching the bulk export', async () => {
+    const calls: string[] = [];
+    const game = await fetchLatestLichessGameFast('nadavk', routingFetch({ current: { status: 200, body: CANNED_PGN }, export: { status: 200, body: EXPORT_PGN } }, calls));
+    expect(game.result).toBe('1-0');
+    expect(game.url).toBe('https://lichess.org/abcd1234');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/current-game');
+  });
+
+  it('falls back to the bulk export when the current game is still in progress', async () => {
+    const calls: string[] = [];
+    const game = await fetchLatestLichessGameFast('nadavk', routingFetch({ current: { status: 200, body: IN_PROGRESS_PGN }, export: { status: 200, body: EXPORT_PGN } }, calls));
+    // The finished export game, not the in-progress current one.
+    expect(game.result).toBe('0-1');
+    expect(game.url).toBe('https://lichess.org/export77');
+    expect(calls.some(u => u.includes('/current-game'))).toBe(true);
+    expect(calls.some(u => u.includes('/api/games/user'))).toBe(true);
+  });
+
+  it('falls back to the bulk export when current-game fails (e.g. transient 500)', async () => {
+    const calls: string[] = [];
+    const game = await fetchLatestLichessGameFast('nadavk', routingFetch({ current: { status: 500, body: '' }, export: { status: 200, body: EXPORT_PGN } }, calls));
+    expect(game.result).toBe('0-1');
+    expect(calls.some(u => u.includes('/api/games/user'))).toBe(true);
+  });
+
+  it('falls back when the current game is finished but has no moves (guards the moves half)', async () => {
+    const calls: string[] = [];
+    const finishedNoMoves = `[Event "Rated Blitz game"]
+[Site "https://lichess.org/nomoves1"]
+[White "nadavk"]
+[Black "opponent"]
+[Result "1-0"]
+
+1-0
+`;
+    const game = await fetchLatestLichessGameFast('nadavk', routingFetch({ current: { status: 200, body: finishedNoMoves }, export: { status: 200, body: EXPORT_PGN } }, calls));
+    expect(game.url).toBe('https://lichess.org/export77');
+    expect(calls.some(u => u.includes('/api/games/user'))).toBe(true);
+  });
+
+  it('falls back when the current game is a non-standard variant (matches the bulk perfType filter)', async () => {
+    const calls: string[] = [];
+    const variantPgn = `[Event "Rated Chess960 game"]
+[Site "https://lichess.org/variant9"]
+[Variant "Chess960"]
+[White "nadavk"]
+[Black "opponent"]
+[Result "1-0"]
+
+1. e4 1-0
+`;
+    const game = await fetchLatestLichessGameFast('nadavk', routingFetch({ current: { status: 200, body: variantPgn }, export: { status: 200, body: EXPORT_PGN } }, calls));
+    expect(game.url).toBe('https://lichess.org/export77');
+    expect(calls.some(u => u.includes('/api/games/user'))).toBe(true);
+  });
+
+  it('rethrows a rate-limit without spending a second request on the bulk export', async () => {
+    const calls: string[] = [];
+    const now = Date.now();
+    const rateLimited = (): never => {
+      throw new LichessRateLimited(now + 60_000, now);
+    };
+    await expect(
+      fetchLatestLichessGameFast('nadavk', routingFetch({ current: rateLimited, export: { status: 200, body: EXPORT_PGN } }, calls)),
+    ).rejects.toBeInstanceOf(LichessRateLimited);
+    expect(calls.some(u => u.includes('/api/games/user'))).toBe(false);
   });
 });

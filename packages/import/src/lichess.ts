@@ -64,6 +64,109 @@ export async function fetchLatestLichessGame(
   return game;
 }
 
+// lichess's per-user "current game" endpoint: a point lookup that returns the user's ongoing
+// game, or — when none is in progress — the last game they played. Unlike the bulk export above
+// (`/api/games/user`, which opens a filtered cursor over the whole archive even for `max=1`),
+// this is a single-document read, so it returns the newest game far sooner. The trade-off it
+// carries, handled by fetchLatestLichessGameFast below, is that it CAN return an in-progress
+// game — which the archive export never does.
+const LICHESS_USER_URL = 'https://lichess.org/api/user';
+
+/** A finished game's PGN `Result` is one of the three decisive/drawn values; anything else
+ * ("*", or a missing header) means the game is still in progress or its result is unknown. Used
+ * to tell a completed game (safe to reconstruct/review) from an ongoing one. */
+function isFinishedResult(result: string | undefined): boolean {
+  return result === '1-0' || result === '0-1' || result === '1/2-1/2';
+}
+
+/** True for a standard-rules game (no `[Variant]` header, or `Variant "Standard"`). The
+ * current-game endpoint does not perf-type-filter, so it can return a non-standard variant
+ * (Chess960, Crazyhouse, …); the bulk export fetchLatestLichessGameFast falls back to DOES
+ * (STANDARD_PERF_TYPES). Requiring standard here keeps the fast path's result matching the bulk
+ * path's — a variant current-game just falls back rather than being reconstructed under standard
+ * rules. A Chess960 game from the normal start can even parse cleanly, so filtering on the
+ * declared variant (not on whether the moves happen to parse) is what actually catches it. */
+function isStandardVariant(game: ImportedGame): boolean {
+  const variant = game.headers.Variant;
+  return variant === undefined || variant === 'Standard';
+}
+
+/**
+ * `username`'s ongoing game, or their last-played game if none is in progress, via lichess's
+ * `/api/user/{username}/current-game` point lookup. Same options and error shape as
+ * fetchLatestLichessGame (404 -> "no lichess user", 429 -> LichessRateLimited from lichessFetch,
+ * timeout -> a 15 s message), so a caller can share error handling. Note the returned game may be
+ * IN PROGRESS (result "*"); callers that need a finished game should check `isFinishedResult` /
+ * use fetchLatestLichessGameFast.
+ */
+export async function fetchCurrentLichessGame(
+  username: string,
+  fetchImpl: LichessFetchImpl = lichessFetch,
+): Promise<ImportedGame> {
+  // `tags=true` is kept (not dropped for speed) because the PGN `Result` header it carries is
+  // exactly what fetchLatestLichessGameFast needs to tell a finished game from an ongoing one.
+  const url = `${LICHESS_USER_URL}/${encodeURIComponent(username)}/current-game?moves=true&tags=true`;
+
+  let response: Response;
+  try {
+    response = await fetchImpl(url, {
+      headers: { Accept: 'application/x-chess-pgn' },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof LichessRateLimited) throw err;
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new Error('lichess did not answer within 15 s');
+    }
+    throw err;
+  }
+
+  if (response.status === 404) {
+    throw new Error(`no lichess user "${username}"`);
+  }
+  if (response.status === 429) {
+    throw new Error('lichess rate-limited this request; wait a moment and try again');
+  }
+  if (!response.ok) {
+    throw new Error(`lichess current-game export failed: HTTP ${response.status}`);
+  }
+
+  const pgn = (await response.text()).trim();
+  if (!pgn) {
+    throw new Error(`${username} has no current or recent game on lichess`);
+  }
+  return toImportedGame('lichess', pgn, username);
+}
+
+/**
+ * `username`'s latest FINISHED game on lichess, fast: tries the `current-game` point lookup first
+ * (far lower latency than the bulk archive export) and returns it only when it's a completed,
+ * standard-variant game with moves; otherwise falls back to fetchLatestLichessGame (the bulk
+ * export), which only ever returns finished games and perf-type-filters to standard ones. So the
+ * contract matches fetchLatestLichessGame exactly — "the newest finished standard game" — it's
+ * just usually much quicker to answer.
+ *
+ * The fallback also absorbs any current-game hiccup (an in-progress game, an empty body, an
+ * unexpected non-2xx surfaced as an Error): whatever the reason, we fall through to the reliable
+ * path rather than failing. The one exception is a rate-limit: a LichessRateLimited is rethrown
+ * immediately rather than spending a second request (the bulk export) that would be refused too.
+ */
+export async function fetchLatestLichessGameFast(
+  username: string,
+  fetchImpl: LichessFetchImpl = lichessFetch,
+): Promise<ImportedGame> {
+  try {
+    const game = await fetchCurrentLichessGame(username, fetchImpl);
+    if (isFinishedResult(game.result) && game.ucis.length > 0 && isStandardVariant(game)) return game;
+    // In-progress, resultless, or non-standard-variant game: fall back to the newest finished
+    // standard game from the archive (which fetchLatestLichessGame perf-type-filters).
+  } catch (err) {
+    if (err instanceof LichessRateLimited) throw err;
+    // Any other current-game failure (404, timeout, transient HTTP error): fall back.
+  }
+  return fetchLatestLichessGame(username, fetchImpl);
+}
+
 export interface FetchRecentLichessGamesOpts {
   /** Clamped to [1, MAX_RECENT_LICHESS_GAMES]. */
   maxGames: number;

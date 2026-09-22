@@ -4,6 +4,8 @@
 export type { GameSpeed, ImportedGame, ImportedGameMeta, RecentGamesResult } from './types';
 export {
   fetchLatestLichessGame,
+  fetchCurrentLichessGame,
+  fetchLatestLichessGameFast,
   fetchLichessGames,
   fetchRecentLichessGames,
   DEFAULT_MAX_LICHESS_GAMES,

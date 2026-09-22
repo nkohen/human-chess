@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button, Field, Page, SegmentedControl, Status } from '@human-chess/ui';
 import { fetchLatestChesscomGame } from './chesscom';
-import { fetchLatestLichessGame } from './lichess';
+import { fetchLatestLichessGameFast } from './lichess';
 import { toImportedGame } from './parse';
 import type { ImportedGame } from './types';
 
@@ -84,12 +84,20 @@ export interface ImportScreenProps {
    * from manually — ImportScreen has no "import by URL" path, and this deliberately does not
    * add one (no fetch beyond the existing username/paste flows). */
   notice?: ReactNode | undefined;
+  /** Opt-in: start fetching the remembered user's latest game on mount, so it's ready (or nearly)
+   * by the time the user clicks Fetch — for a subproject whose whole purpose is "the game I just
+   * played" (the memory trainer). Off by default; only fires once, for the remembered site+username,
+   * and never in PGN-paste mode. */
+  prefetch?: boolean | undefined;
 }
 
 const SITE_LABELS: Record<ImportSite, string> = { lichess: 'lichess', 'chess.com': 'chess.com' };
 const SITE_DISPLAY_NAMES: Record<ImportSite, string> = { lichess: 'Lichess', 'chess.com': 'Chess.com' };
+// lichess routes through the fast current-game-first path (see fetchLatestLichessGameFast);
+// chess.com's Published-Data API has no per-user "current game" lookup, so it keeps the
+// archive fetcher. Both still resolve to the newest FINISHED game — the contract is unchanged.
 const FETCHERS: Record<ImportSite, (username: string) => Promise<ImportedGame>> = {
-  lichess: fetchLatestLichessGame,
+  lichess: fetchLatestLichessGameFast,
   'chess.com': fetchLatestChesscomGame,
 };
 
@@ -123,6 +131,7 @@ export function ImportScreen({
   title = 'Import a game',
   initialPgnText,
   notice,
+  prefetch = false,
 }: ImportScreenProps): React.JSX.Element {
   const { username, setUsername, save } = useLastUsername(storageKey);
   const [site, setSite] = useState<ImportSite>(() => loadLastSite(storageKey));
@@ -159,16 +168,38 @@ export function ImportScreen({
     };
   }, []);
 
+  // Optional prefetch (opt-in via `prefetch`): kick the fetch off on mount for the remembered
+  // site+username so lichess's latency overlaps the user reading the screen instead of following
+  // their click. Runs once, for the initially-remembered values — deliberately NOT on later
+  // username edits (that would fetch per keystroke) and never in PGN-paste mode. `fetchGame`
+  // reuses this in-flight result when the user clicks Fetch without having changed the username.
+  const prefetchRef = useRef<{ site: ImportSite; username: string; promise: Promise<ImportedGame> } | null>(null);
+  useEffect(() => {
+    if (!prefetch || pgnMode) return;
+    const u = username.trim();
+    if (!u) return;
+    const promise = fetchLatestGameFrom(site, u);
+    // Mark the prefetch handled so an unclicked (or later-superseded) one never logs an unhandled
+    // rejection; fetchGame attaches its own handlers to the same promise when the user clicks.
+    promise.catch(() => {});
+    prefetchRef.current = { site, username: u, promise };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, for the remembered values (see comment).
+  }, []);
+
   const fetchGame = (): void => {
-    if (!username.trim()) return;
+    const u = username.trim();
+    if (!u) return;
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(undefined);
-    fetchLatestGameFrom(site, username.trim())
+    // Reuse a matching in-flight/settled prefetch rather than starting a second identical fetch.
+    const pre = prefetchRef.current;
+    const promise = pre && pre.site === site && pre.username === u ? pre.promise : fetchLatestGameFrom(site, u);
+    promise
       .then(game => {
         if (settledRef.current || requestIdRef.current !== requestId) return;
         settledRef.current = true;
-        save(username.trim());
+        save(u);
         onImported(game);
       })
       .catch((err: unknown) => {

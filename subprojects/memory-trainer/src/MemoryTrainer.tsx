@@ -97,7 +97,10 @@ export function MemoryTrainer(): React.JSX.Element {
   };
 
   if (screen.kind === 'import') {
-    return <ImportScreen storageKey={STORAGE_KEY} title="Memory trainer" onImported={beginReconstruction} />;
+    // Prefetch on mount: the whole point of this tool is "reconstruct the game I just played", so
+    // start pulling the remembered user's latest game before they click — lichess's latency then
+    // overlaps them reading the screen instead of following the click.
+    return <ImportScreen storageKey={STORAGE_KEY} title="Memory trainer" onImported={beginReconstruction} prefetch />;
   }
 
   if (screen.kind === 'reconstruct') {
