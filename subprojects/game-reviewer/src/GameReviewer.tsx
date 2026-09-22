@@ -314,7 +314,11 @@ function ReviewScreen({
         <Board
           fen={fen}
           orientation={orientation}
-          turnColor="white"
+          // The shown position's real side to move: chessground resolves check=true against
+          // turnColor, so a hardcoded "white" glows the wrong king when Black is in check (V3 —
+          // the check indicator is a board-state fact). The board is non-interactive, so this
+          // only affects that highlight.
+          turnColor={turn(positionFromFen(fen))}
           dests={new Map()}
           movableColor={undefined}
           lastMove={lastMove}

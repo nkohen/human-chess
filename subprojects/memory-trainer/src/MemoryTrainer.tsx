@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Board } from '@human-chess/board';
+import { Board, type BoardShape } from '@human-chess/board';
 import { fetchLatestGameFrom, ImportScreen } from '@human-chess/import/react';
 import type { ImportedGame } from '@human-chess/import';
 import {
   annotateLine, fullmove, inCheck, opposite, positionFromFen, turn, uciSquares, type Color, type Role, type SquareName,
 } from '@human-chess/rules';
 import { Button, Toolbar, usePersistedState, Workbench } from '@human-chess/ui';
-import { classifyCompleteAttempt, compareReconstruction, fenSequence, type ReconstructionOutcome } from './compare';
+import { classifyCompleteAttempt, compareReconstruction, fenSequence, type ReconstructionOutcome, type Segment } from './compare';
 import { relativeTime } from './relativeTime';
 import {
   currentFen, lastReconstructedMove, playReconstructionMove, reconstructedSans, reconstructedUcis,
@@ -354,6 +354,96 @@ function ReconstructScreen({
   );
 }
 
+/** One misremembered move, anchored to the START of a diverged segment. A diverged segment's
+ * first ply is where the learner's recall first left the real game: every earlier ply matched, so
+ * the position going into `ply` is the real game's own position and the learner's move there is a
+ * legal alternative to the real move — directly comparable. Later plies in the same segment are
+ * downstream of that one wrong move (they inherit a different position), so they are not counted
+ * as separate mistakes. All fields are read off the real game and the reconstruction; nothing is
+ * an engine judgement (this is a memory-recall diff, not a move-quality verdict — A1/V3). */
+interface Mistake {
+  /** 1-based real-game ply where recall diverged. */
+  ply: number;
+  /** The move the game actually played here — the correct recall (green arrow). */
+  realUci: string;
+  realSan: string;
+  /** The move the learner remembered instead (red arrow), legal from the same position. */
+  userUci: string;
+  userSan: string;
+  /** The ply at which the reconstruction rejoined the real game, if it ever did. */
+  rejoinedAtPly: number | undefined;
+}
+
+/** Pulls the mistake list straight from `compareReconstruction`'s segments — one entry per
+ * diverged segment, in game order. `realUcis`/`userUcis` are the two move lists the segments were
+ * built from, so the indices line up; a `ply` in a diverged segment is always within the shared
+ * prefix, so both move lists have it (the `undefined` guard only satisfies the type). */
+function mistakesFromSegments(
+  segments: Segment[],
+  realUcis: string[],
+  realSans: string[],
+  userUcis: string[],
+  userSans: string[],
+): Mistake[] {
+  const mistakes: Mistake[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (!seg || seg.kind !== 'diverged') continue;
+    const realUci = realUcis[seg.fromPly - 1];
+    const userUci = userUcis[seg.fromPly - 1];
+    if (realUci === undefined || userUci === undefined) continue;
+    const next = segments[i + 1];
+    mistakes.push({
+      ply: seg.fromPly,
+      realUci,
+      realSan: realSans[seg.fromPly - 1] ?? '?',
+      userUci,
+      userSan: userSans[seg.fromPly - 1] ?? '?',
+      rejoinedAtPly: next?.kind === 'match' ? next.fromPly : undefined,
+    });
+  }
+  return mistakes;
+}
+
+/** A game-review-style move line of the REAL game: SAN with move numbers (via the rules library's
+ * `annotateLine`, never derived here), each ply a button that scrubs the board to it, misremembered
+ * plies flagged, and the ply that produced the shown position marked current. Local to the memory
+ * trainer (like `MoveList`): it drives an external board and highlights recall mistakes, neither of
+ * which the shared `MoveLine` does — keeping that tool-specific behaviour out of the shared layer. */
+function ReviewLine({
+  startFen,
+  ucis,
+  mistakePlies,
+  currentPly,
+  onSelectPly,
+}: {
+  startFen: string;
+  ucis: string[];
+  mistakePlies: Set<number>;
+  currentPly: number;
+  onSelectPly: (ply: number) => void;
+}): React.JSX.Element {
+  const line = annotateLine(startFen, ucis);
+  return (
+    <div className="mt-review-line" aria-label="Game moves; misremembered moves are flagged">
+      {line.map((p, i) => {
+        const ply = i + 1;
+        const isMistake = mistakePlies.has(ply);
+        const isCurrent = currentPly === ply;
+        const className = `mt-review-move${isMistake ? ' mt-review-move-mistake' : ''}${isCurrent ? ' mt-review-move-current' : ''}`;
+        return (
+          <span key={i} className="mt-review-line-item">
+            {p.label ? <span className="mt-review-movenum">{p.label} </span> : null}
+            <button type="button" className={className} aria-pressed={isCurrent} onClick={() => onSelectPly(ply)}>
+              {p.san}
+            </button>{' '}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function ReviewScreen({
   game,
   reconstruction,
@@ -378,6 +468,9 @@ function ReviewScreen({
   const userUcis = reconstructedUcis(reconstruction);
   const userSans = reconstructedSans(reconstruction);
   const segments = compareReconstruction(game.startFen, game.ucis, userUcis);
+  // The board now steps through the WHOLE real game (not just the matched prefix): after a
+  // misremembered move it "remerges to the correct board" — the real game plays on regardless of
+  // where recall went. Index 0 is the start; index i (>0) is the position after game.ucis[i-1].
   const realFens = fenSequence(game.startFen, game.ucis);
 
   // Ply → colour/move-number is anchored to the actual start position (parsed once here),
@@ -388,8 +481,8 @@ function ReviewScreen({
 
   const firstSegment = segments[0];
   const correctBeforeFirstDivergence = firstSegment?.kind === 'match' ? firstSegment.toPly : 0;
-  const diverged = segments.filter(s => s.kind === 'diverged');
-  const lastMatchPly = firstSegment?.kind === 'match' ? firstSegment.toPly : 0;
+  const mistakes = mistakesFromSegments(segments, game.ucis, game.sans, userUcis, userSans);
+  const mistakePlies = new Set(mistakes.map(m => m.ply));
 
   // Only meaningful when the learner claimed the attempt was the whole game — "I have no idea"
   // makes no claim about length, so it keeps the plain first-divergence text below. Built only
@@ -398,17 +491,31 @@ function ReviewScreen({
     ? classifyCompleteAttempt(segments, game.ucis.length, userUcis.length)
     : undefined;
 
-  const replayFens = realFens.slice(0, lastMatchPly + 1);
-  const replayUcis = game.ucis.slice(0, lastMatchPly);
-  const hasReplayBoard = replayFens.length > 1;
-  const clampedIndex = Math.min(replayIndex, replayFens.length - 1);
-  const replayFen = replayFens[clampedIndex] ?? replayFens[0] ?? game.startFen;
-  // replayFens[0] is the start position (no previous move); replayFens[i] for i > 0 is the
-  // position after replayUcis[i - 1], so that is the real move that produced the position shown.
-  const replayUci = clampedIndex > 0 ? replayUcis[clampedIndex - 1] : undefined;
-  const replayLastMove: [SquareName, SquareName] | undefined = replayUci ? uciSquares(replayUci) : undefined;
-  const canPrev = hasReplayBoard && clampedIndex > 0;
-  const canNext = hasReplayBoard && clampedIndex < replayFens.length - 1;
+  const lastIndex = realFens.length - 1;
+  const hasBoard = lastIndex > 0;
+  const clampedIndex = Math.min(Math.max(replayIndex, 0), Math.max(lastIndex, 0));
+  const boardFen = realFens[clampedIndex] ?? game.startFen;
+  // Parsed once for both the side-to-move and the check flag: chessground resolves check=true
+  // against `turnColor`, so passing the shown position's real turn is what makes the check glow
+  // land on the king that is actually in check (a board-state fact — V3), not a hardcoded colour.
+  const boardPos = positionFromFen(boardFen);
+  // realFens[i] for i > 0 is the position after game.ucis[i - 1], so that is the real move that
+  // produced the position shown — the last move highlighted on the board.
+  const boardMoveUci = clampedIndex > 0 ? game.ucis[clampedIndex - 1] : undefined;
+  const boardLastMove: [SquareName, SquareName] | undefined = boardMoveUci ? uciSquares(boardMoveUci) : undefined;
+
+  // When the board sits at the position going INTO a misremembered move (index = ply - 1), draw
+  // both moves as arrows: green for the move the game actually played (the correct recall), red
+  // for what the learner remembered. `next` then plays the green move and the board remerges.
+  const forkMistake = mistakes.find(m => m.ply - 1 === clampedIndex);
+  // Empty (not undefined) away from a fork: `shapes` is a required-when-present optional under
+  // exactOptionalPropertyTypes, and an empty list is how the board shows no annotations.
+  const shapes: readonly BoardShape[] = forkMistake
+    ? [toArrow(forkMistake.realUci, 'green'), toArrow(forkMistake.userUci, 'red')]
+    : [];
+
+  const canPrev = hasBoard && clampedIndex > 0;
+  const canNext = hasBoard && clampedIndex < lastIndex;
 
   const baseOrientation = game.playedAs ?? 'white';
   const orientation = flipped ? opposite(baseOrientation) : baseOrientation;
@@ -432,15 +539,16 @@ function ReviewScreen({
         </p>
       }
       board={sizePx =>
-        hasReplayBoard ? (
+        hasBoard ? (
           <Board
-            fen={replayFen}
+            fen={boardFen}
             orientation={orientation}
-            turnColor="white"
+            turnColor={turn(boardPos)}
             dests={new Map()}
             movableColor={undefined}
-            lastMove={replayLastMove}
-            check={false}
+            lastMove={boardLastMove}
+            check={inCheck(boardPos)}
+            shapes={shapes}
             onMove={() => {}}
             size={boardSize(sizePx)}
           />
@@ -448,12 +556,12 @@ function ReviewScreen({
       }
       footer={
         <Toolbar>
-          {hasReplayBoard && (
+          {hasBoard && (
             <>
               <Button size="sm" onClick={() => onReplayIndexChange(i => Math.max(0, i - 1))} disabled={!canPrev}>
                 prev
               </Button>
-              <Button size="sm" onClick={() => onReplayIndexChange(i => Math.min(replayFens.length - 1, i + 1))} disabled={!canNext}>
+              <Button size="sm" onClick={() => onReplayIndexChange(i => Math.min(lastIndex, i + 1))} disabled={!canNext}>
                 next
               </Button>
             </>
@@ -469,19 +577,41 @@ function ReviewScreen({
     >
       <GameIdentity game={game} withResult={true} />
       <div className="mt-review-details">
-        {diverged.length === 0 && segments.length > 0 && <p>No divergence — you reconstructed the whole game you entered.</p>}
+        {hasBoard && (
+          <ReviewLine
+            startFen={game.startFen}
+            ucis={game.ucis}
+            mistakePlies={mistakePlies}
+            currentPly={clampedIndex}
+            // A flagged move lands on its fork (index ply - 1) so the arrows + caption show — the
+            // same place the mistake write-up's jump button goes; any other move shows the
+            // position after it, as a move list normally does.
+            onSelectPly={ply => onReplayIndexChange(mistakePlies.has(ply) ? ply - 1 : ply)}
+          />
+        )}
 
-        {diverged.map((seg, i) => {
-          const { moveNumber, color } = ordinalMove(startColor, startFullmove, seg.fromPly);
-          const youPlayed = userSans[seg.fromPly - 1] ?? '?';
-          const gameWent = game.sans[seg.fromPly - 1] ?? '?';
-          const nextSegment = segments[segments.indexOf(seg) + 1];
-          const rejoinedAt = nextSegment?.kind === 'match' ? nextSegment.fromPly : undefined;
+        {forkMistake && (
+          // Grounded caption for the fork the board is showing: SANs come from the move lists,
+          // colour/number from the start position — no engine verdict (V3).
+          <p className="mt-review-fork">
+            The game played <span className="mt-review-correct">{forkMistake.realSan}</span> (green); you recalled{' '}
+            <span className="mt-review-wrong">{forkMistake.userSan}</span> (red). Press next to play the correct move.
+          </p>
+        )}
+
+        {mistakes.length === 0 && segments.length > 0 && (
+          <p>No divergence — you reconstructed the whole game you entered.</p>
+        )}
+
+        {mistakes.map((m, i) => {
+          const { moveNumber, color } = ordinalMove(startColor, startFullmove, m.ply);
           return (
             <p key={i}>
-              At move {moveNumber} ({color}) you played {youPlayed}, the game went {gameWent}.{' '}
-              {rejoinedAt !== undefined
-                ? `Your reconstruction rejoined the real game at ply ${rejoinedAt}.`
+              <button type="button" className="mt-review-jump" onClick={() => onReplayIndexChange(m.ply - 1)}>
+                At move {moveNumber} ({color}) you played {m.userSan}, the game went {m.realSan}.
+              </button>{' '}
+              {m.rejoinedAtPly !== undefined
+                ? `Your reconstruction rejoined the real game at ply ${m.rejoinedAtPly}.`
                 : 'It never rejoined the real game after that.'}
             </p>
           );
@@ -489,4 +619,11 @@ function ReviewScreen({
       </div>
     </Workbench>
   );
+}
+
+/** A `BoardShape` arrow from a UCI move's two squares. Squares come from the rules library's
+ * `uciSquares`, never parsed here. */
+function toArrow(uci: string, brush: BoardShape['brush']): BoardShape {
+  const [orig, dest] = uciSquares(uci);
+  return { orig, dest, brush };
 }

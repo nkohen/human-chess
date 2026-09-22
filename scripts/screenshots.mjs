@@ -60,6 +60,11 @@ const ROUTES = [
   { name: 'hand-and-brain', hash: 'hand-and-brain', hasBoardOnLoad: true },
   { name: 'openings', hash: 'openings', hasBoardOnLoad: true },
   { name: 'memory', hash: 'memory', extra: 'import' },
+  // The memory trainer's review screen ("How you did") is only reachable after a whole attempt;
+  // this route seeds a diverged-attempt snapshot into localStorage and reloads to render it, so
+  // the review line, fork arrows and caption get the same layout/console checks as every board
+  // screen. Same hash as `memory`; the first-paint capture is the import Page again (harmless).
+  { name: 'memory-review', hash: 'memory', extra: 'memory-review' },
   { name: 'opening-game', hash: 'opening-game', extra: 'touch-move' },
   { name: 'bot-rating', hash: 'bot-rating' },
   // Puzzles fetches its first puzzle from lichess on mount, which this harness must always
@@ -111,6 +116,35 @@ const MONTHLY_FIXTURE = {
       black: { username: 'opponent99', rating: 1500, result: 'resigned' },
     },
   ],
+};
+
+// ---------- memory-trainer review-screen fixture (seeded into localStorage, no network) ----------
+// The review screen only exists after a whole attempt, which is too many board moves to drive
+// live; instead we seed the persisted snapshot directly (the same shape parseTrainerSnapshot
+// rebuilds on reload) and let the app render it. Mirrors STATE_KEY in
+// subprojects/memory-trainer/src/storage.ts.
+const MEMORY_STATE_KEY = 'human-chess.memory-trainer.state.v1';
+const MEMORY_REVIEW_GAME = {
+  source: 'pgn',
+  username: undefined,
+  pgn: '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6',
+  headers: {},
+  startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+  ucis: ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5', 'a7a6'],
+  sans: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6'],
+  white: 'smoketestuser',
+  black: 'opponent99',
+  result: undefined,
+  playedAs: 'white',
+  url: undefined,
+  playedAt: undefined,
+};
+// A reconstruction that matched three plies then recalled 2… Nf6 instead of 2… Nc6: one flagged
+// mistake, and replayIndex 3 parks the board at that fork so the arrows + caption are on screen.
+const MEMORY_REVIEW_SNAPSHOT = {
+  screen: { kind: 'review', game: MEMORY_REVIEW_GAME, ucis: ['e2e4', 'e7e5', 'g1f3', 'g8f6'], claimedComplete: false },
+  flipped: false,
+  replayIndex: 3,
 };
 
 let blockedCount = 0;
@@ -377,6 +411,18 @@ async function driveChesscomImport(page) {
   await page.waitForSelector('cg-board', { timeout: 20_000 });
 }
 
+/** Seeds the review-screen snapshot into localStorage and reloads so the memory trainer renders
+ * its "How you did" review directly — the diverged move flagged in the line, the fork arrows, and
+ * the grounded caption. No network: the snapshot carries its own game. */
+async function driveMemoryReview(page) {
+  await page.evaluate(
+    ({ key, snapshot }) => localStorage.setItem(key, JSON.stringify(snapshot)),
+    { key: MEMORY_STATE_KEY, snapshot: MEMORY_REVIEW_SNAPSHOT },
+  );
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('cg-board', { timeout: 20_000 });
+}
+
 // ---------- the touch-move / mouse-move extra state (opening-game) ----------
 
 async function computeSquareCenters(page) {
@@ -579,6 +625,12 @@ async function main() {
 
           if (route.extra === 'import') {
             await driveChesscomImport(page);
+            await waitForNotBusy(page);
+            await capture('loaded');
+          }
+
+          if (route.extra === 'memory-review') {
+            await driveMemoryReview(page);
             await waitForNotBusy(page);
             await capture('loaded');
           }
