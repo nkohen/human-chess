@@ -112,3 +112,19 @@ Interview closed 2026-09-16; the user may add more later.
 - What counts as a divergence when the remembered move is equal in eval: still discussed, as
   the user says, but is it flagged differently from a worse move?
 - Any handling for very long games or a limit on how far reconstruction goes?
+- User report 2026-09-22: the review ("How you did") screen is now a game-review-style result
+  (commit b0d8f1a). It renders the real game as a move line (`ReviewLine`, local, via rules'
+  `annotateLine` — kept out of the shared `MoveLine`, which doesn't drive an external board or
+  flag plies), flags the ply where recall diverged (amber/attention, since the move shown there
+  is the CORRECT one — red is reserved for the move the learner wrongly recalled), and steps the
+  board through the WHOLE real game so it remerges to the correct board after a mistake (was:
+  replayed only the matched prefix). At each fork it draws two `BoardShape` arrows — green =
+  real/correct move, red = recalled move — with a grounded caption; a clickable mistake list
+  jumps to each fork. Mistakes anchor at the first ply of each diverged segment (position going
+  in equals the real game's, so the recalled move is legal from the real board — both arrows
+  valid). No engine/eval: it's a memory-recall diff over compareReconstruction's segments (A1/V3).
+  The code-reviewer also caught a latent V3 bug the dynamic check flag exposed — the review board
+  AND the game-reviewer's board hardcoded `turnColor="white"` while passing `check={inCheck(...)}`,
+  so a Black-in-check position glowed the white king; both now pass the shown position's real turn
+  (both boards non-interactive, so safe). New `memory-review` screenshots harness route seeds a
+  diverged-attempt snapshot into localStorage (no network) so the screen gets layout/console checks.
